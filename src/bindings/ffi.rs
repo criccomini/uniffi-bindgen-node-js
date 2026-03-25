@@ -162,6 +162,7 @@ struct StructModel {
     identifier: String,
     name_json: String,
     fields: Vec<StructFieldModel>,
+    is_callback_vtable: bool,
 }
 
 impl StructModel {
@@ -169,6 +170,7 @@ impl StructModel {
         Self {
             identifier: js_identifier(struct_.name()),
             name_json: json_string(struct_.name()).expect("FFI struct names should serialize"),
+            is_callback_vtable: struct_.name().starts_with("VTableCallbackInterface"),
             fields: struct_
                 .fields()
                 .iter()

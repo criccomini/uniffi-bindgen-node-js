@@ -1,1 +1,14 @@
-export {};
+export declare const UniffiHandle: "uint64_t";
+export declare const VoidPointer: "void *";
+export declare const RustBuffer: unknown;
+export declare const ForeignBytes: unknown;
+export declare const RustCallStatus: unknown;
+export declare function defineOpaquePointer(name: string): unknown;
+export declare function defineStructType(
+  name: string,
+  fields: Readonly<Record<string, unknown>>,
+): unknown;
+export declare function defineCallbackVtable(
+  name: string,
+  fields: Readonly<Record<string, unknown>>,
+): unknown;

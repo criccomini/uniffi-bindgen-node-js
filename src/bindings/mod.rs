@@ -899,12 +899,28 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
+            component_ffi_js.contains("from \"./runtime/ffi-types.js\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
             component_ffi_js.contains("koffi.load"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
             component_ffi_js.contains("uniffi_contract_version"),
             "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+
+        let ffi_types_js =
+            fs::read_to_string(output_dir.join("runtime/ffi-types.js").as_std_path())
+                .expect("runtime FFI types JS should be readable");
+        assert!(
+            ffi_types_js.contains("export const RustBuffer"),
+            "unexpected runtime FFI types JS contents: {ffi_types_js}"
+        );
+        assert!(
+            ffi_types_js.contains("export function defineCallbackVtable"),
+            "unexpected runtime FFI types JS contents: {ffi_types_js}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

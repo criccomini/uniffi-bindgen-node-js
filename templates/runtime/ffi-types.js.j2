@@ -1,1 +1,32 @@
-// Runtime FFI types template scaffold.
+import koffi from "koffi";
+
+export const UniffiHandle = "uint64_t";
+export const VoidPointer = "void *";
+
+export const RustBuffer = koffi.struct("RustBuffer", {
+  capacity: "uint64_t",
+  len: "uint64_t",
+  data: VoidPointer,
+});
+
+export const ForeignBytes = koffi.struct("ForeignBytes", {
+  len: "int32_t",
+  data: VoidPointer,
+});
+
+export const RustCallStatus = koffi.struct("RustCallStatus", {
+  code: "int8_t",
+  error_buf: RustBuffer,
+});
+
+export function defineOpaquePointer(name) {
+  return koffi.pointer(name, koffi.opaque());
+}
+
+export function defineStructType(name, fields) {
+  return koffi.struct(name, fields);
+}
+
+export function defineCallbackVtable(name, fields) {
+  return koffi.struct(name, fields);
+}

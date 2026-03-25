@@ -1,4 +1,14 @@
 import koffi from "koffi";
+import {
+  ForeignBytes,
+  RustBuffer,
+  RustCallStatus,
+  UniffiHandle,
+  VoidPointer,
+  defineCallbackVtable,
+  defineOpaquePointer,
+  defineStructType,
+} from "./runtime/ffi-types.js";
 
 export const ffiMetadata = Object.freeze({
   namespace: {{ context.namespace_json }},
@@ -11,26 +21,13 @@ let loadedBindings = null;
 
 function createBindings(libraryPath) {
   const library = koffi.load(libraryPath);
-  const RustBuffer = koffi.struct("RustBuffer", {
-    capacity: "uint64_t",
-    len: "uint64_t",
-    data: "void *",
-  });
-  const ForeignBytes = koffi.struct("ForeignBytes", {
-    len: "int32_t",
-    data: "void *",
-  });
-  const RustCallStatus = koffi.struct("RustCallStatus", {
-    code: "int8_t",
-    error_buf: RustBuffer,
-  });
 {% for opaque_type in context.opaque_types %}
-  const {{ opaque_type.identifier }} = koffi.pointer({{ opaque_type.name_json }}, koffi.opaque());
+  const {{ opaque_type.identifier }} = defineOpaquePointer({{ opaque_type.name_json }});
 {% endfor %}
 
   const ffiTypes = Object.freeze({
-    UniffiHandle: "uint64_t",
-    VoidPointer: "void *",
+    UniffiHandle,
+    VoidPointer,
     RustBuffer,
     ForeignBytes,
     RustCallStatus,
@@ -45,7 +42,7 @@ function createBindings(libraryPath) {
   const ffiStructs = Object.freeze((() => {
     const ffiStructs = {};
 {% for struct_ in context.structs %}
-    ffiStructs.{{ struct_.identifier }} = koffi.struct({{ struct_.name_json }}, {
+    ffiStructs.{{ struct_.identifier }} = {% if struct_.is_callback_vtable %}defineCallbackVtable{% else %}defineStructType{% endif %}({{ struct_.name_json }}, {
 {% for field in struct_.fields %}
       {{ field.name_json }}: {{ field.type_expr }},
 {% endfor %}

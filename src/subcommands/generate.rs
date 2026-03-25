@@ -11,6 +11,24 @@ pub struct GenerateArgs {
 
     #[arg(long)]
     pub out_dir: Utf8PathBuf,
+
+    #[arg(long)]
+    pub package_name: Option<String>,
+
+    #[arg(long)]
+    pub cdylib_name: Option<String>,
+
+    #[arg(long)]
+    pub node_engine: Option<String>,
+
+    #[arg(long)]
+    pub lib_path_literal: Option<String>,
+
+    #[arg(long)]
+    pub manual_load: bool,
+
+    #[arg(long)]
+    pub config_override: Vec<String>,
 }
 
 pub fn run(_args: GenerateArgs) -> anyhow::Result<()> {

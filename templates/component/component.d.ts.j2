@@ -1,1 +1,12 @@
-export {};
+export interface ComponentMetadata {
+  namespace: string;
+  packageName: string;
+  cdylibName: string;
+  nodeEngine: string;
+  libPathLiteral: string | null;
+  manualLoad: boolean;
+}
+
+export declare const componentMetadata: Readonly<ComponentMetadata>;
+
+export { ffiMetadata } from "./{{ namespace }}-ffi.js";

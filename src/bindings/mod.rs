@@ -1,6 +1,7 @@
 use std::fs;
 
 use anyhow::{Result, anyhow, bail};
+use askama::Template;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
 use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
@@ -249,8 +250,9 @@ impl BindingGenerator for NodeBindingGenerator {
             ),
         };
 
-        let package = GeneratedPackageLayout::from_component(settings, component)?;
+        let package = GeneratedPackage::from_component(settings, component)?;
         package.ensure_root_dir()?;
+        package.write_package_files()?;
 
         Ok(())
     }
@@ -292,7 +294,214 @@ impl GeneratedPackageLayout {
         fs::create_dir_all(self.root_dir.as_std_path())?;
         Ok(())
     }
+
+    fn package_json_path(&self) -> Utf8PathBuf {
+        self.root_dir.join("package.json")
+    }
+
+    fn index_js_path(&self) -> Utf8PathBuf {
+        self.root_dir.join("index.js")
+    }
+
+    fn index_dts_path(&self) -> Utf8PathBuf {
+        self.root_dir.join("index.d.ts")
+    }
+
+    fn component_js_path(&self) -> Utf8PathBuf {
+        self.root_dir.join(format!("{}.js", self.namespace))
+    }
+
+    fn component_dts_path(&self) -> Utf8PathBuf {
+        self.root_dir.join(format!("{}.d.ts", self.namespace))
+    }
+
+    fn component_ffi_js_path(&self) -> Utf8PathBuf {
+        self.root_dir.join(format!("{}-ffi.js", self.namespace))
+    }
+
+    fn component_ffi_dts_path(&self) -> Utf8PathBuf {
+        self.root_dir.join(format!("{}-ffi.d.ts", self.namespace))
+    }
 }
+
+#[derive(Debug, Clone)]
+struct GeneratedPackage {
+    layout: GeneratedPackageLayout,
+    cdylib_name: String,
+    node_engine: String,
+    lib_path_literal: Option<String>,
+    manual_load: bool,
+}
+
+impl GeneratedPackage {
+    fn from_component(
+        settings: &GenerationSettings,
+        component: &Component<NodeBindingGeneratorConfig>,
+    ) -> Result<Self> {
+        let layout = GeneratedPackageLayout::from_component(settings, component)?;
+        let cdylib_name = component
+            .config
+            .cdylib_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow!("node bindings generation requires a cdylib_name"))?;
+
+        Ok(Self {
+            layout,
+            cdylib_name: cdylib_name.to_string(),
+            node_engine: component.config.node_engine.trim().to_string(),
+            lib_path_literal: component.config.lib_path_literal.clone(),
+            manual_load: component.config.manual_load,
+        })
+    }
+
+    fn ensure_root_dir(&self) -> Result<()> {
+        self.layout.ensure_root_dir()
+    }
+
+    fn write_package_files(&self) -> Result<()> {
+        let template_context = TemplateContext::from_package(self)?;
+
+        write_template(
+            &self.layout.package_json_path(),
+            &PackageJsonTemplate {
+                package_name_json: template_context.package_name_json.clone(),
+                node_engine_json: template_context.node_engine_json.clone(),
+            },
+        )?;
+        write_template(
+            &self.layout.index_js_path(),
+            &PackageIndexJsTemplate {
+                namespace: self.layout.namespace.clone(),
+            },
+        )?;
+        write_template(
+            &self.layout.index_dts_path(),
+            &PackageIndexDtsTemplate {
+                namespace: self.layout.namespace.clone(),
+            },
+        )?;
+        write_template(
+            &self.layout.component_js_path(),
+            &ComponentJsTemplate {
+                namespace: self.layout.namespace.clone(),
+                namespace_json: template_context.namespace_json.clone(),
+                package_name_json: template_context.package_name_json.clone(),
+                cdylib_name_json: template_context.cdylib_name_json.clone(),
+                node_engine_json: template_context.node_engine_json.clone(),
+                lib_path_literal_json: template_context.lib_path_literal_json.clone(),
+                manual_load: self.manual_load,
+            },
+        )?;
+        write_template(
+            &self.layout.component_dts_path(),
+            &ComponentDtsTemplate {
+                namespace: self.layout.namespace.clone(),
+            },
+        )?;
+        write_template(
+            &self.layout.component_ffi_js_path(),
+            &ComponentFfiJsTemplate {
+                namespace_json: template_context.namespace_json,
+                cdylib_name_json: template_context.cdylib_name_json,
+                lib_path_literal_json: template_context.lib_path_literal_json,
+                manual_load: self.manual_load,
+            },
+        )?;
+        write_template(
+            &self.layout.component_ffi_dts_path(),
+            &ComponentFfiDtsTemplate {},
+        )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TemplateContext {
+    namespace_json: String,
+    package_name_json: String,
+    cdylib_name_json: String,
+    node_engine_json: String,
+    lib_path_literal_json: String,
+}
+
+impl TemplateContext {
+    fn from_package(package: &GeneratedPackage) -> Result<Self> {
+        Ok(Self {
+            namespace_json: json_string(&package.layout.namespace)?,
+            package_name_json: json_string(&package.layout.package_name)?,
+            cdylib_name_json: json_string(&package.cdylib_name)?,
+            node_engine_json: json_string(&package.node_engine)?,
+            lib_path_literal_json: json_optional_string(package.lib_path_literal.as_deref())?,
+        })
+    }
+}
+
+fn write_template<T: Template>(path: &Utf8PathBuf, template: &T) -> Result<()> {
+    let contents = template.render()?;
+    fs::write(path.as_std_path(), contents)?;
+    Ok(())
+}
+
+fn json_string(value: &str) -> Result<String> {
+    Ok(serde_json::to_string(value)?)
+}
+
+fn json_optional_string(value: Option<&str>) -> Result<String> {
+    Ok(serde_json::to_string(&value)?)
+}
+
+#[derive(Template)]
+#[template(path = "package/package.json.j2", escape = "none")]
+struct PackageJsonTemplate {
+    package_name_json: String,
+    node_engine_json: String,
+}
+
+#[derive(Template)]
+#[template(path = "package/index.js.j2", escape = "none")]
+struct PackageIndexJsTemplate {
+    namespace: String,
+}
+
+#[derive(Template)]
+#[template(path = "package/index.d.ts.j2", escape = "none")]
+struct PackageIndexDtsTemplate {
+    namespace: String,
+}
+
+#[derive(Template)]
+#[template(path = "component/component.js.j2", escape = "none")]
+struct ComponentJsTemplate {
+    namespace: String,
+    namespace_json: String,
+    package_name_json: String,
+    cdylib_name_json: String,
+    node_engine_json: String,
+    lib_path_literal_json: String,
+    manual_load: bool,
+}
+
+#[derive(Template)]
+#[template(path = "component/component.d.ts.j2", escape = "none")]
+struct ComponentDtsTemplate {
+    namespace: String,
+}
+
+#[derive(Template)]
+#[template(path = "component/component-ffi.js.j2", escape = "none")]
+struct ComponentFfiJsTemplate {
+    namespace_json: String,
+    cdylib_name_json: String,
+    lib_path_literal_json: String,
+    manual_load: bool,
+}
+
+#[derive(Template)]
+#[template(path = "component/component-ffi.d.ts.j2", escape = "none")]
+struct ComponentFfiDtsTemplate {}
 
 #[cfg(test)]
 mod tests {
@@ -373,5 +582,49 @@ mod tests {
             error.to_string().contains("one npm package per invocation"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn write_bindings_emits_package_and_component_files() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("package-files");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+
+        generator
+            .write_bindings(&settings, &[component_with_namespace("example")])
+            .expect("write_bindings should succeed");
+
+        for expected in [
+            "package.json",
+            "index.js",
+            "index.d.ts",
+            "example.js",
+            "example.d.ts",
+            "example-ffi.js",
+            "example-ffi.d.ts",
+        ] {
+            let path = output_dir.join(expected);
+            assert!(path.is_file(), "expected generated file {path}");
+        }
+
+        let package_json = fs::read_to_string(output_dir.join("package.json").as_std_path())
+            .expect("package.json should be readable");
+        assert!(
+            package_json.contains("\"name\": \"example-package\""),
+            "unexpected package.json contents: {package_json}"
+        );
+
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
+        assert!(
+            component_js.contains("componentMetadata"),
+            "unexpected component JS contents: {component_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
 }

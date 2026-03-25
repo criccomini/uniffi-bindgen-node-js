@@ -1,1 +1,10 @@
-// Component API template scaffold.
+export const componentMetadata = Object.freeze({
+  namespace: {{ namespace_json }},
+  packageName: {{ package_name_json }},
+  cdylibName: {{ cdylib_name_json }},
+  nodeEngine: {{ node_engine_json }},
+  libPathLiteral: {{ lib_path_literal_json }},
+  manualLoad: {{ manual_load }},
+});
+
+export { ffiMetadata } from "./{{ namespace }}-ffi.js";

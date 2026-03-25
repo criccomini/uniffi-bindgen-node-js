@@ -1,1 +1,8 @@
-export {};
+export interface FfiMetadata {
+  namespace: string;
+  cdylibName: string;
+  libPathLiteral: string | null;
+  manualLoad: boolean;
+}
+
+export declare const ffiMetadata: Readonly<FfiMetadata>;

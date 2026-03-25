@@ -89,7 +89,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [ ] Parse `[bindings.node]` from `uniffi.toml` and merge it with CLI overrides.
 - [ ] Fail with clear errors when required inputs are missing or invalid.
 - [x] Add `src/bindings/mod.rs` with a `NodeBindingGenerator` that implements `uniffi_bindgen::BindingGenerator`.
-- [ ] Add a config struct for `[bindings.node]` settings and defaults.
+- [x] Add a config struct for `[bindings.node]` settings and defaults.
 - [ ] Write generated files into one output package directory per invocation.
 - [ ] Generate `package.json`, `index.js`, `index.d.ts`, `<namespace>.js`, `<namespace>.d.ts`, `<namespace>-ffi.js`, and `<namespace>-ffi.d.ts`.
 - [ ] Generate shared runtime helper files under `runtime/`.

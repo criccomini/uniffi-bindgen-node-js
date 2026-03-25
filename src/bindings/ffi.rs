@@ -274,7 +274,7 @@ fn type_depends_on_structs(type_: &FfiType) -> bool {
 
 fn render_optional_type_expr(type_: Option<&FfiType>) -> String {
     type_
-        .map(render_type_expr)
+        .map(|type_| render_type_expr(type_.clone()))
         .unwrap_or_else(|| "\"void\"".to_string())
 }
 

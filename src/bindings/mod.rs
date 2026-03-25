@@ -943,12 +943,11 @@ mod tests {
             r#"
             namespace example {
                 u64 current_generation();
-
-                callback interface LogCallback {
-                    void log(string message);
-                };
-
                 void init_logging(LogCallback callback);
+            };
+
+            callback interface LogCallback {
+                void log(string message);
             };
             "#,
         );
@@ -964,7 +963,8 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("koffi.struct(\"VTableCallbackInterfaceLogCallback\""),
+            component_ffi_js
+                .contains("defineCallbackVtable(\"VTableCallbackInterfaceLogCallback\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

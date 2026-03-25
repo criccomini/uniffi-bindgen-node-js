@@ -97,7 +97,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Reject unsupported v1 inputs up front with explicit generator errors for custom types, external types, and callback interfaces that are still waiting on runtime support.
 - [x] Render public API types for `bytes`, `i64/u64`, `Option<T>`, `Vec<T>`, `HashMap<K, V>`, and the nested combinations SlateDB needs.
 - [x] Generate public JS + `.d.ts` skeletons for top-level functions, objects, constructors, methods, records, flat enums, tagged enums, and error enums.
-- [ ] Support synchronous callback interfaces needed by SlateDB.
+- [x] Support synchronous callback interfaces needed by SlateDB.
 - [ ] Reject unsupported v1 features with explicit generator errors: async callback-interface methods, CommonJS output, and multi-package platform-switch packaging.
 - [ ] Add `koffi` as the generated package FFI dependency instead of `ffi-rs`.
 - [ ] Implement library loading and symbol binding with `koffi`.

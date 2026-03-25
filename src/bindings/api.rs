@@ -3,7 +3,8 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
 use uniffi_bindgen::interface::{
-    AsType, ComponentInterface, Constructor, Enum, Field, Function, Method, Object, Type, Variant,
+    AsType, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function, Method,
+    Object, Type, Variant,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,6 +14,7 @@ pub(crate) struct ComponentModel {
     pub flat_enums: Vec<EnumModel>,
     pub tagged_enums: Vec<EnumModel>,
     pub errors: Vec<ErrorModel>,
+    pub callback_interfaces: Vec<CallbackInterfaceModel>,
     pub objects: Vec<ObjectModel>,
 }
 
@@ -53,6 +55,11 @@ impl ComponentModel {
             flat_enums,
             tagged_enums,
             errors,
+            callback_interfaces: ci
+                .callback_interface_definitions()
+                .iter()
+                .map(CallbackInterfaceModel::from_callback_interface)
+                .collect(),
             objects: ci
                 .object_definitions()
                 .iter()
@@ -133,6 +140,16 @@ impl ComponentModel {
                 .join("\n\n");
             js_sections.push(error_js);
             dts_sections.push(error_dts);
+        }
+
+        if !self.callback_interfaces.is_empty() {
+            dts_sections.push(
+                self.callback_interfaces
+                    .iter()
+                    .map(render_dts_callback_interface)
+                    .collect::<Result<Vec<_>>>()?
+                    .join("\n\n"),
+            );
         }
 
         if !self.functions.is_empty() {
@@ -228,6 +245,32 @@ impl ComponentModel {
             }
         }
 
+        for callback_interface in &self.callback_interfaces {
+            for method in &callback_interface.methods {
+                validate_arguments_renderable(
+                    &method.arguments,
+                    &format!(
+                        "callback interface {}.{}",
+                        callback_interface.name, method.name
+                    ),
+                )?;
+                validate_optional_type_renderable(
+                    method.return_type.as_ref(),
+                    &format!(
+                        "callback interface {}.{} return type",
+                        callback_interface.name, method.name
+                    ),
+                )?;
+                validate_optional_type_renderable(
+                    method.throws_type.as_ref(),
+                    &format!(
+                        "callback interface {}.{} error type",
+                        callback_interface.name, method.name
+                    ),
+                )?;
+            }
+        }
+
         for object in &self.objects {
             for constructor in &object.constructors {
                 validate_arguments_renderable(
@@ -277,9 +320,10 @@ pub(crate) fn render_public_type(type_: &Type) -> Result<String> {
         Type::Boolean => Ok("boolean".to_string()),
         Type::String => Ok("string".to_string()),
         Type::Bytes => Ok("Uint8Array".to_string()),
-        Type::Object { name, .. } | Type::Record { name, .. } | Type::Enum { name, .. } => {
-            Ok(name.clone())
-        }
+        Type::Object { name, .. }
+        | Type::Record { name, .. }
+        | Type::Enum { name, .. }
+        | Type::CallbackInterface { name, .. } => Ok(name.clone()),
         Type::Optional { inner_type } => {
             Ok(format!("{} | undefined", render_public_type(inner_type)?))
         }
@@ -294,9 +338,6 @@ pub(crate) fn render_public_type(type_: &Type) -> Result<String> {
         )),
         Type::Timestamp => bail!("timestamps are not supported in the public Node API yet"),
         Type::Duration => bail!("durations are not supported in the public Node API yet"),
-        Type::CallbackInterface { name, .. } => {
-            bail!("callback interface '{name}' is not supported in the public Node API yet")
-        }
         Type::Custom { name, .. } => {
             bail!("custom type '{name}' is not supported in the public Node API yet")
         }
@@ -378,6 +419,25 @@ impl ErrorModel {
                 .variants()
                 .iter()
                 .map(VariantModel::from_variant)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CallbackInterfaceModel {
+    pub name: String,
+    pub methods: Vec<MethodModel>,
+}
+
+impl CallbackInterfaceModel {
+    fn from_callback_interface(callback_interface: &CallbackInterface) -> Self {
+        Self {
+            name: callback_interface.name().to_string(),
+            methods: callback_interface
+                .methods()
+                .into_iter()
+                .map(MethodModel::from_method)
                 .collect(),
         }
     }
@@ -537,21 +597,6 @@ fn validate_supported_features(ci: &ComponentInterface) -> Result<()> {
         ));
     }
 
-    let callback_interfaces = ci
-        .callback_interface_definitions()
-        .iter()
-        .map(|callback| callback.name().to_string())
-        .collect::<BTreeSet<_>>();
-    if !callback_interfaces.is_empty() {
-        unsupported.push(format!(
-            "callback interfaces are not supported yet: {}",
-            callback_interfaces
-                .into_iter()
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    }
-
     let async_callback_interfaces = ci
         .callback_interface_definitions()
         .iter()
@@ -641,6 +686,22 @@ fn render_dts_record(record: &RecordModel) -> Result<String> {
             render_public_type(&field.type_)?
         ));
     }
+    lines.push("}".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_dts_callback_interface(callback_interface: &CallbackInterfaceModel) -> Result<String> {
+    let mut lines = vec![format!("export interface {} {{", callback_interface.name)];
+
+    for method in &callback_interface.methods {
+        lines.push(format!(
+            "  {}({}): {};",
+            js_member_identifier(&method.name),
+            render_dts_params(&method.arguments)?,
+            render_return_type(method.return_type.as_ref(), method.is_async)?
+        ));
+    }
+
     lines.push("}".to_string());
     Ok(lines.join("\n"))
 }
@@ -1123,6 +1184,7 @@ mod tests {
             r#"
             namespace example {
                 string greet(string name);
+                void init_logging(Logger? callback);
             };
 
             dictionary Profile {
@@ -1147,6 +1209,10 @@ mod tests {
                 Conflict(string message);
             };
 
+            callback interface Logger {
+                void write(string message);
+            };
+
             interface Store {
                 constructor();
                 [Async] Profile fetch(string key);
@@ -1159,7 +1225,7 @@ mod tests {
 
         let model = ComponentModel::from_ci(&ci).expect("component model should build");
 
-        assert_eq!(model.functions.len(), 1);
+        assert_eq!(model.functions.len(), 2);
         assert_eq!(model.functions[0].name, "greet");
         assert_eq!(model.records.len(), 1);
         assert_eq!(model.records[0].name, "Profile");
@@ -1169,6 +1235,9 @@ mod tests {
         assert_eq!(model.tagged_enums[0].name, "Outcome");
         assert_eq!(model.errors.len(), 1);
         assert_eq!(model.errors[0].name, "StoreError");
+        assert_eq!(model.callback_interfaces.len(), 1);
+        assert_eq!(model.callback_interfaces[0].name, "Logger");
+        assert_eq!(model.callback_interfaces[0].methods.len(), 1);
         assert_eq!(model.objects.len(), 1);
         assert_eq!(model.objects[0].name, "Store");
         assert_eq!(model.objects[0].constructors.len(), 1);
@@ -1225,10 +1294,12 @@ mod tests {
     }
 
     #[test]
-    fn component_model_rejects_callback_interfaces() {
+    fn component_model_collects_synchronous_callback_interfaces() {
         let ci = ComponentInterface::from_webidl(
             r#"
-            namespace example {};
+            namespace example {
+                void init_logging(Logger? callback);
+            };
 
             callback interface Logger {
                 void write(string message);
@@ -1238,13 +1309,19 @@ mod tests {
         )
         .expect("UDL should parse");
 
-        let error = ComponentModel::from_ci(&ci).expect_err("callback interfaces should fail");
+        let model = ComponentModel::from_ci(&ci).expect("callback interfaces should build");
 
-        assert!(
-            error
-                .to_string()
-                .contains("callback interfaces are not supported yet"),
-            "unexpected error: {error}"
+        assert_eq!(model.callback_interfaces.len(), 1);
+        assert_eq!(model.callback_interfaces[0].name, "Logger");
+        assert_eq!(model.callback_interfaces[0].methods[0].name, "write");
+        assert_eq!(
+            model.functions[0].arguments[0].type_,
+            Type::Optional {
+                inner_type: Box::new(Type::CallbackInterface {
+                    name: "Logger".to_string(),
+                    module_path: "fixture_crate".to_string(),
+                }),
+            }
         );
     }
 
@@ -1328,6 +1405,14 @@ mod tests {
             })
             .unwrap(),
             "Map<string, Array<Uint8Array>>"
+        );
+        assert_eq!(
+            render_public_type(&Type::CallbackInterface {
+                name: "LogCallback".to_string(),
+                module_path: "crate::logging".to_string(),
+            })
+            .unwrap(),
+            "LogCallback"
         );
     }
 
@@ -1486,6 +1571,43 @@ mod tests {
             rendered
                 .dts
                 .contains("static new(path: string): Promise<AsyncStore>;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_callback_interface_types() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                void init_logging(LogCallback? callback);
+            };
+
+            callback interface LogCallback {
+                void log(string message);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .dts
+                .contains("export interface LogCallback {\n  log(message: string): void;\n}"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export declare function init_logging(callback: LogCallback | undefined): void;"),
             "unexpected DTS output: {}",
             rendered.dts
         );

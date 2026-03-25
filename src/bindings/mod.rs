@@ -33,10 +33,10 @@ impl NodeBindingCliOverrides {
         config_overrides: Vec<String>,
     ) -> Result<Self> {
         Ok(Self {
-            package_name,
-            cdylib_name,
-            node_engine,
-            lib_path_literal,
+            package_name: normalize_optional_value("--package-name", package_name)?,
+            cdylib_name: normalize_optional_value("--cdylib-name", cdylib_name)?,
+            node_engine: normalize_optional_value("--node-engine", node_engine)?,
+            lib_path_literal: normalize_optional_value("--lib-path-literal", lib_path_literal)?,
             manual_load,
             config_overrides: config_overrides
                 .into_iter()
@@ -83,7 +83,10 @@ impl NodeBindingConfigOverride {
             .split_once('=')
             .ok_or_else(|| anyhow!("invalid --config-override '{raw}': expected KEY=VALUE"))?;
         let key = raw_key.trim();
-        let value = raw_value.trim().to_string();
+        if key.is_empty() {
+            bail!("invalid --config-override '{raw}': missing key before '='");
+        }
+        let value = normalize_required_value("--config-override", raw_value.trim())?;
 
         match key {
             "package_name"
@@ -131,6 +134,20 @@ fn parse_bool_override(raw: &str, value: &str) -> Result<bool> {
     }
 }
 
+fn normalize_optional_value(flag: &str, value: Option<String>) -> Result<Option<String>> {
+    value
+        .map(|value| normalize_required_value(flag, &value))
+        .transpose()
+}
+
+fn normalize_required_value(flag: &str, value: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        bail!("{flag} cannot be empty");
+    }
+    Ok(trimmed.to_string())
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct NodeBindingGeneratorConfig {
@@ -150,6 +167,36 @@ impl Default for NodeBindingGeneratorConfig {
             lib_path_literal: None,
             manual_load: false,
         }
+    }
+}
+
+impl NodeBindingGeneratorConfig {
+    fn validate(&self) -> Result<()> {
+        if self
+            .package_name
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            bail!("node binding package_name cannot be empty");
+        }
+        if self
+            .cdylib_name
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            bail!("node binding cdylib_name cannot be empty");
+        }
+        if self.node_engine.trim().is_empty() {
+            bail!("node binding node_engine cannot be empty");
+        }
+        if self
+            .lib_path_literal
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            bail!("node binding lib_path_literal cannot be empty");
+        }
+        Ok(())
     }
 }
 
@@ -181,6 +228,7 @@ impl BindingGenerator for NodeBindingGenerator {
                 component.config.cdylib_name = settings.cdylib.clone();
             }
             self.cli_overrides.apply_to(&mut component.config);
+            component.config.validate()?;
         }
         Ok(())
     }

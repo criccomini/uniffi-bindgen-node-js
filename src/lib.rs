@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod bindings;
 mod cli;
 pub mod subcommands;
 

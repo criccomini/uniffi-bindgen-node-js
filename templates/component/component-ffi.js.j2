@@ -1,3 +1,5 @@
+import { dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import koffi from "koffi";
 import {
   ForeignBytes,
@@ -23,6 +25,45 @@ export const ffiMetadata = Object.freeze({
 });
 
 let loadedBindings = null;
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirectory = dirname(moduleFilename);
+
+function defaultSiblingLibraryFilename() {
+  const extensionByPlatform = {
+    darwin: ".dylib",
+    linux: ".so",
+    win32: ".dll",
+  };
+  const extension = extensionByPlatform[process.platform] ?? ".so";
+
+  if (process.platform === "win32") {
+    return ffiMetadata.cdylibName.endsWith(extension)
+      ? ffiMetadata.cdylibName
+      : `${ffiMetadata.cdylibName}${extension}`;
+  }
+
+  const libraryBaseName = ffiMetadata.cdylibName.startsWith("lib")
+    ? ffiMetadata.cdylibName
+    : `lib${ffiMetadata.cdylibName}`;
+  return libraryBaseName.endsWith(extension)
+    ? libraryBaseName
+    : `${libraryBaseName}${extension}`;
+}
+
+function defaultSiblingLibraryPath() {
+  return join(moduleDirectory, defaultSiblingLibraryFilename());
+}
+
+function resolveLibraryPath(libraryPath = undefined) {
+  const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+  if (rawLibraryPath == null) {
+    return defaultSiblingLibraryPath();
+  }
+
+  return isAbsolute(rawLibraryPath)
+    ? rawLibraryPath
+    : join(moduleDirectory, rawLibraryPath);
+}
 
 function createBindings(libraryPath) {
   const library = koffi.load(libraryPath);
@@ -76,12 +117,7 @@ function createBindings(libraryPath) {
 }
 
 export function load(libraryPath = undefined) {
-  const resolvedLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
-  if (resolvedLibraryPath == null) {
-    throw new Error(
-      "No native library path was provided. Pass a path to load(libraryPath) or set bindings.node.lib_path_literal.",
-    );
-  }
+  const resolvedLibraryPath = resolveLibraryPath(libraryPath);
 
   if (loadedBindings !== null) {
     if (loadedBindings.libraryPath === resolvedLibraryPath) {

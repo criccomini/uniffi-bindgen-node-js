@@ -106,7 +106,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Make library loading idempotent.
 - [ ] Support automatic library loading by default.
 - [ ] Support `--manual-load` by exporting explicit load and unload helpers.
-- [ ] Support sibling-library lookup by default plus literal-path override support.
+- [x] Support sibling-library lookup by default plus literal-path override support.
 - [ ] Add a `runtime/errors.js` + `.d.ts` module with UniFFI error helpers and internal runtime errors.
 - [ ] Add a `runtime/ffi-types.js` + `.d.ts` module with `RustBuffer` and raw byte helpers.
 - [ ] Add a `runtime/ffi-converters.js` + `.d.ts` module for primitive, optional, sequence, map, timestamp, duration, string, and byte-array converters.

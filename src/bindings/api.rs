@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use uniffi_bindgen::interface::{
     AsType, ComponentInterface, Constructor, Enum, Field, Function, Method, Object, Type, Variant,
 };
@@ -33,7 +33,7 @@ impl ComponentModel {
             }
         }
 
-        Ok(Self {
+        let model = Self {
             functions: ci
                 .function_definitions()
                 .iter()
@@ -51,7 +51,136 @@ impl ComponentModel {
                 .iter()
                 .map(ObjectModel::from_object)
                 .collect(),
-        })
+        };
+        model.validate_renderable_types()?;
+        Ok(model)
+    }
+
+    fn validate_renderable_types(&self) -> Result<()> {
+        for function in &self.functions {
+            validate_arguments_renderable(
+                &function.arguments,
+                &format!("function {}", function.name),
+            )?;
+            validate_optional_type_renderable(
+                function.return_type.as_ref(),
+                &format!("function {} return type", function.name),
+            )?;
+            validate_optional_type_renderable(
+                function.throws_type.as_ref(),
+                &format!("function {} error type", function.name),
+            )?;
+        }
+
+        for record in &self.records {
+            for field in &record.fields {
+                validate_type_renderable(
+                    &field.type_,
+                    &format!("record {} field {}", record.name, field.name),
+                )?;
+            }
+        }
+
+        for enum_def in self.flat_enums.iter().chain(&self.tagged_enums) {
+            for variant in &enum_def.variants {
+                for field in &variant.fields {
+                    validate_type_renderable(
+                        &field.type_,
+                        &format!(
+                            "enum {} variant {} field {}",
+                            enum_def.name, variant.name, field.name
+                        ),
+                    )?;
+                }
+            }
+        }
+
+        for error in &self.errors {
+            for variant in &error.variants {
+                for field in &variant.fields {
+                    validate_type_renderable(
+                        &field.type_,
+                        &format!(
+                            "error {} variant {} field {}",
+                            error.name, variant.name, field.name
+                        ),
+                    )?;
+                }
+            }
+        }
+
+        for object in &self.objects {
+            for constructor in &object.constructors {
+                validate_arguments_renderable(
+                    &constructor.arguments,
+                    &format!("constructor {}.{}", object.name, constructor.name),
+                )?;
+                validate_optional_type_renderable(
+                    constructor.throws_type.as_ref(),
+                    &format!(
+                        "constructor {}.{} error type",
+                        object.name, constructor.name
+                    ),
+                )?;
+            }
+
+            for method in &object.methods {
+                validate_arguments_renderable(
+                    &method.arguments,
+                    &format!("method {}.{}", object.name, method.name),
+                )?;
+                validate_optional_type_renderable(
+                    method.return_type.as_ref(),
+                    &format!("method {}.{} return type", object.name, method.name),
+                )?;
+                validate_optional_type_renderable(
+                    method.throws_type.as_ref(),
+                    &format!("method {}.{} error type", object.name, method.name),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub(crate) fn render_public_type(type_: &Type) -> Result<String> {
+    match type_ {
+        Type::UInt8
+        | Type::Int8
+        | Type::UInt16
+        | Type::Int16
+        | Type::UInt32
+        | Type::Int32
+        | Type::Float32
+        | Type::Float64 => Ok("number".to_string()),
+        Type::UInt64 | Type::Int64 => Ok("bigint".to_string()),
+        Type::Boolean => Ok("boolean".to_string()),
+        Type::String => Ok("string".to_string()),
+        Type::Bytes => Ok("Uint8Array".to_string()),
+        Type::Object { name, .. } | Type::Record { name, .. } | Type::Enum { name, .. } => {
+            Ok(name.clone())
+        }
+        Type::Optional { inner_type } => {
+            Ok(format!("{} | undefined", render_public_type(inner_type)?))
+        }
+        Type::Sequence { inner_type } => Ok(format!("Array<{}>", render_public_type(inner_type)?)),
+        Type::Map {
+            key_type,
+            value_type,
+        } => Ok(format!(
+            "Map<{}, {}>",
+            render_public_type(key_type)?,
+            render_public_type(value_type)?
+        )),
+        Type::Timestamp => bail!("timestamps are not supported in the public Node API yet"),
+        Type::Duration => bail!("durations are not supported in the public Node API yet"),
+        Type::CallbackInterface { name, .. } => {
+            bail!("callback interface '{name}' is not supported in the public Node API yet")
+        }
+        Type::Custom { name, .. } => {
+            bail!("custom type '{name}' is not supported in the public Node API yet")
+        }
     }
 }
 
@@ -365,6 +494,29 @@ fn describe_type(type_: &Type) -> String {
     }
 }
 
+fn validate_arguments_renderable(arguments: &[ArgumentModel], context: &str) -> Result<()> {
+    for argument in arguments {
+        validate_type_renderable(
+            &argument.type_,
+            &format!("{context} argument {}", argument.name),
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_optional_type_renderable(type_: Option<&Type>, context: &str) -> Result<()> {
+    if let Some(type_) = type_ {
+        validate_type_renderable(type_, context)?;
+    }
+    Ok(())
+}
+
+fn validate_type_renderable(type_: &Type, context: &str) -> Result<()> {
+    render_public_type(type_)
+        .with_context(|| format!("unsupported public Node API type for {context}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,5 +701,73 @@ mod tests {
             }
         );
         assert_eq!(model.functions[0].arguments[0].type_.as_type().name(), None);
+    }
+
+    #[test]
+    fn render_public_type_maps_slatedb_primitives_and_collections() {
+        assert_eq!(render_public_type(&Type::Bytes).unwrap(), "Uint8Array");
+        assert_eq!(render_public_type(&Type::UInt64).unwrap(), "bigint");
+        assert_eq!(render_public_type(&Type::Int64).unwrap(), "bigint");
+        assert_eq!(
+            render_public_type(&Type::Optional {
+                inner_type: Box::new(Type::Bytes),
+            })
+            .unwrap(),
+            "Uint8Array | undefined"
+        );
+        assert_eq!(
+            render_public_type(&Type::Sequence {
+                inner_type: Box::new(Type::Optional {
+                    inner_type: Box::new(Type::UInt64),
+                }),
+            })
+            .unwrap(),
+            "Array<bigint | undefined>"
+        );
+        assert_eq!(
+            render_public_type(&Type::Map {
+                key_type: Box::new(Type::String),
+                value_type: Box::new(Type::Sequence {
+                    inner_type: Box::new(Type::Bytes),
+                }),
+            })
+            .unwrap(),
+            "Map<string, Array<Uint8Array>>"
+        );
+    }
+
+    #[test]
+    fn render_public_type_handles_nested_slatedb_combinations() {
+        assert_eq!(
+            render_public_type(&Type::Optional {
+                inner_type: Box::new(Type::Sequence {
+                    inner_type: Box::new(Type::Sequence {
+                        inner_type: Box::new(Type::Bytes),
+                    }),
+                }),
+            })
+            .unwrap(),
+            "Array<Array<Uint8Array>> | undefined"
+        );
+        assert_eq!(
+            render_public_type(&Type::Map {
+                key_type: Box::new(Type::String),
+                value_type: Box::new(Type::Optional {
+                    inner_type: Box::new(Type::Int64),
+                }),
+            })
+            .unwrap(),
+            "Map<string, bigint | undefined>"
+        );
+    }
+
+    #[test]
+    fn render_public_type_rejects_timestamp_until_runtime_exists() {
+        let error = render_public_type(&Type::Timestamp)
+            .expect_err("timestamps should be rejected until the runtime exists");
+        assert!(
+            error.to_string().contains("timestamps are not supported"),
+            "unexpected error: {error}"
+        );
     }
 }

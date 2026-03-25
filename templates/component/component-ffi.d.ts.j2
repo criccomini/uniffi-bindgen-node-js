@@ -5,4 +5,22 @@ export interface FfiMetadata {
   manualLoad: boolean;
 }
 
+export interface FfiBindings {
+  libraryPath: string;
+  library: unknown;
+  ffiTypes: Readonly<Record<string, unknown>>;
+  ffiCallbacks: Readonly<Record<string, unknown>>;
+  ffiStructs: Readonly<Record<string, unknown>>;
+  ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
+}
+
 export declare const ffiMetadata: Readonly<FfiMetadata>;
+export declare function load(libraryPath?: string | null): Readonly<FfiBindings>;
+export declare function unload(): boolean;
+export declare function isLoaded(): boolean;
+export declare function getFfiBindings(): Readonly<FfiBindings>;
+export declare const ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
+
+{% for function in context.functions %}
+export declare function {{ function.identifier }}(...args: any[]): any;
+{% endfor %}

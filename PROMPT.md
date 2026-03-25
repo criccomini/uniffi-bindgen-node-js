@@ -100,7 +100,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Support synchronous callback interfaces needed by SlateDB.
 - [x] Reject unsupported v1 features with explicit generator errors: async callback-interface methods, CommonJS output, and multi-package platform-switch packaging.
 - [x] Add `koffi` as the generated package FFI dependency instead of `ffi-rs`.
-- [ ] Implement library loading and symbol binding with `koffi`.
+- [x] Implement library loading and symbol binding with `koffi`.
 - [ ] Declare runtime representations for UniFFI `RustBuffer`, `ForeignBytes`, `RustCallStatus`, handles, and callback vtables.
 - [ ] Normalize Koffi 64-bit values so generated bindings consistently expose `bigint`.
 - [ ] Make library loading idempotent.

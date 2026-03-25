@@ -1,6 +1,132 @@
+import koffi from "koffi";
+
 export const ffiMetadata = Object.freeze({
-  namespace: {{ namespace_json }},
-  cdylibName: {{ cdylib_name_json }},
-  libPathLiteral: {{ lib_path_literal_json }},
-  manualLoad: {{ manual_load }},
+  namespace: {{ context.namespace_json }},
+  cdylibName: {{ context.cdylib_name_json }},
+  libPathLiteral: {{ context.lib_path_literal_json }},
+  manualLoad: {{ context.manual_load }},
 });
+
+let loadedBindings = null;
+
+function createBindings(libraryPath) {
+  const library = koffi.load(libraryPath);
+  const RustBuffer = koffi.struct("RustBuffer", {
+    capacity: "uint64_t",
+    len: "uint64_t",
+    data: "void *",
+  });
+  const ForeignBytes = koffi.struct("ForeignBytes", {
+    len: "int32_t",
+    data: "void *",
+  });
+  const RustCallStatus = koffi.struct("RustCallStatus", {
+    code: "int8_t",
+    error_buf: RustBuffer,
+  });
+{% for opaque_type in context.opaque_types %}
+  const {{ opaque_type.identifier }} = koffi.pointer({{ opaque_type.name_json }}, koffi.opaque());
+{% endfor %}
+
+  const ffiTypes = Object.freeze({
+    UniffiHandle: "uint64_t",
+    VoidPointer: "void *",
+    RustBuffer,
+    ForeignBytes,
+    RustCallStatus,
+{% for opaque_type in context.opaque_types %}
+    {{ opaque_type.identifier }},
+{% endfor %}
+  });
+  const ffiCallbacks = {};
+{% for callback in context.pre_struct_callbacks %}
+  ffiCallbacks.{{ callback.identifier }} = koffi.proto({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
+{% endfor %}
+  const ffiStructs = Object.freeze((() => {
+    const ffiStructs = {};
+{% for struct_ in context.structs %}
+    ffiStructs.{{ struct_.identifier }} = koffi.struct({{ struct_.name_json }}, {
+{% for field in struct_.fields %}
+      {{ field.name_json }}: {{ field.type_expr }},
+{% endfor %}
+    });
+{% endfor %}
+    return ffiStructs;
+  })());
+{% for callback in context.post_struct_callbacks %}
+  ffiCallbacks.{{ callback.identifier }} = koffi.proto({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
+{% endfor %}
+  Object.freeze(ffiCallbacks);
+  const ffiFunctions = Object.freeze({
+{% for function in context.functions %}
+    {{ function.identifier }}: library.func({{ function.name_json }}, {{ function.return_type_expr }}, [{% for argument_type_expr in function.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]),
+{% endfor %}
+  });
+
+  return Object.freeze({
+    libraryPath,
+    library,
+    ffiTypes,
+    ffiCallbacks,
+    ffiStructs,
+    ffiFunctions,
+  });
+}
+
+export function load(libraryPath = undefined) {
+  const resolvedLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+  if (resolvedLibraryPath == null) {
+    throw new Error(
+      "No native library path was provided. Pass a path to load(libraryPath) or set bindings.node.lib_path_literal.",
+    );
+  }
+
+  if (loadedBindings !== null) {
+    unload();
+  }
+
+  loadedBindings = createBindings(resolvedLibraryPath);
+  return loadedBindings;
+}
+
+export function unload() {
+  if (loadedBindings === null) {
+    return false;
+  }
+
+  loadedBindings.library.unload();
+  loadedBindings = null;
+  return true;
+}
+
+export function isLoaded() {
+  return loadedBindings !== null;
+}
+
+export function getFfiBindings() {
+  if (loadedBindings === null) {
+    throw new Error("The native library is not loaded. Call load(libraryPath) first.");
+  }
+
+  return loadedBindings;
+}
+
+export const ffiFunctions = new Proxy(
+  {},
+  {
+    get(_target, property) {
+      if (typeof property !== "string") {
+        return undefined;
+      }
+
+      return getFfiBindings().ffiFunctions[property];
+    },
+  },
+);
+
+{% for function in context.functions %}
+export function {{ function.identifier }}(...args) {
+  return getFfiBindings().ffiFunctions.{{ function.identifier }}(...args);
+}
+
+{% endfor %}

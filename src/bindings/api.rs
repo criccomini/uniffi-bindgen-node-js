@@ -1605,9 +1605,9 @@ mod tests {
             rendered.dts
         );
         assert!(
-            rendered
-                .dts
-                .contains("export declare function init_logging(callback: LogCallback | undefined): void;"),
+            rendered.dts.contains(
+                "export declare function init_logging(callback: LogCallback | undefined): void;"
+            ),
             "unexpected DTS output: {}",
             rendered.dts
         );

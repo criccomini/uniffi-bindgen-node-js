@@ -7,8 +7,12 @@ use serde::Deserialize;
 use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
 
 mod api;
+mod ffi;
 
-use self::api::{ComponentModel, RenderedComponentApi};
+use self::{
+    api::{ComponentModel, RenderedComponentApi},
+    ffi::{RenderedComponentFfi, render_component_ffi},
+};
 
 #[derive(Debug, Clone)]
 pub struct NodeBindingGenerator {
@@ -411,6 +415,7 @@ struct GeneratedPackage {
     lib_path_literal: Option<String>,
     manual_load: bool,
     public_api: RenderedComponentApi,
+    ffi_api: RenderedComponentFfi,
 }
 
 impl GeneratedPackage {
@@ -427,6 +432,12 @@ impl GeneratedPackage {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| anyhow!("node bindings generation requires a cdylib_name"))?;
+        let ffi_api = render_component_ffi(
+            &component.ci,
+            cdylib_name,
+            component.config.lib_path_literal.as_deref(),
+            component.config.manual_load,
+        )?;
 
         Ok(Self {
             layout,
@@ -435,6 +446,7 @@ impl GeneratedPackage {
             lib_path_literal: component.config.lib_path_literal.clone(),
             manual_load: component.config.manual_load,
             public_api,
+            ffi_api,
         })
     }
 
@@ -486,16 +498,15 @@ impl GeneratedPackage {
         )?;
         write_template(
             &self.layout.component_ffi_js_path(),
-            &ComponentFfiJsTemplate {
-                namespace_json: template_context.namespace_json,
-                cdylib_name_json: template_context.cdylib_name_json,
-                lib_path_literal_json: template_context.lib_path_literal_json,
-                manual_load: self.manual_load,
+            &StringTemplate {
+                contents: self.ffi_api.js.clone(),
             },
         )?;
         write_template(
             &self.layout.component_ffi_dts_path(),
-            &ComponentFfiDtsTemplate {},
+            &StringTemplate {
+                contents: self.ffi_api.dts.clone(),
+            },
         )?;
         self.write_runtime_files()?;
 
@@ -650,17 +661,10 @@ struct ComponentDtsTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "component/component-ffi.js.j2", escape = "none")]
-struct ComponentFfiJsTemplate {
-    namespace_json: String,
-    cdylib_name_json: String,
-    lib_path_literal_json: String,
-    manual_load: bool,
+#[template(source = "{{ contents }}", ext = "txt", escape = "none")]
+struct StringTemplate {
+    contents: String,
 }
-
-#[derive(Template)]
-#[template(path = "component/component-ffi.d.ts.j2", escape = "none")]
-struct ComponentFfiDtsTemplate {}
 
 #[derive(Template)]
 #[template(path = "runtime/errors.js.j2", escape = "none")]
@@ -745,6 +749,17 @@ mod tests {
             .expect("valid test UDL"),
             config: NodeBindingGeneratorConfig {
                 package_name: Some(format!("{namespace}-package")),
+                cdylib_name: Some("fixture".to_string()),
+                ..NodeBindingGeneratorConfig::default()
+            },
+        }
+    }
+
+    fn component_from_webidl(source: &str) -> Component<NodeBindingGeneratorConfig> {
+        Component {
+            ci: ComponentInterface::from_webidl(source, "fixture_crate").expect("valid test UDL"),
+            config: NodeBindingGeneratorConfig {
+                package_name: Some("fixture-package".to_string()),
                 cdylib_name: Some("fixture".to_string()),
                 ..NodeBindingGeneratorConfig::default()
             },
@@ -875,6 +890,70 @@ mod tests {
         assert!(
             component_js.contains("componentMetadata"),
             "unexpected component JS contents: {component_js}"
+        );
+
+        let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
+        assert!(
+            component_ffi_js.contains("import koffi from \"koffi\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("koffi.load"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("uniffi_contract_version"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_emits_koffi_callback_and_function_declarations() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("ffi-bindings");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+        let component = component_from_webidl(
+            r#"
+            namespace example {
+                u64 current_generation();
+
+                callback interface LogCallback {
+                    void log(string message);
+                };
+
+                void init_logging(LogCallback callback);
+            };
+            "#,
+        );
+
+        generator
+            .write_bindings(&settings, &[component])
+            .expect("write_bindings should succeed");
+
+        let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
+        assert!(
+            component_ffi_js.contains("koffi.proto(\"CallbackInterfaceLogCallbackMethod0\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("koffi.struct(\"VTableCallbackInterfaceLogCallback\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("current_generation"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("init_callback_vtable_logcallback"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

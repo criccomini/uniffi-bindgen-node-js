@@ -102,7 +102,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add `koffi` as the generated package FFI dependency instead of `ffi-rs`.
 - [x] Implement library loading and symbol binding with `koffi`.
 - [x] Declare runtime representations for UniFFI `RustBuffer`, `ForeignBytes`, `RustCallStatus`, handles, and callback vtables.
-- [ ] Normalize Koffi 64-bit values so generated bindings consistently expose `bigint`.
+- [x] Normalize Koffi 64-bit values so generated bindings consistently expose `bigint`.
 - [ ] Make library loading idempotent.
 - [ ] Support automatic library loading by default.
 - [ ] Support `--manual-load` by exporting explicit load and unload helpers.

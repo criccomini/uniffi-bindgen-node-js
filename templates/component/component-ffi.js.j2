@@ -8,6 +8,11 @@ import {
   defineCallbackVtable,
   defineOpaquePointer,
   defineStructType,
+  normalizeHandle,
+  normalizeInt64,
+  normalizeRustBuffer,
+  normalizeRustCallStatus,
+  normalizeUInt64,
 } from "./runtime/ffi-types.js";
 
 export const ffiMetadata = Object.freeze({
@@ -108,22 +113,22 @@ export function getFfiBindings() {
   return loadedBindings;
 }
 
-export const ffiFunctions = new Proxy(
-  {},
-  {
-    get(_target, property) {
-      if (typeof property !== "string") {
-        return undefined;
-      }
-
-      return getFfiBindings().ffiFunctions[property];
-    },
+export const ffiFunctions = Object.freeze({
+{% for function in context.functions %}
+  {{ function.identifier }}(...args) {
+    const result = getFfiBindings().ffiFunctions.{{ function.identifier }}(...args);
+{% if let Some(return_normalizer) = function.return_normalizer %}
+    return {{ return_normalizer }}(result);
+{% else %}
+    return result;
+{% endif %}
   },
-);
+{% endfor %}
+});
 
 {% for function in context.functions %}
 export function {{ function.identifier }}(...args) {
-  return getFfiBindings().ffiFunctions.{{ function.identifier }}(...args);
+  return ffiFunctions.{{ function.identifier }}(...args);
 }
 
 {% endfor %}

@@ -19,6 +19,49 @@ export const RustCallStatus = koffi.struct("RustCallStatus", {
   error_buf: RustBuffer,
 });
 
+export function normalizeInt64(value) {
+  if (value == null) {
+    return value;
+  }
+
+  return typeof value === "bigint" ? value : BigInt(value);
+}
+
+export function normalizeUInt64(value) {
+  if (value == null) {
+    return value;
+  }
+
+  return typeof value === "bigint" ? value : BigInt(value);
+}
+
+export function normalizeHandle(value) {
+  return normalizeUInt64(value);
+}
+
+export function normalizeRustBuffer(buffer) {
+  if (buffer == null) {
+    return buffer;
+  }
+
+  return {
+    ...buffer,
+    capacity: normalizeUInt64(buffer.capacity),
+    len: normalizeUInt64(buffer.len),
+  };
+}
+
+export function normalizeRustCallStatus(status) {
+  if (status == null) {
+    return status;
+  }
+
+  return {
+    ...status,
+    error_buf: normalizeRustBuffer(status.error_buf),
+  };
+}
+
 export function defineOpaquePointer(name) {
   return koffi.pointer(name, koffi.opaque());
 }

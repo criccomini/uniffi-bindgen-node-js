@@ -196,6 +196,7 @@ struct FunctionModel {
     name_json: String,
     return_type_expr: String,
     argument_type_exprs: Vec<String>,
+    return_normalizer: Option<String>,
 }
 
 impl FunctionModel {
@@ -215,6 +216,9 @@ impl FunctionModel {
             name_json: json_string(function.name()).expect("FFI function names should serialize"),
             return_type_expr: render_optional_type_expr(function.return_type()),
             argument_type_exprs,
+            return_normalizer: function
+                .return_type()
+                .and_then(render_return_normalizer_expr),
         }
     }
 }
@@ -272,6 +276,17 @@ fn render_optional_type_expr(type_: Option<&FfiType>) -> String {
     type_
         .map(render_type_expr)
         .unwrap_or_else(|| "\"void\"".to_string())
+}
+
+fn render_return_normalizer_expr(type_: &FfiType) -> Option<String> {
+    match type_ {
+        FfiType::Int64 => Some("normalizeInt64".to_string()),
+        FfiType::UInt64 => Some("normalizeUInt64".to_string()),
+        FfiType::Handle => Some("normalizeHandle".to_string()),
+        FfiType::RustBuffer(_) => Some("normalizeRustBuffer".to_string()),
+        FfiType::RustCallStatus => Some("normalizeRustCallStatus".to_string()),
+        _ => None,
+    }
 }
 
 fn render_type_expr(type_: FfiType) -> String {

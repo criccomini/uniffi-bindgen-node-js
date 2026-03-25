@@ -922,6 +922,10 @@ mod tests {
             ffi_types_js.contains("export function defineCallbackVtable"),
             "unexpected runtime FFI types JS contents: {ffi_types_js}"
         );
+        assert!(
+            ffi_types_js.contains("export function normalizeUInt64"),
+            "unexpected runtime FFI types JS contents: {ffi_types_js}"
+        );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
@@ -969,6 +973,10 @@ mod tests {
         );
         assert!(
             component_ffi_js.contains("init_callback_vtable_logcallback"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("normalizeUInt64"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
 

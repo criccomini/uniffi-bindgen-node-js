@@ -3,6 +3,11 @@ export declare const VoidPointer: "void *";
 export declare const RustBuffer: unknown;
 export declare const ForeignBytes: unknown;
 export declare const RustCallStatus: unknown;
+export declare function normalizeInt64(value: bigint | number | null | undefined): bigint | null | undefined;
+export declare function normalizeUInt64(value: bigint | number | null | undefined): bigint | null | undefined;
+export declare function normalizeHandle(value: bigint | number | null | undefined): bigint | null | undefined;
+export declare function normalizeRustBuffer<T>(buffer: T): T;
+export declare function normalizeRustCallStatus<T>(status: T): T;
 export declare function defineOpaquePointer(name: string): unknown;
 export declare function defineStructType(
   name: string,

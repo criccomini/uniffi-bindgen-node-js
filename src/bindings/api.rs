@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use anyhow::{Context, Result, bail};
+use heck::ToUpperCamelCase;
 use uniffi_bindgen::interface::{
     AsType, ComponentInterface, Constructor, Enum, Field, Function, Method, Object, Type, Variant,
 };
@@ -13,6 +14,12 @@ pub(crate) struct ComponentModel {
     pub tagged_enums: Vec<EnumModel>,
     pub errors: Vec<ErrorModel>,
     pub objects: Vec<ObjectModel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RenderedComponentApi {
+    pub js: String,
+    pub dts: String,
 }
 
 impl ComponentModel {
@@ -54,6 +61,118 @@ impl ComponentModel {
         };
         model.validate_renderable_types()?;
         Ok(model)
+    }
+
+    pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
+        let mut js_sections = Vec::new();
+        let mut dts_sections = Vec::new();
+
+        if !self.functions.is_empty() || !self.objects.is_empty() {
+            js_sections.push(
+                "function uniffiNotImplemented(member) {\n  throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);\n}"
+                    .to_string(),
+            );
+        }
+
+        if !self.records.is_empty() {
+            dts_sections.push(
+                self.records
+                    .iter()
+                    .map(render_dts_record)
+                    .collect::<Result<Vec<_>>>()?
+                    .join("\n\n"),
+            );
+        }
+
+        if !self.flat_enums.is_empty() {
+            let flat_enum_js = self
+                .flat_enums
+                .iter()
+                .map(render_js_flat_enum)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            let flat_enum_dts = self
+                .flat_enums
+                .iter()
+                .map(render_dts_flat_enum)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            js_sections.push(flat_enum_js);
+            dts_sections.push(flat_enum_dts);
+        }
+
+        if !self.tagged_enums.is_empty() {
+            let tagged_enum_js = self
+                .tagged_enums
+                .iter()
+                .map(render_js_tagged_enum)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            let tagged_enum_dts = self
+                .tagged_enums
+                .iter()
+                .map(render_dts_tagged_enum)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            js_sections.push(tagged_enum_js);
+            dts_sections.push(tagged_enum_dts);
+        }
+
+        if !self.errors.is_empty() {
+            let error_js = self
+                .errors
+                .iter()
+                .map(render_js_error)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            let error_dts = self
+                .errors
+                .iter()
+                .map(render_dts_error)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            js_sections.push(error_js);
+            dts_sections.push(error_dts);
+        }
+
+        if !self.functions.is_empty() {
+            let functions_js = self
+                .functions
+                .iter()
+                .map(render_js_function)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            let functions_dts = self
+                .functions
+                .iter()
+                .map(render_dts_function)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            js_sections.push(functions_js);
+            dts_sections.push(functions_dts);
+        }
+
+        if !self.objects.is_empty() {
+            let objects_js = self
+                .objects
+                .iter()
+                .map(render_js_object)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            let objects_dts = self
+                .objects
+                .iter()
+                .map(render_dts_object)
+                .collect::<Result<Vec<_>>>()?
+                .join("\n\n");
+            js_sections.push(objects_js);
+            dts_sections.push(objects_dts);
+        }
+
+        Ok(RenderedComponentApi {
+            js: js_sections.join("\n\n"),
+            dts: dts_sections.join("\n\n"),
+        })
     }
 
     fn validate_renderable_types(&self) -> Result<()> {
@@ -494,6 +613,482 @@ fn describe_type(type_: &Type) -> String {
     }
 }
 
+fn render_js_function(function: &FunctionModel) -> Result<String> {
+    Ok(format!(
+        "export {}function {}({}) {{\n  return uniffiNotImplemented({});\n}}",
+        if function.is_async { "async " } else { "" },
+        js_identifier(&function.name),
+        render_js_params(&function.arguments),
+        json_string_literal(&function.name)?
+    ))
+}
+
+fn render_dts_function(function: &FunctionModel) -> Result<String> {
+    Ok(format!(
+        "export declare function {}({}): {};",
+        js_identifier(&function.name),
+        render_dts_params(&function.arguments)?,
+        render_return_type(function.return_type.as_ref(), function.is_async)?
+    ))
+}
+
+fn render_dts_record(record: &RecordModel) -> Result<String> {
+    let mut lines = vec![format!("export interface {} {{", record.name)];
+    for field in &record.fields {
+        lines.push(format!(
+            "  {}: {};",
+            quoted_property_name(&field.name)?,
+            render_public_type(&field.type_)?
+        ));
+    }
+    lines.push("}".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_js_flat_enum(enum_def: &EnumModel) -> Result<String> {
+    let mut lines = vec![format!("export const {} = Object.freeze({{", enum_def.name)];
+    for variant in &enum_def.variants {
+        let variant_name = json_string_literal(&variant.name)?;
+        lines.push(format!("  {}: {},", variant_name, variant_name));
+    }
+    lines.push("});".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_dts_flat_enum(enum_def: &EnumModel) -> Result<String> {
+    let mut lines = vec![format!(
+        "export declare const {}: Readonly<{{",
+        enum_def.name
+    )];
+    for variant in &enum_def.variants {
+        lines.push(format!(
+            "  {}: {};",
+            quoted_property_name(&variant.name)?,
+            json_string_literal(&variant.name)?
+        ));
+    }
+    lines.push("}>;".to_string());
+    lines.push(format!(
+        "export type {} = (typeof {})[keyof typeof {}];",
+        enum_def.name, enum_def.name, enum_def.name
+    ));
+    Ok(lines.join("\n"))
+}
+
+fn render_js_tagged_enum(enum_def: &EnumModel) -> Result<String> {
+    let mut lines = vec![format!("export const {} = Object.freeze({{", enum_def.name)];
+    for variant in &enum_def.variants {
+        lines.push(format!(
+            "  {}({}) {{",
+            js_member_identifier(&variant.name),
+            render_js_fields_as_params(&variant.fields)
+        ));
+        lines.push("    return Object.freeze({".to_string());
+        lines.push(format!(
+            "      tag: {},",
+            json_string_literal(&variant.name)?
+        ));
+        for field in &variant.fields {
+            lines.push(format!(
+                "      {}: {},",
+                quoted_property_name(&field.name)?,
+                js_identifier(&field.name)
+            ));
+        }
+        lines.push("    });".to_string());
+        lines.push("  },".to_string());
+    }
+    lines.push("});".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_dts_tagged_enum(enum_def: &EnumModel) -> Result<String> {
+    let mut lines = Vec::new();
+    let mut variant_types = Vec::new();
+
+    for variant in &enum_def.variants {
+        let variant_type_name = variant_type_name(&enum_def.name, &variant.name);
+        variant_types.push(variant_type_name.clone());
+        lines.push(format!("export interface {} {{", variant_type_name));
+        lines.push(format!("  tag: {};", json_string_literal(&variant.name)?));
+        for field in &variant.fields {
+            lines.push(format!(
+                "  {}: {};",
+                quoted_property_name(&field.name)?,
+                render_public_type(&field.type_)?
+            ));
+        }
+        lines.push("}".to_string());
+        lines.push(String::new());
+    }
+
+    lines.push(format!(
+        "export type {} = {};",
+        enum_def.name,
+        variant_types.join(" | ")
+    ));
+    lines.push(format!(
+        "export declare const {}: Readonly<{{",
+        enum_def.name
+    ));
+    for variant in &enum_def.variants {
+        lines.push(format!(
+            "  {}({}): {};",
+            js_member_identifier(&variant.name),
+            render_dts_fields_as_params(&variant.fields)?,
+            variant_type_name(&enum_def.name, &variant.name)
+        ));
+    }
+    lines.push("}>;".to_string());
+
+    Ok(lines.join("\n"))
+}
+
+fn render_js_error(error: &ErrorModel) -> Result<String> {
+    let mut lines = vec![
+        format!("export class {} extends Error {{", error.name),
+        "  constructor(tag) {".to_string(),
+        "    super(tag);".to_string(),
+        format!("    this.name = {};", json_string_literal(&error.name)?),
+        "    this.tag = tag;".to_string(),
+        "  }".to_string(),
+        "}".to_string(),
+    ];
+
+    for variant in &error.variants {
+        lines.push(String::new());
+        let variant_class_name = variant_type_name(&error.name, &variant.name);
+        lines.push(format!(
+            "export class {} extends {} {{",
+            variant_class_name, error.name
+        ));
+        lines.push(format!(
+            "  constructor({}) {{",
+            render_js_fields_as_params(&variant.fields)
+        ));
+        lines.push(format!(
+            "    super({});",
+            json_string_literal(&variant.name)?
+        ));
+        lines.push(format!(
+            "    this.name = {};",
+            json_string_literal(&variant_class_name)?
+        ));
+        for field in &variant.fields {
+            lines.push(format!(
+                "    this[{}] = {};",
+                json_string_literal(&field.name)?,
+                js_identifier(&field.name)
+            ));
+        }
+        lines.push("  }".to_string());
+        lines.push("}".to_string());
+    }
+
+    Ok(lines.join("\n"))
+}
+
+fn render_dts_error(error: &ErrorModel) -> Result<String> {
+    let mut lines = vec![
+        format!("export declare class {} extends Error {{", error.name),
+        "  readonly tag: string;".to_string(),
+        "  protected constructor(tag: string);".to_string(),
+        "}".to_string(),
+    ];
+
+    for variant in &error.variants {
+        lines.push(String::new());
+        let variant_class_name = variant_type_name(&error.name, &variant.name);
+        lines.push(format!(
+            "export declare class {} extends {} {{",
+            variant_class_name, error.name
+        ));
+        lines.push(format!(
+            "  readonly tag: {};",
+            json_string_literal(&variant.name)?
+        ));
+        for field in &variant.fields {
+            lines.push(format!(
+                "  readonly {}: {};",
+                quoted_property_name(&field.name)?,
+                render_public_type(&field.type_)?
+            ));
+        }
+        lines.push(format!(
+            "  constructor({});",
+            render_dts_fields_as_params(&variant.fields)?
+        ));
+        lines.push("}".to_string());
+    }
+
+    Ok(lines.join("\n"))
+}
+
+fn render_js_object(object: &ObjectModel) -> Result<String> {
+    let mut lines = vec![format!("export class {} {{", object.name)];
+
+    if let Some(primary_constructor) = object
+        .constructors
+        .iter()
+        .find(|constructor| constructor.is_primary && !constructor.is_async)
+    {
+        lines.push(format!(
+            "  constructor({}) {{",
+            render_js_params(&primary_constructor.arguments)
+        ));
+    } else {
+        lines.push("  constructor() {".to_string());
+    }
+    lines.push(format!(
+        "    return uniffiNotImplemented({});",
+        json_string_literal(&format!("{}.constructor", object.name))?
+    ));
+    lines.push("  }".to_string());
+
+    for constructor in &object.constructors {
+        if constructor.is_primary && !constructor.is_async {
+            continue;
+        }
+        lines.push(String::new());
+        lines.push(format!(
+            "  static {}{}({}) {{",
+            if constructor.is_async { "async " } else { "" },
+            js_member_identifier(&constructor.name),
+            render_js_params(&constructor.arguments)
+        ));
+        lines.push(format!(
+            "    return uniffiNotImplemented({});",
+            json_string_literal(&format!("{}.{}", object.name, constructor.name))?
+        ));
+        lines.push("  }".to_string());
+    }
+
+    for method in &object.methods {
+        lines.push(String::new());
+        lines.push(format!(
+            "  {}{}({}) {{",
+            if method.is_async { "async " } else { "" },
+            js_member_identifier(&method.name),
+            render_js_params(&method.arguments)
+        ));
+        lines.push(format!(
+            "    return uniffiNotImplemented({});",
+            json_string_literal(&format!("{}.{}", object.name, method.name))?
+        ));
+        lines.push("  }".to_string());
+    }
+
+    lines.push("}".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_dts_object(object: &ObjectModel) -> Result<String> {
+    let mut lines = vec![format!("export declare class {} {{", object.name)];
+
+    if let Some(primary_constructor) = object
+        .constructors
+        .iter()
+        .find(|constructor| constructor.is_primary && !constructor.is_async)
+    {
+        lines.push(format!(
+            "  constructor({});",
+            render_dts_params(&primary_constructor.arguments)?
+        ));
+    } else {
+        lines.push("  protected constructor();".to_string());
+    }
+
+    for constructor in &object.constructors {
+        if constructor.is_primary && !constructor.is_async {
+            continue;
+        }
+        lines.push(format!(
+            "  static {}({}): {};",
+            js_member_identifier(&constructor.name),
+            render_dts_params(&constructor.arguments)?,
+            render_named_return_type(&object.name, constructor.is_async)
+        ));
+    }
+
+    for method in &object.methods {
+        lines.push(format!(
+            "  {}({}): {};",
+            js_member_identifier(&method.name),
+            render_dts_params(&method.arguments)?,
+            render_return_type(method.return_type.as_ref(), method.is_async)?
+        ));
+    }
+
+    lines.push("}".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_js_params(arguments: &[ArgumentModel]) -> String {
+    arguments
+        .iter()
+        .map(|argument| js_identifier(&argument.name))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn render_dts_params(arguments: &[ArgumentModel]) -> Result<String> {
+    arguments
+        .iter()
+        .map(|argument| {
+            Ok(format!(
+                "{}: {}",
+                js_identifier(&argument.name),
+                render_public_type(&argument.type_)?
+            ))
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(|params| params.join(", "))
+}
+
+fn render_js_fields_as_params(fields: &[FieldModel]) -> String {
+    fields
+        .iter()
+        .map(|field| js_identifier(&field.name))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn render_dts_fields_as_params(fields: &[FieldModel]) -> Result<String> {
+    fields
+        .iter()
+        .map(|field| {
+            Ok(format!(
+                "{}: {}",
+                js_identifier(&field.name),
+                render_public_type(&field.type_)?
+            ))
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(|params| params.join(", "))
+}
+
+fn render_return_type(return_type: Option<&Type>, is_async: bool) -> Result<String> {
+    let type_name = match return_type {
+        Some(return_type) => render_public_type(return_type)?,
+        None => "void".to_string(),
+    };
+    if is_async {
+        Ok(format!("Promise<{type_name}>"))
+    } else {
+        Ok(type_name)
+    }
+}
+
+fn render_named_return_type(type_name: &str, is_async: bool) -> String {
+    if is_async {
+        format!("Promise<{type_name}>")
+    } else {
+        type_name.to_string()
+    }
+}
+
+fn variant_type_name(type_name: &str, variant_name: &str) -> String {
+    format!("{type_name}{}", variant_name.to_upper_camel_case())
+}
+
+fn quoted_property_name(name: &str) -> Result<String> {
+    json_string_literal(name)
+}
+
+fn json_string_literal(value: &str) -> Result<String> {
+    Ok(serde_json::to_string(value)?)
+}
+
+fn js_identifier(name: &str) -> String {
+    sanitize_identifier(name, false)
+}
+
+fn js_member_identifier(name: &str) -> String {
+    sanitize_identifier(name, true)
+}
+
+fn sanitize_identifier(name: &str, allow_reserved: bool) -> String {
+    let mut identifier = String::new();
+    for (index, character) in name.chars().enumerate() {
+        let valid = if index == 0 {
+            is_identifier_start(character)
+        } else {
+            is_identifier_continue(character)
+        };
+        if valid {
+            identifier.push(character);
+        } else {
+            identifier.push('_');
+        }
+    }
+
+    if identifier.is_empty() {
+        identifier.push('_');
+    }
+
+    if !identifier.chars().next().is_some_and(is_identifier_start) {
+        identifier.insert(0, '_');
+    }
+
+    if !allow_reserved && is_reserved_identifier(&identifier) {
+        identifier.push('_');
+    }
+
+    identifier
+}
+
+fn is_identifier_start(character: char) -> bool {
+    character == '_' || character == '$' || character.is_ascii_alphabetic()
+}
+
+fn is_identifier_continue(character: char) -> bool {
+    is_identifier_start(character) || character.is_ascii_digit()
+}
+
+fn is_reserved_identifier(identifier: &str) -> bool {
+    matches!(
+        identifier,
+        "await"
+            | "break"
+            | "case"
+            | "catch"
+            | "class"
+            | "const"
+            | "continue"
+            | "debugger"
+            | "default"
+            | "delete"
+            | "do"
+            | "else"
+            | "enum"
+            | "export"
+            | "extends"
+            | "false"
+            | "finally"
+            | "for"
+            | "function"
+            | "if"
+            | "import"
+            | "in"
+            | "instanceof"
+            | "new"
+            | "null"
+            | "return"
+            | "super"
+            | "switch"
+            | "this"
+            | "throw"
+            | "true"
+            | "try"
+            | "typeof"
+            | "var"
+            | "void"
+            | "while"
+            | "with"
+            | "yield"
+    )
+}
+
 fn validate_arguments_renderable(arguments: &[ArgumentModel], context: &str) -> Result<()> {
     for argument in arguments {
         validate_type_renderable(
@@ -768,6 +1363,131 @@ mod tests {
         assert!(
             error.to_string().contains("timestamps are not supported"),
             "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_js_and_dts_skeletons() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                string greet(string name);
+            };
+
+            dictionary Profile {
+                string name;
+                bytes bytes;
+            };
+
+            enum Flavor {
+                "vanilla",
+                "chocolate"
+            };
+
+            [Enum]
+            interface Outcome {
+                Success(string value);
+                Missing();
+            };
+
+            [Error]
+            interface StoreError {
+                NotFound();
+                Conflict(string message);
+            };
+
+            interface Store {
+                constructor();
+                [Async] Profile fetch(string key);
+                void put(string key, Profile profile);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains("export function greet(name)"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("export const Flavor = Object.freeze({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("export class StoreErrorConflict extends StoreError"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("export class Store {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.dts.contains(
+                "export interface Profile {\n  \"name\": string;\n  \"bytes\": Uint8Array;\n}"
+            ),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export type Outcome = OutcomeSuccess | OutcomeMissing;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("fetch(key: string): Promise<Profile>;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+    }
+
+    #[test]
+    fn render_public_api_keeps_async_primary_constructor_as_static_new() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            interface AsyncStore {
+                [Async] constructor(string path);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains("static async new(path)"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("static new(path: string): Promise<AsyncStore>;"),
+            "unexpected DTS output: {}",
+            rendered.dts
         );
     }
 }

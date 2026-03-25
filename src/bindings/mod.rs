@@ -8,7 +8,7 @@ use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
 
 mod api;
 
-use self::api::ComponentModel;
+use self::api::{ComponentModel, RenderedComponentApi};
 
 #[derive(Debug, Clone)]
 pub struct NodeBindingGenerator {
@@ -339,6 +339,7 @@ struct GeneratedPackage {
     node_engine: String,
     lib_path_literal: Option<String>,
     manual_load: bool,
+    public_api: RenderedComponentApi,
 }
 
 impl GeneratedPackage {
@@ -346,7 +347,7 @@ impl GeneratedPackage {
         settings: &GenerationSettings,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<Self> {
-        ComponentModel::from_ci(&component.ci)?;
+        let public_api = ComponentModel::from_ci(&component.ci)?.render_public_api()?;
         let layout = GeneratedPackageLayout::from_component(settings, component)?;
         let cdylib_name = component
             .config
@@ -362,6 +363,7 @@ impl GeneratedPackage {
             node_engine: component.config.node_engine.trim().to_string(),
             lib_path_literal: component.config.lib_path_literal.clone(),
             manual_load: component.config.manual_load,
+            public_api,
         })
     }
 
@@ -401,12 +403,14 @@ impl GeneratedPackage {
                 node_engine_json: template_context.node_engine_json.clone(),
                 lib_path_literal_json: template_context.lib_path_literal_json.clone(),
                 manual_load: self.manual_load,
+                public_api_js: self.public_api.js.clone(),
             },
         )?;
         write_template(
             &self.layout.component_dts_path(),
             &ComponentDtsTemplate {
                 namespace: self.layout.namespace.clone(),
+                public_api_dts: self.public_api.dts.clone(),
             },
         )?;
         write_template(
@@ -564,12 +568,14 @@ struct ComponentJsTemplate {
     node_engine_json: String,
     lib_path_literal_json: String,
     manual_load: bool,
+    public_api_js: String,
 }
 
 #[derive(Template)]
 #[template(path = "component/component.d.ts.j2", escape = "none")]
 struct ComponentDtsTemplate {
     namespace: String,
+    public_api_dts: String,
 }
 
 #[derive(Template)]

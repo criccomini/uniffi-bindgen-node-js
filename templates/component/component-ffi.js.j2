@@ -84,7 +84,13 @@ export function load(libraryPath = undefined) {
   }
 
   if (loadedBindings !== null) {
-    unload();
+    if (loadedBindings.libraryPath === resolvedLibraryPath) {
+      return loadedBindings;
+    }
+
+    throw new Error(
+      `The native library is already loaded from ${JSON.stringify(loadedBindings.libraryPath)}. Call unload() before loading a different library path.`,
+    );
   }
 
   loadedBindings = createBindings(resolvedLibraryPath);

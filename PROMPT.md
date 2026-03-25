@@ -93,13 +93,12 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Write generated files into one output package directory per invocation.
 - [x] Generate `package.json`, `index.js`, `index.d.ts`, `<namespace>.js`, `<namespace>.d.ts`, `<namespace>-ffi.js`, and `<namespace>-ffi.d.ts`.
 - [x] Generate shared runtime helper files under `runtime/`.
-- [ ] Support UniFFI objects, constructors, sync methods, async methods, records, flat enums, tagged enums, and error enums.
-- [ ] Support `Option<T>`, `Vec<T>`, `HashMap<K, V>`, `bytes`, and nested combinations required by SlateDB.
-- [ ] Map `bytes` to `Uint8Array` in the public API.
-- [ ] Map `i64` and `u64` to `bigint` in the public API.
-- [ ] Map `Option<T>` to `T | undefined`, `Vec<T>` to `Array<T>`, and `HashMap<K, V>` to `Map<K, V>`.
+- [x] Add a generator-side component model that collects top-level functions, objects, constructors, methods, records, enums, and errors before template rendering.
+- [x] Reject unsupported v1 inputs up front with explicit generator errors for custom types, external types, and callback interfaces that are still waiting on runtime support.
+- [ ] Render public API types for `bytes`, `i64/u64`, `Option<T>`, `Vec<T>`, `HashMap<K, V>`, and the nested combinations SlateDB needs.
+- [ ] Generate public JS + `.d.ts` skeletons for top-level functions, objects, constructors, methods, records, flat enums, tagged enums, and error enums.
 - [ ] Support synchronous callback interfaces needed by SlateDB.
-- [ ] Reject unsupported v1 features with explicit generator errors: custom types, external types, async callback-interface methods, CommonJS output, and multi-package platform-switch packaging.
+- [ ] Reject unsupported v1 features with explicit generator errors: async callback-interface methods, CommonJS output, and multi-package platform-switch packaging.
 - [ ] Add `koffi` as the generated package FFI dependency instead of `ffi-rs`.
 - [ ] Implement library loading and symbol binding with `koffi`.
 - [ ] Declare runtime representations for UniFFI `RustBuffer`, `ForeignBytes`, `RustCallStatus`, handles, and callback vtables.

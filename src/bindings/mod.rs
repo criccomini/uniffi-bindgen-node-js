@@ -6,6 +6,10 @@ use camino::Utf8PathBuf;
 use serde::Deserialize;
 use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
 
+mod api;
+
+use self::api::ComponentModel;
+
 #[derive(Debug, Clone)]
 pub struct NodeBindingGenerator {
     cli_overrides: NodeBindingCliOverrides,
@@ -342,6 +346,7 @@ impl GeneratedPackage {
         settings: &GenerationSettings,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<Self> {
+        ComponentModel::from_ci(&component.ci)?;
         let layout = GeneratedPackageLayout::from_component(settings, component)?;
         let cdylib_name = component
             .config

@@ -1,4 +1,7 @@
+use std::fs;
+
 use anyhow::{Result, anyhow, bail};
+use camino::Utf8PathBuf;
 use serde::Deserialize;
 use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
 
@@ -235,9 +238,140 @@ impl BindingGenerator for NodeBindingGenerator {
 
     fn write_bindings(
         &self,
-        _settings: &GenerationSettings,
-        _components: &[Component<Self::Config>],
+        settings: &GenerationSettings,
+        components: &[Component<Self::Config>],
     ) -> Result<()> {
+        let component = match components {
+            [component] => component,
+            [] => bail!("node bindings generation did not receive a UniFFI component"),
+            _ => bail!(
+                "node bindings generation emits one npm package per invocation; re-run with --crate-name to select a single crate"
+            ),
+        };
+
+        let package = GeneratedPackageLayout::from_component(settings, component)?;
+        package.ensure_root_dir()?;
+
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GeneratedPackageLayout {
+    root_dir: Utf8PathBuf,
+    namespace: String,
+    package_name: String,
+}
+
+impl GeneratedPackageLayout {
+    fn from_component(
+        settings: &GenerationSettings,
+        component: &Component<NodeBindingGeneratorConfig>,
+    ) -> Result<Self> {
+        let namespace = component.ci.namespace().trim();
+        if namespace.is_empty() {
+            bail!("node bindings generation requires a non-empty UniFFI namespace");
+        }
+
+        let package_name = component
+            .config
+            .package_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow!("node bindings generation requires a package_name"))?;
+
+        Ok(Self {
+            root_dir: settings.out_dir.clone(),
+            namespace: namespace.to_string(),
+            package_name: package_name.to_string(),
+        })
+    }
+
+    fn ensure_root_dir(&self) -> Result<()> {
+        fs::create_dir_all(self.root_dir.as_std_path())?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        env, process,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use uniffi_bindgen::interface::ComponentInterface;
+
+    fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
+        Component {
+            ci: ComponentInterface::from_webidl(
+                &format!("namespace {namespace} {{}};"),
+                "fixture_crate",
+            )
+            .expect("valid test UDL"),
+            config: NodeBindingGeneratorConfig {
+                package_name: Some(format!("{namespace}-package")),
+                cdylib_name: Some("fixture".to_string()),
+                ..NodeBindingGeneratorConfig::default()
+            },
+        }
+    }
+
+    fn temp_dir_path(name: &str) -> Utf8PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        Utf8PathBuf::from_path_buf(env::temp_dir().join(format!(
+            "uniffi-bindgen-node-js-{name}-{}-{unique}",
+            process::id()
+        )))
+        .expect("temp dir path should be utf-8")
+    }
+
+    #[test]
+    fn write_bindings_creates_output_package_directory() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("package-root");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+
+        generator
+            .write_bindings(&settings, &[component_with_namespace("example")])
+            .expect("write_bindings should succeed");
+
+        assert!(output_dir.is_dir(), "expected {output_dir} to be created");
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_rejects_multiple_components() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let settings = GenerationSettings {
+            out_dir: temp_dir_path("multiple-components"),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+
+        let error = generator
+            .write_bindings(
+                &settings,
+                &[
+                    component_with_namespace("first"),
+                    component_with_namespace("second"),
+                ],
+            )
+            .expect_err("multiple components should be rejected");
+
+        assert!(
+            error.to_string().contains("one npm package per invocation"),
+            "unexpected error: {error}"
+        );
     }
 }

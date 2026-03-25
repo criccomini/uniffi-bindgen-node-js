@@ -92,7 +92,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a config struct for `[bindings.node]` settings and defaults.
 - [x] Write generated files into one output package directory per invocation.
 - [x] Generate `package.json`, `index.js`, `index.d.ts`, `<namespace>.js`, `<namespace>.d.ts`, `<namespace>-ffi.js`, and `<namespace>-ffi.d.ts`.
-- [ ] Generate shared runtime helper files under `runtime/`.
+- [x] Generate shared runtime helper files under `runtime/`.
 - [ ] Support UniFFI objects, constructors, sync methods, async methods, records, flat enums, tagged enums, and error enums.
 - [ ] Support `Option<T>`, `Vec<T>`, `HashMap<K, V>`, `bytes`, and nested combinations required by SlateDB.
 - [ ] Map `bytes` to `Uint8Array` in the public API.

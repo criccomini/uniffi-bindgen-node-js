@@ -322,6 +322,10 @@ impl GeneratedPackageLayout {
     fn component_ffi_dts_path(&self) -> Utf8PathBuf {
         self.root_dir.join(format!("{}-ffi.d.ts", self.namespace))
     }
+
+    fn runtime_path(&self, file_name: &str) -> Utf8PathBuf {
+        self.root_dir.join("runtime").join(file_name)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -413,6 +417,76 @@ impl GeneratedPackage {
             &self.layout.component_ffi_dts_path(),
             &ComponentFfiDtsTemplate {},
         )?;
+        self.write_runtime_files()?;
+
+        Ok(())
+    }
+
+    fn write_runtime_files(&self) -> Result<()> {
+        write_template(
+            &self.layout.runtime_path("errors.js"),
+            &RuntimeErrorsJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("errors.d.ts"),
+            &RuntimeErrorsDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("ffi-types.js"),
+            &RuntimeFfiTypesJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("ffi-types.d.ts"),
+            &RuntimeFfiTypesDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("ffi-converters.js"),
+            &RuntimeFfiConvertersJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("ffi-converters.d.ts"),
+            &RuntimeFfiConvertersDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("rust-call.js"),
+            &RuntimeRustCallJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("rust-call.d.ts"),
+            &RuntimeRustCallDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("async-rust-call.js"),
+            &RuntimeAsyncRustCallJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("async-rust-call.d.ts"),
+            &RuntimeAsyncRustCallDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("handle-map.js"),
+            &RuntimeHandleMapJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("handle-map.d.ts"),
+            &RuntimeHandleMapDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("callbacks.js"),
+            &RuntimeCallbacksJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("callbacks.d.ts"),
+            &RuntimeCallbacksDtsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("objects.js"),
+            &RuntimeObjectsJsTemplate {},
+        )?;
+        write_template(
+            &self.layout.runtime_path("objects.d.ts"),
+            &RuntimeObjectsDtsTemplate {},
+        )?;
 
         Ok(())
     }
@@ -441,6 +515,9 @@ impl TemplateContext {
 
 fn write_template<T: Template>(path: &Utf8PathBuf, template: &T) -> Result<()> {
     let contents = template.render()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent.as_std_path())?;
+    }
     fs::write(path.as_std_path(), contents)?;
     Ok(())
 }
@@ -502,6 +579,70 @@ struct ComponentFfiJsTemplate {
 #[derive(Template)]
 #[template(path = "component/component-ffi.d.ts.j2", escape = "none")]
 struct ComponentFfiDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/errors.js.j2", escape = "none")]
+struct RuntimeErrorsJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/errors.d.ts.j2", escape = "none")]
+struct RuntimeErrorsDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/ffi-types.js.j2", escape = "none")]
+struct RuntimeFfiTypesJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/ffi-types.d.ts.j2", escape = "none")]
+struct RuntimeFfiTypesDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/ffi-converters.js.j2", escape = "none")]
+struct RuntimeFfiConvertersJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/ffi-converters.d.ts.j2", escape = "none")]
+struct RuntimeFfiConvertersDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/rust-call.js.j2", escape = "none")]
+struct RuntimeRustCallJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/rust-call.d.ts.j2", escape = "none")]
+struct RuntimeRustCallDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/async-rust-call.js.j2", escape = "none")]
+struct RuntimeAsyncRustCallJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/async-rust-call.d.ts.j2", escape = "none")]
+struct RuntimeAsyncRustCallDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/handle-map.js.j2", escape = "none")]
+struct RuntimeHandleMapJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/handle-map.d.ts.j2", escape = "none")]
+struct RuntimeHandleMapDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/callbacks.js.j2", escape = "none")]
+struct RuntimeCallbacksJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/callbacks.d.ts.j2", escape = "none")]
+struct RuntimeCallbacksDtsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/objects.js.j2", escape = "none")]
+struct RuntimeObjectsJsTemplate {}
+
+#[derive(Template)]
+#[template(path = "runtime/objects.d.ts.j2", escape = "none")]
+struct RuntimeObjectsDtsTemplate {}
 
 #[cfg(test)]
 mod tests {
@@ -606,6 +747,22 @@ mod tests {
             "example.d.ts",
             "example-ffi.js",
             "example-ffi.d.ts",
+            "runtime/errors.js",
+            "runtime/errors.d.ts",
+            "runtime/ffi-types.js",
+            "runtime/ffi-types.d.ts",
+            "runtime/ffi-converters.js",
+            "runtime/ffi-converters.d.ts",
+            "runtime/rust-call.js",
+            "runtime/rust-call.d.ts",
+            "runtime/async-rust-call.js",
+            "runtime/async-rust-call.d.ts",
+            "runtime/handle-map.js",
+            "runtime/handle-map.d.ts",
+            "runtime/callbacks.js",
+            "runtime/callbacks.d.ts",
+            "runtime/objects.js",
+            "runtime/objects.d.ts",
         ] {
             let path = output_dir.join(expected);
             assert!(path.is_file(), "expected generated file {path}");

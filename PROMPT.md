@@ -83,7 +83,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add `askama.toml` and a `templates/` directory for all generated output.
 - [x] Add Rust dependencies for `anyhow`, `askama`, `camino`, `cargo_metadata`, `clap`, `heck`, `serde`, `serde_json`, `textwrap`, `toml`, `uniffi`, and `uniffi_bindgen`.
 - [x] Pin `uniffi` and `uniffi_bindgen` to the UniFFI 0.29 line to match SlateDB.
-- [ ] Implement a `generate` subcommand that accepts `lib_source`, `--crate-name`, and `--out-dir`.
+- [x] Implement a `generate` subcommand that accepts `lib_source`, `--crate-name`, and `--out-dir`.
 - [ ] Add CLI options for `--package-name`, `--cdylib-name`, `--node-engine`, `--lib-path-literal`, `--manual-load`, and `--config-override`.
 - [ ] Make the CLI call UniFFI library-mode generation with a custom `NodeBindingGenerator`.
 - [ ] Parse `[bindings.node]` from `uniffi.toml` and merge it with CLI overrides.

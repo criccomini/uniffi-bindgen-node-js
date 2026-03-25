@@ -1,44 +1,23 @@
-use std::ffi::OsString;
+pub mod generate;
+
+use clap::{Parser, Subcommand};
 
 use crate::CRATE_NAME;
-use crate::cli::CliError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Parser)]
+#[command(name = CRATE_NAME, about = "Generate Node.js bindings for UniFFI components")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Debug, Clone, Subcommand)]
 pub enum Command {
-    Help,
+    Generate(generate::GenerateArgs),
 }
 
-impl Command {
-    pub fn from_args<I>(args: I) -> Result<Self, CliError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let mut args = args.into_iter();
-        let _program_name = args.next();
-
-        match args.next() {
-            None => Ok(Self::Help),
-            Some(flag) if flag == "--help" || flag == "-h" => Ok(Self::Help),
-            Some(command) => Err(CliError::UnsupportedCommand(format!(
-                "unsupported command `{}`\n\n{}",
-                command.to_string_lossy(),
-                usage()
-            ))),
-        }
-    }
-}
-
-pub fn run(command: Command) -> Result<(), CliError> {
+pub fn run(command: Command) -> anyhow::Result<()> {
     match command {
-        Command::Help => {
-            println!("{}", usage());
-            Ok(())
-        }
+        Command::Generate(args) => generate::run(args),
     }
-}
-
-fn usage() -> String {
-    format!(
-        "{CRATE_NAME}\n\nUsage:\n  {CRATE_NAME} <command>\n\nCommands:\n  generate    Generate Node bindings from a UniFFI component\n\nUse `--help` to show this message."
-    )
 }

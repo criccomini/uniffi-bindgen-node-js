@@ -1,30 +1,13 @@
 use std::ffi::OsString;
-use std::fmt;
 
-use crate::subcommands::{self, Command};
+use clap::Parser;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CliError {
-    InvalidArguments(String),
-    UnsupportedCommand(String),
-}
+use crate::subcommands::{self, Cli};
 
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidArguments(message) | Self::UnsupportedCommand(message) => {
-                f.write_str(message)
-            }
-        }
-    }
-}
-
-impl std::error::Error for CliError {}
-
-pub fn run<I>(args: I) -> Result<(), CliError>
+pub fn run<I>(args: I) -> anyhow::Result<()>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let command = Command::from_args(args)?;
-    subcommands::run(command)
+    let cli = Cli::parse_from(args);
+    subcommands::run(cli.command)
 }

@@ -3,4 +3,12 @@ name = "uniffi-bindgen-node-js"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "uniffi_bindgen_node_js"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uniffi-bindgen-node-js"
+path = "src/main.rs"
+
 [dependencies]

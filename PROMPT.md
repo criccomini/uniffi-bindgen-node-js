@@ -78,7 +78,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 
 ## TODO
 
-- [ ] Convert the repo from the current stub into a real single-package Cargo crate with both a library target and the `uniffi-bindgen-node-js` binary.
+- [x] Convert the repo from the current stub into a real single-package Cargo crate with both a library target and the `uniffi-bindgen-node-js` binary.
 - [ ] Add `src/lib.rs` and move CLI startup out of `src/main.rs` into reusable modules.
 - [ ] Add `askama.toml` and a `templates/` directory for all generated output.
 - [ ] Add Rust dependencies for `anyhow`, `askama`, `camino`, `cargo_metadata`, `clap`, `heck`, `serde`, `serde_json`, `textwrap`, `toml`, `uniffi`, and `uniffi_bindgen`.

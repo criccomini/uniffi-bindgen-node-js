@@ -8,5 +8,8 @@ export const componentMetadata = Object.freeze({
 });
 
 export { ffiMetadata } from "./{{ namespace }}-ffi.js";
+{% if manual_load %}
+export { load, unload } from "./{{ namespace }}-ffi.js";
+{% endif %}
 
 {{ public_api_js }}

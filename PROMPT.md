@@ -105,7 +105,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Normalize Koffi 64-bit values so generated bindings consistently expose `bigint`.
 - [x] Make library loading idempotent.
 - [x] Support automatic library loading by default.
-- [ ] Support `--manual-load` by exporting explicit load and unload helpers.
+- [x] Support `--manual-load` by exporting explicit load and unload helpers.
 - [x] Support sibling-library lookup by default plus literal-path override support.
 - [ ] Add a `runtime/errors.js` + `.d.ts` module with UniFFI error helpers and internal runtime errors.
 - [ ] Add a `runtime/ffi-types.js` + `.d.ts` module with `RustBuffer` and raw byte helpers.

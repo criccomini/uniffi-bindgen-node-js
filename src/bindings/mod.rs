@@ -493,6 +493,7 @@ impl GeneratedPackage {
             &self.layout.component_dts_path(),
             &ComponentDtsTemplate {
                 namespace: self.layout.namespace.clone(),
+                manual_load: self.manual_load,
                 public_api_dts: self.public_api.dts.clone(),
             },
         )?;
@@ -657,6 +658,7 @@ struct ComponentJsTemplate {
 #[template(path = "component/component.d.ts.j2", escape = "none")]
 struct ComponentDtsTemplate {
     namespace: String,
+    manual_load: bool,
     public_api_dts: String,
 }
 
@@ -753,6 +755,12 @@ mod tests {
                 ..NodeBindingGeneratorConfig::default()
             },
         }
+    }
+
+    fn component_with_manual_load(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
+        let mut component = component_with_namespace(namespace);
+        component.config.manual_load = true;
+        component
     }
 
     fn component_from_webidl(source: &str) -> Component<NodeBindingGeneratorConfig> {
@@ -1079,6 +1087,37 @@ mod tests {
         assert!(
             component_ffi_js.contains("  load();"),
             "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_exports_manual_load_helpers() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("manual-load-exports");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+
+        generator
+            .write_bindings(&settings, &[component_with_manual_load("example")])
+            .expect("write_bindings should succeed");
+
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
+        assert!(
+            component_js.contains("export { load, unload } from \"./example-ffi.js\";"),
+            "unexpected component JS contents: {component_js}"
+        );
+
+        let component_dts = fs::read_to_string(output_dir.join("example.d.ts").as_std_path())
+            .expect("component DTS should be readable");
+        assert!(
+            component_dts.contains("export { load, unload } from \"./example-ffi.js\";"),
+            "unexpected component DTS contents: {component_dts}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

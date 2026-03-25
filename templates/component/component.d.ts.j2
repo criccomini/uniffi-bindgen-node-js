@@ -10,5 +10,8 @@ export interface ComponentMetadata {
 export declare const componentMetadata: Readonly<ComponentMetadata>;
 
 export { ffiMetadata } from "./{{ namespace }}-ffi.js";
+{% if manual_load %}
+export { load, unload } from "./{{ namespace }}-ffi.js";
+{% endif %}
 
 {{ public_api_dts }}

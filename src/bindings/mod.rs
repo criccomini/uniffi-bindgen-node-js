@@ -865,6 +865,10 @@ mod tests {
             package_json.contains("\"name\": \"example-package\""),
             "unexpected package.json contents: {package_json}"
         );
+        assert!(
+            package_json.contains("\"koffi\": \"^2.0.0\""),
+            "unexpected package.json contents: {package_json}"
+        );
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");

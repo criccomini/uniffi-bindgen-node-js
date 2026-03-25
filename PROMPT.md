@@ -99,7 +99,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate public JS + `.d.ts` skeletons for top-level functions, objects, constructors, methods, records, flat enums, tagged enums, and error enums.
 - [x] Support synchronous callback interfaces needed by SlateDB.
 - [x] Reject unsupported v1 features with explicit generator errors: async callback-interface methods, CommonJS output, and multi-package platform-switch packaging.
-- [ ] Add `koffi` as the generated package FFI dependency instead of `ffi-rs`.
+- [x] Add `koffi` as the generated package FFI dependency instead of `ffi-rs`.
 - [ ] Implement library loading and symbol binding with `koffi`.
 - [ ] Declare runtime representations for UniFFI `RustBuffer`, `ForeignBytes`, `RustCallStatus`, handles, and callback vtables.
 - [ ] Normalize Koffi 64-bit values so generated bindings consistently expose `bigint`.

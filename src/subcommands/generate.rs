@@ -3,7 +3,7 @@ use camino::Utf8PathBuf;
 use clap::Args;
 use uniffi_bindgen::cargo_metadata::CrateConfigSupplier;
 
-use crate::bindings::NodeBindingGenerator;
+use crate::bindings::{NodeBindingCliOverrides, NodeBindingGenerator};
 
 #[derive(Debug, Clone, Args)]
 pub struct GenerateArgs {
@@ -39,7 +39,15 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
         .exec()
         .context("failed to run cargo metadata for UniFFI config discovery")?;
     let config_supplier = CrateConfigSupplier::from(metadata);
-    let generator = NodeBindingGenerator::new();
+    let cli_overrides = NodeBindingCliOverrides::from_parts(
+        args.package_name.clone(),
+        args.cdylib_name.clone(),
+        args.node_engine.clone(),
+        args.lib_path_literal.clone(),
+        args.manual_load,
+        args.config_override.clone(),
+    )?;
+    let generator = NodeBindingGenerator::new(cli_overrides);
 
     uniffi_bindgen::library_mode::generate_bindings(
         &args.lib_source,

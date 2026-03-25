@@ -1057,6 +1057,34 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_auto_loads_by_default() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("ffi-auto-load");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+
+        generator
+            .write_bindings(&settings, &[component_with_namespace("example")])
+            .expect("write_bindings should succeed");
+
+        let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
+        assert!(
+            component_ffi_js.contains("if (!ffiMetadata.manualLoad) {"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("  load();"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn config_validation_rejects_commonjs_output() {
         let config = parse_node_config(
             r#"

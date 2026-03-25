@@ -104,7 +104,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Declare runtime representations for UniFFI `RustBuffer`, `ForeignBytes`, `RustCallStatus`, handles, and callback vtables.
 - [x] Normalize Koffi 64-bit values so generated bindings consistently expose `bigint`.
 - [x] Make library loading idempotent.
-- [ ] Support automatic library loading by default.
+- [x] Support automatic library loading by default.
 - [ ] Support `--manual-load` by exporting explicit load and unload helpers.
 - [x] Support sibling-library lookup by default plus literal-path override support.
 - [ ] Add a `runtime/errors.js` + `.d.ts` module with UniFFI error helpers and internal runtime errors.

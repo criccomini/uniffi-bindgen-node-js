@@ -147,6 +147,10 @@ export function isLoaded() {
   return loadedBindings !== null;
 }
 
+if (!ffiMetadata.manualLoad) {
+  load();
+}
+
 export function getFfiBindings() {
   if (loadedBindings === null) {
     throw new Error("The native library is not loaded. Call load(libraryPath) first.");

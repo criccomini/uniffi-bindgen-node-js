@@ -83,6 +83,9 @@ enum NodeBindingConfigOverride {
     NodeEngine(String),
     LibPathLiteral(String),
     ManualLoad(bool),
+    ModuleFormat(String),
+    Commonjs(bool),
+    LibPathModules(String),
 }
 
 impl NodeBindingConfigOverride {
@@ -119,6 +122,29 @@ impl NodeBindingConfigOverride {
             | "bindings.node.manual-load" => {
                 Ok(Self::ManualLoad(parse_bool_override(&raw, &value)?))
             }
+            "module_format"
+            | "module-format"
+            | "bindings.node.module_format"
+            | "bindings.node.module-format" => Ok(Self::ModuleFormat(value)),
+            "commonjs" | "bindings.node.commonjs" => {
+                Ok(Self::Commonjs(parse_bool_override(&raw, &value)?))
+            }
+            "lib_path_module"
+            | "lib-path-module"
+            | "lib_path_modules"
+            | "lib-path-modules"
+            | "out_lib_path_module"
+            | "out-lib-path-module"
+            | "out_lib_path_modules"
+            | "out-lib-path-modules"
+            | "bindings.node.lib_path_module"
+            | "bindings.node.lib-path-module"
+            | "bindings.node.lib_path_modules"
+            | "bindings.node.lib-path-modules"
+            | "bindings.node.out_lib_path_module"
+            | "bindings.node.out-lib-path-module"
+            | "bindings.node.out_lib_path_modules"
+            | "bindings.node.out-lib-path-modules" => Ok(Self::LibPathModules(value)),
             _ => bail!("unsupported --config-override key '{key}'"),
         }
     }
@@ -130,6 +156,11 @@ impl NodeBindingConfigOverride {
             Self::NodeEngine(value) => config.node_engine = value.clone(),
             Self::LibPathLiteral(value) => config.lib_path_literal = Some(value.clone()),
             Self::ManualLoad(value) => config.manual_load = *value,
+            Self::ModuleFormat(value) => config.module_format = Some(value.clone()),
+            Self::Commonjs(value) => config.commonjs = Some(*value),
+            Self::LibPathModules(value) => {
+                config.lib_path_modules = Some(toml::Value::String(value.clone()))
+            }
         }
     }
 }
@@ -164,6 +195,19 @@ pub struct NodeBindingGeneratorConfig {
     pub node_engine: String,
     pub lib_path_literal: Option<String>,
     pub manual_load: bool,
+    #[serde(alias = "module-format")]
+    pub module_format: Option<String>,
+    pub commonjs: Option<bool>,
+    #[serde(
+        alias = "lib-path-module",
+        alias = "lib_path_module",
+        alias = "lib-path-modules",
+        alias = "out-lib-path-module",
+        alias = "out_lib_path_module",
+        alias = "out-lib-path-modules",
+        alias = "out_lib_path_modules"
+    )]
+    pub lib_path_modules: Option<toml::Value>,
 }
 
 impl Default for NodeBindingGeneratorConfig {
@@ -174,6 +218,9 @@ impl Default for NodeBindingGeneratorConfig {
             node_engine: ">=16".to_string(),
             lib_path_literal: None,
             manual_load: false,
+            module_format: None,
+            commonjs: None,
+            lib_path_modules: None,
         }
     }
 }
@@ -203,6 +250,30 @@ impl NodeBindingGeneratorConfig {
             .is_some_and(|value| value.trim().is_empty())
         {
             bail!("node binding lib_path_literal cannot be empty");
+        }
+        if let Some(module_format) = self.module_format.as_deref() {
+            let normalized = module_format.trim();
+            if normalized.is_empty() {
+                bail!("node binding module_format cannot be empty");
+            }
+            if !normalized.eq_ignore_ascii_case("esm") {
+                if normalized.eq_ignore_ascii_case("commonjs")
+                    || normalized.eq_ignore_ascii_case("cjs")
+                {
+                    bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
+                }
+                bail!(
+                    "unsupported node binding module_format '{normalized}': v1 only supports 'esm'"
+                );
+            }
+        }
+        if self.commonjs == Some(true) {
+            bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
+        }
+        if self.lib_path_modules.is_some() {
+            bail!(
+                "node bindings v1 do not support multi-package platform-switch packaging; use lib_path_literal or the default sibling-library lookup"
+            );
         }
         Ok(())
     }
@@ -692,6 +763,15 @@ mod tests {
         .expect("temp dir path should be utf-8")
     }
 
+    fn parse_node_config(source: &str) -> NodeBindingGeneratorConfig {
+        let root = source
+            .parse::<toml::Value>()
+            .expect("test TOML should deserialize");
+        NodeBindingGenerator::new(NodeBindingCliOverrides::default())
+            .new_config(&root)
+            .expect("node config should deserialize")
+    }
+
     #[test]
     fn write_bindings_creates_output_package_directory() {
         let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
@@ -794,5 +874,99 @@ mod tests {
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn config_validation_rejects_commonjs_output() {
+        let config = parse_node_config(
+            r#"
+            [bindings.node]
+            module_format = "commonjs"
+            "#,
+        );
+
+        let error = config
+            .validate()
+            .expect_err("CommonJS output should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("CommonJS output is not supported"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn config_override_validation_rejects_commonjs_output() {
+        let overrides = NodeBindingCliOverrides::from_parts(
+            None,
+            None,
+            None,
+            None,
+            false,
+            vec!["commonjs=true".to_string()],
+        )
+        .expect("override should parse");
+        let mut config = NodeBindingGeneratorConfig::default();
+
+        overrides.apply_to(&mut config);
+        let error = config
+            .validate()
+            .expect_err("CommonJS override should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("CommonJS output is not supported"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn config_validation_rejects_platform_switch_packaging() {
+        let config = parse_node_config(
+            r#"
+            [bindings.node]
+            out_lib_path_module = ["@scope/example-darwin", "@scope/example-linux"]
+            "#,
+        );
+
+        let error = config
+            .validate()
+            .expect_err("platform-switch packaging should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("multi-package platform-switch packaging"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn config_override_validation_rejects_platform_switch_packaging() {
+        let overrides = NodeBindingCliOverrides::from_parts(
+            None,
+            None,
+            None,
+            None,
+            false,
+            vec!["out_lib_path_module=@scope/example-darwin".to_string()],
+        )
+        .expect("override should parse");
+        let mut config = NodeBindingGeneratorConfig::default();
+
+        overrides.apply_to(&mut config);
+        let error = config
+            .validate()
+            .expect_err("platform-switch override should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("multi-package platform-switch packaging"),
+            "unexpected error: {error}"
+        );
     }
 }

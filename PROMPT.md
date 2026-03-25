@@ -81,7 +81,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Convert the repo from the current stub into a real single-package Cargo crate with both a library target and the `uniffi-bindgen-node-js` binary.
 - [x] Add `src/lib.rs` and move CLI startup out of `src/main.rs` into reusable modules.
 - [x] Add `askama.toml` and a `templates/` directory for all generated output.
-- [ ] Add Rust dependencies for `anyhow`, `askama`, `camino`, `cargo_metadata`, `clap`, `heck`, `serde`, `serde_json`, `textwrap`, `toml`, `uniffi`, and `uniffi_bindgen`.
+- [x] Add Rust dependencies for `anyhow`, `askama`, `camino`, `cargo_metadata`, `clap`, `heck`, `serde`, `serde_json`, `textwrap`, `toml`, `uniffi`, and `uniffi_bindgen`.
 - [ ] Pin `uniffi` and `uniffi_bindgen` to the UniFFI 0.29 line to match SlateDB.
 - [ ] Implement a `generate` subcommand that accepts `lib_source`, `--crate-name`, and `--out-dir`.
 - [ ] Add CLI options for `--package-name`, `--cdylib-name`, `--node-engine`, `--lib-path-literal`, `--manual-load`, and `--config-override`.

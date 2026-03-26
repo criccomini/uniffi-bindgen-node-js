@@ -952,6 +952,17 @@ mod tests {
             ffi_types_js.contains("export function readRustBufferBytes"),
             "unexpected runtime FFI types JS contents: {ffi_types_js}"
         );
+        let ffi_converters_js =
+            fs::read_to_string(output_dir.join("runtime/ffi-converters.js").as_std_path())
+                .expect("runtime FFI converters JS should be readable");
+        assert!(
+            ffi_converters_js.contains("export class AbstractFfiConverterByteArray"),
+            "unexpected runtime FFI converters JS contents: {ffi_converters_js}"
+        );
+        assert!(
+            ffi_converters_js.contains("export const FfiConverterString"),
+            "unexpected runtime FFI converters JS contents: {ffi_converters_js}"
+        );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }

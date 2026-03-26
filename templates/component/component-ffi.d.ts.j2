@@ -17,6 +17,7 @@ export interface FfiBindings {
 export interface FfiIntegrity {
   contractVersionFunction: string;
   expectedContractVersion: number;
+  checksums: Readonly<Record<string, number>>;
 }
 
 export declare const ffiMetadata: Readonly<FfiMetadata>;
@@ -27,6 +28,12 @@ export declare function isLoaded(): boolean;
 export declare function getFfiBindings(): Readonly<FfiBindings>;
 export declare function getContractVersion(bindings?: Readonly<FfiBindings>): number;
 export declare function validateContractVersion(bindings?: Readonly<FfiBindings>): number;
+export declare function getChecksums(
+  bindings?: Readonly<FfiBindings>,
+): Readonly<Record<string, number>>;
+export declare function validateChecksums(
+  bindings?: Readonly<FfiBindings>,
+): Readonly<Record<string, number>>;
 export declare const ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
 
 {% for function in context.functions %}

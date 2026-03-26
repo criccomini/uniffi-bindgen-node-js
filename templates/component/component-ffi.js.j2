@@ -17,6 +17,7 @@ import {
   normalizeUInt64,
 } from "./runtime/ffi-types.js";
 import {
+  ChecksumMismatchError,
   ContractVersionMismatchError,
   LibraryNotLoadedError,
 } from "./runtime/errors.js";
@@ -31,6 +32,11 @@ export const ffiMetadata = Object.freeze({
 export const ffiIntegrity = Object.freeze({
   contractVersionFunction: {{ context.contract_version.name_json }},
   expectedContractVersion: {{ context.contract_version.expected }},
+  checksums: Object.freeze({
+{% for checksum in context.checksums %}
+    {{ checksum.name_json }}: {{ checksum.expected }},
+{% endfor %}
+  }),
 });
 
 let loadedBindings = null;
@@ -141,6 +147,7 @@ export function load(libraryPath = undefined) {
   const bindings = createBindings(resolvedLibraryPath);
   try {
     validateContractVersion(bindings);
+    validateChecksums(bindings);
   } catch (error) {
     try {
       bindings.library.unload();
@@ -193,6 +200,28 @@ export function validateContractVersion(bindings = getFfiBindings()) {
     throw new ContractVersionMismatchError(expected, actual);
   }
   return actual;
+}
+
+export function getChecksums(bindings = getFfiBindings()) {
+  return Object.freeze({
+{% for checksum in context.checksums %}
+    {{ checksum.name_json }}: bindings.ffiFunctions.{{ checksum.identifier }}(),
+{% endfor %}
+  });
+}
+
+export function validateChecksums(bindings = getFfiBindings()) {
+  const actualChecksums = getChecksums(bindings);
+{% for checksum in context.checksums %}
+  {
+    const expected = ffiIntegrity.checksums[{{ checksum.name_json }}];
+    const actual = actualChecksums[{{ checksum.name_json }}];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError({{ checksum.name_json }}, expected, actual);
+    }
+  }
+{% endfor %}
+  return actualChecksums;
 }
 
 export const ffiFunctions = Object.freeze({

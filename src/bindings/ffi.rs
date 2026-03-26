@@ -27,6 +27,7 @@ pub(crate) fn render_component_ffi(
         lib_path_literal_json: json_optional_string(lib_path_literal)?,
         manual_load,
         contract_version: model.contract_version,
+        checksums: model.checksums,
         opaque_types: model.opaque_types,
         pre_struct_callbacks: model.pre_struct_callbacks,
         post_struct_callbacks: model.post_struct_callbacks,
@@ -49,6 +50,7 @@ pub(crate) fn render_component_ffi(
 #[derive(Debug, Clone)]
 struct ComponentFfiModel {
     contract_version: ContractVersionModel,
+    checksums: Vec<ChecksumModel>,
     opaque_types: Vec<OpaqueTypeModel>,
     pre_struct_callbacks: Vec<CallbackFunctionModel>,
     post_struct_callbacks: Vec<CallbackFunctionModel>,
@@ -59,6 +61,14 @@ struct ComponentFfiModel {
 impl ComponentFfiModel {
     fn from_ci(ci: &ComponentInterface) -> Self {
         let contract_version_symbol = ci.ffi_uniffi_contract_version().name().to_string();
+        let checksums = ci
+            .iter_checksums()
+            .map(|(name, expected)| ChecksumModel {
+                identifier: js_identifier(&name),
+                name_json: json_string(&name).expect("FFI checksum names should serialize"),
+                expected,
+            })
+            .collect();
         let mut opaque_names = BTreeSet::new();
         let mut pre_struct_callbacks = Vec::new();
         let mut post_struct_callbacks = Vec::new();
@@ -102,6 +112,7 @@ impl ComponentFfiModel {
                     .expect("FFI contract version symbol names should serialize"),
                 expected: ci.uniffi_contract_version(),
             },
+            checksums,
             opaque_types,
             pre_struct_callbacks,
             post_struct_callbacks,
@@ -118,6 +129,7 @@ struct ComponentFfiTemplateContext {
     lib_path_literal_json: String,
     manual_load: bool,
     contract_version: ContractVersionModel,
+    checksums: Vec<ChecksumModel>,
     opaque_types: Vec<OpaqueTypeModel>,
     pre_struct_callbacks: Vec<CallbackFunctionModel>,
     post_struct_callbacks: Vec<CallbackFunctionModel>,
@@ -130,6 +142,13 @@ struct ContractVersionModel {
     identifier: String,
     name_json: String,
     expected: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ChecksumModel {
+    identifier: String,
+    name_json: String,
+    expected: u16,
 }
 
 #[derive(Debug, Clone, Serialize)]

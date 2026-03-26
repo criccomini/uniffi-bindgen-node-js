@@ -1,1 +1,55 @@
-export {};
+import type { ByteReader, ByteWriter } from "./ffi-converters.js";
+
+export declare const uniffiTypeNameSymbol: unique symbol;
+export declare const uniffiObjectFactorySymbol: unique symbol;
+export declare const uniffiObjectHandleSymbol: unique symbol;
+export declare const uniffiObjectDestroyedSymbol: unique symbol;
+export declare const UNIFFI_OBJECT_HANDLE_SIZE: 8;
+
+export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase> {
+  typeName?: string;
+  createInstance?: () => T;
+  cloneHandle?: ((handle: bigint, value: T) => bigint | number) | null;
+  freeHandle?: ((handle: bigint, value?: T) => void) | null;
+}
+
+export declare class UniffiObjectBase {
+  readonly [uniffiTypeNameSymbol]?: string;
+  readonly [uniffiObjectHandleSymbol]?: bigint;
+  readonly [uniffiObjectDestroyedSymbol]?: boolean;
+  get uniffiTypeName(): string;
+  get uniffiHandle(): bigint;
+  uniffiDestroy(): boolean;
+  dispose(): boolean;
+}
+
+export declare class UniffiObjectFactory<T extends object = UniffiObjectBase> {
+  readonly typeName: string;
+  constructor(options?: UniffiObjectFactoryOptions<T>);
+  attach(instance: T, handle: bigint | number): T;
+  bless(instance: T, handle: bigint | number): T;
+  create(handle: bigint | number): T;
+  handle(value: T): bigint;
+  peekHandle(value: unknown): bigint | undefined;
+  cloneHandle(value: T): bigint;
+  destroy(value: unknown): boolean;
+  isInstance(value: unknown): value is T;
+  isDestroyed(value: unknown): boolean;
+}
+
+export declare class FfiConverterObject<T extends object = UniffiObjectBase> {
+  readonly factory: UniffiObjectFactory<T>;
+  constructor(factory: UniffiObjectFactory<T>);
+  lower(value: T): bigint;
+  lift(handle: bigint | number): T;
+  write(value: T, writer: ByteWriter): void;
+  read(reader: ByteReader): T;
+  allocationSize(value?: T): 8;
+}
+
+export declare function createObjectFactory<T extends object = UniffiObjectBase>(
+  options?: UniffiObjectFactoryOptions<T>,
+): UniffiObjectFactory<T>;
+export declare function createObjectConverter<T extends object = UniffiObjectBase>(
+  factory: UniffiObjectFactory<T>,
+): FfiConverterObject<T>;

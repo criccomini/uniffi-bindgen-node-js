@@ -1,1 +1,247 @@
-// Runtime objects template scaffold.
+import { UnexpectedNullPointer } from "./errors.js";
+import { normalizeHandle } from "./ffi-types.js";
+
+const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
+
+export const uniffiTypeNameSymbol = Symbol("uniffi.typeName");
+export const uniffiObjectFactorySymbol = Symbol("uniffi.objectFactory");
+export const uniffiObjectHandleSymbol = Symbol("uniffi.objectHandle");
+export const uniffiObjectDestroyedSymbol = Symbol("uniffi.objectDestroyed");
+export const UNIFFI_OBJECT_HANDLE_SIZE = 8;
+
+function requireObjectInstance(value, label = "UniFFI object") {
+  if (typeof value !== "object" || value == null) {
+    throw new TypeError(`${label} instances must be non-null objects.`);
+  }
+  return value;
+}
+
+function requireHandle(handle, label = "UniFFI handle") {
+  const normalized = normalizeHandle(handle);
+  if (normalized == null || normalized === 0n) {
+    throw new UnexpectedNullPointer(`${label} is null or has already been destroyed.`);
+  }
+  return normalized;
+}
+
+function storedHandle(value) {
+  return normalizeHandle(value?.[uniffiObjectHandleSymbol]);
+}
+
+function objectFactory(value) {
+  const factory = value?.[uniffiObjectFactorySymbol];
+  if (
+    factory == null
+    || typeof factory.create !== "function"
+    || typeof factory.destroy !== "function"
+    || typeof factory.handle !== "function"
+  ) {
+    return undefined;
+  }
+  return factory;
+}
+
+export class UniffiObjectBase {
+  get uniffiTypeName() {
+    return this[uniffiTypeNameSymbol] ?? this.constructor?.name ?? "UniFFI object";
+  }
+
+  get uniffiHandle() {
+    const factory = objectFactory(this);
+    if (factory == null) {
+      throw new TypeError(`${this.uniffiTypeName} is not attached to a UniFFI object factory.`);
+    }
+    return factory.handle(this);
+  }
+
+  uniffiDestroy() {
+    const factory = objectFactory(this);
+    if (factory == null) {
+      return false;
+    }
+    return factory.destroy(this);
+  }
+
+  dispose() {
+    return this.uniffiDestroy();
+  }
+}
+
+export class UniffiObjectFactory {
+  constructor({
+    typeName = "UniFFI object",
+    createInstance = () => Object.create(UniffiObjectBase.prototype),
+    cloneHandle = undefined,
+    freeHandle = undefined,
+  } = {}) {
+    this.typeName = typeName;
+    this._createInstance = createInstance;
+    this._cloneHandle = cloneHandle;
+    this._freeHandle = freeHandle;
+    this._registry =
+      typeof FinalizationRegistry === "undefined" || typeof freeHandle !== "function"
+        ? null
+        : new FinalizationRegistry((handle) => {
+            try {
+              this._freeHandle(handle);
+            } catch {
+              // Finalizers must not surface user-visible errors.
+            }
+          });
+  }
+
+  _unregisterFinalizer(instance) {
+    const token = instance[uniffiFinalizerTokenSymbol];
+    if (this._registry != null && token != null) {
+      this._registry.unregister(token);
+    }
+    instance[uniffiFinalizerTokenSymbol] = null;
+  }
+
+  _registerFinalizer(instance, handle) {
+    if (this._registry == null) {
+      instance[uniffiFinalizerTokenSymbol] = null;
+      return;
+    }
+
+    const token = {};
+    instance[uniffiFinalizerTokenSymbol] = token;
+    this._registry.register(instance, handle, token);
+  }
+
+  _markDestroyed(instance) {
+    instance[uniffiObjectHandleSymbol] = 0n;
+    instance[uniffiObjectDestroyedSymbol] = true;
+    instance[uniffiFinalizerTokenSymbol] = null;
+  }
+
+  attach(instance, handle) {
+    const normalizedHandle = requireHandle(handle, `${this.typeName} handle`);
+    const target = requireObjectInstance(instance, this.typeName);
+
+    if (storedHandle(target) != null && target[uniffiObjectDestroyedSymbol] !== true) {
+      throw new TypeError(`${this.typeName} is already bound to a live UniFFI handle.`);
+    }
+
+    Object.defineProperties(target, {
+      [uniffiTypeNameSymbol]: {
+        configurable: true,
+        value: this.typeName,
+        writable: true,
+      },
+      [uniffiObjectFactorySymbol]: {
+        configurable: true,
+        value: this,
+      },
+      [uniffiObjectHandleSymbol]: {
+        configurable: true,
+        value: normalizedHandle,
+        writable: true,
+      },
+      [uniffiObjectDestroyedSymbol]: {
+        configurable: true,
+        value: false,
+        writable: true,
+      },
+      [uniffiFinalizerTokenSymbol]: {
+        configurable: true,
+        value: null,
+        writable: true,
+      },
+    });
+
+    this._registerFinalizer(target, normalizedHandle);
+    return target;
+  }
+
+  bless(instance, handle) {
+    return this.attach(instance, handle);
+  }
+
+  create(handle) {
+    return this.attach(this._createInstance(), handle);
+  }
+
+  handle(value) {
+    if (!this.isInstance(value)) {
+      throw new TypeError(`${this.typeName} expected an instance created by this factory.`);
+    }
+    return requireHandle(storedHandle(value), `${this.typeName} handle`);
+  }
+
+  peekHandle(value) {
+    if (!this.isInstance(value) || this.isDestroyed(value)) {
+      return undefined;
+    }
+    return storedHandle(value);
+  }
+
+  cloneHandle(value) {
+    const handle = this.handle(value);
+    if (typeof this._cloneHandle !== "function") {
+      return handle;
+    }
+    return requireHandle(
+      this._cloneHandle(handle, value),
+      `${this.typeName} cloned handle`,
+    );
+  }
+
+  destroy(value) {
+    if (!this.isInstance(value) || this.isDestroyed(value)) {
+      return false;
+    }
+
+    const handle = this.handle(value);
+    this._unregisterFinalizer(value);
+    this._markDestroyed(value);
+
+    if (typeof this._freeHandle === "function") {
+      this._freeHandle(handle, value);
+    }
+    return true;
+  }
+
+  isInstance(value) {
+    return objectFactory(value) === this;
+  }
+
+  isDestroyed(value) {
+    return this.isInstance(value)
+      && (value[uniffiObjectDestroyedSymbol] === true || storedHandle(value) == null);
+  }
+}
+
+export class FfiConverterObject {
+  constructor(factory) {
+    this.factory = factory;
+  }
+
+  lower(value) {
+    return this.factory.cloneHandle(value);
+  }
+
+  lift(handle) {
+    return this.factory.create(handle);
+  }
+
+  write(value, writer) {
+    writer.writeUInt64(this.lower(value));
+  }
+
+  read(reader) {
+    return this.lift(reader.readUInt64());
+  }
+
+  allocationSize() {
+    return UNIFFI_OBJECT_HANDLE_SIZE;
+  }
+}
+
+export function createObjectFactory(options = undefined) {
+  return new UniffiObjectFactory(options);
+}
+
+export function createObjectConverter(factory) {
+  return new FfiConverterObject(factory);
+}

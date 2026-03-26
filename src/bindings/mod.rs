@@ -991,6 +991,8 @@ mod tests {
         let callbacks_js =
             fs::read_to_string(output_dir.join("runtime/callbacks.js").as_std_path())
                 .expect("runtime callbacks JS should be readable");
+        let objects_js = fs::read_to_string(output_dir.join("runtime/objects.js").as_std_path())
+            .expect("runtime objects JS should be readable");
         assert!(
             async_rust_call_js.contains("export async function rustCallAsync"),
             "unexpected runtime async rust-call JS contents: {async_rust_call_js}"
@@ -1010,6 +1012,18 @@ mod tests {
         assert!(
             callbacks_js.contains("export function writeCallbackError"),
             "unexpected runtime callbacks JS contents: {callbacks_js}"
+        );
+        assert!(
+            objects_js.contains("export class UniffiObjectFactory"),
+            "unexpected runtime objects JS contents: {objects_js}"
+        );
+        assert!(
+            objects_js.contains("export class FfiConverterObject"),
+            "unexpected runtime objects JS contents: {objects_js}"
+        );
+        assert!(
+            objects_js.contains("UNIFFI_OBJECT_HANDLE_SIZE"),
+            "unexpected runtime objects JS contents: {objects_js}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

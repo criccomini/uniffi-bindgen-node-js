@@ -36,6 +36,7 @@ pub struct GenerateArgs {
 
 pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     validate_args(&args)?;
+    let crate_name = normalize_crate_name_for_library_mode(&args.crate_name);
 
     let metadata = cargo_metadata::MetadataCommand::new()
         .exec()
@@ -53,7 +54,7 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
 
     uniffi_bindgen::library_mode::generate_bindings(
         &args.lib_source,
-        Some(args.crate_name.clone()),
+        Some(crate_name),
         &generator,
         &config_supplier,
         None::<&camino::Utf8Path>,
@@ -68,6 +69,10 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     })?;
 
     Ok(())
+}
+
+fn normalize_crate_name_for_library_mode(crate_name: &str) -> String {
+    crate_name.replace('-', "_")
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
@@ -97,4 +102,21 @@ fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_crate_name_for_library_mode;
+
+    #[test]
+    fn normalize_crate_name_for_library_mode_accepts_cargo_package_names() {
+        assert_eq!(
+            normalize_crate_name_for_library_mode("slatedb-uniffi"),
+            "slatedb_uniffi"
+        );
+        assert_eq!(
+            normalize_crate_name_for_library_mode("slatedb_uniffi"),
+            "slatedb_uniffi"
+        );
+    }
 }

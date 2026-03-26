@@ -32,12 +32,34 @@ pub struct BuiltSlateDbCdylib {
 pub struct GeneratedFixturePackage {
     pub built_fixture: BuiltFixtureCdylib,
     pub package_dir: Utf8PathBuf,
+    pub sibling_library_path: Option<Utf8PathBuf>,
+    pub bundled_prebuild_target: Option<String>,
+    pub bundled_prebuild_path: Option<Utf8PathBuf>,
 }
 
 pub struct GeneratedSlateDbPackage {
     pub built_slatedb: BuiltSlateDbCdylib,
     pub namespace: String,
     pub package_dir: Utf8PathBuf,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FixturePackageOptions {
+    pub bundled_prebuilds: bool,
+    pub manual_load: bool,
+    pub stage_root_sibling_library: bool,
+    pub stage_host_prebuild: bool,
+}
+
+impl Default for FixturePackageOptions {
+    fn default() -> Self {
+        Self {
+            bundled_prebuilds: false,
+            manual_load: false,
+            stage_root_sibling_library: true,
+            stage_host_prebuild: false,
+        }
+    }
 }
 
 pub fn generator() -> NodeBindingGenerator {
@@ -143,6 +165,13 @@ pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {
 }
 
 pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
+    generate_fixture_package_with_options(name, FixturePackageOptions::default())
+}
+
+pub fn generate_fixture_package_with_options(
+    name: &str,
+    options: FixturePackageOptions,
+) -> GeneratedFixturePackage {
     let built_fixture = build_fixture_cdylib(name);
     let package_dir = temp_dir_path(&format!("fixture-{name}-package"));
 
@@ -155,8 +184,8 @@ pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
             cdylib_name: Some(built_fixture.crate_name.clone()),
             node_engine: None,
             lib_path_literal: None,
-            bundled_prebuilds: false,
-            manual_load: false,
+            bundled_prebuilds: options.bundled_prebuilds,
+            manual_load: options.manual_load,
             config_override: Vec::new(),
         },
     )
@@ -168,21 +197,29 @@ pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
             built_fixture.library_path
         )
     });
-    let packaged_library_path = package_dir.join(library_filename);
-    fs::copy(
-        built_fixture.library_path.as_std_path(),
-        packaged_library_path.as_std_path(),
-    )
-    .unwrap_or_else(|error| {
-        panic!(
-            "failed to copy fixture library {} to {}: {error}",
-            built_fixture.library_path, packaged_library_path
-        )
+    let sibling_library_path = options.stage_root_sibling_library.then(|| {
+        let packaged_library_path = package_dir.join(library_filename);
+        copy_library(&built_fixture.library_path, &packaged_library_path, "fixture");
+        packaged_library_path
     });
+    let (bundled_prebuild_target, bundled_prebuild_path) = if options.stage_host_prebuild {
+        let target = current_bundled_prebuild_target();
+        let packaged_library_path = package_dir
+            .join("prebuilds")
+            .join(&target)
+            .join(library_filename);
+        copy_library(&built_fixture.library_path, &packaged_library_path, "fixture");
+        (Some(target), Some(packaged_library_path))
+    } else {
+        (None, None)
+    };
 
     GeneratedFixturePackage {
         built_fixture,
         package_dir,
+        sibling_library_path,
+        bundled_prebuild_target,
+        bundled_prebuild_path,
     }
 }
 
@@ -431,6 +468,17 @@ fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) {
     }
 }
 
+pub fn current_bundled_prebuild_target() -> String {
+    let platform = current_node_platform();
+    let arch = current_node_arch();
+
+    if platform != "linux" {
+        return format!("{platform}-{arch}");
+    }
+
+    format!("{platform}-{arch}-{}", current_linux_libc())
+}
+
 fn local_koffi_fixture_dir() -> Utf8PathBuf {
     Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -490,6 +538,55 @@ fn rewrite_package_dependency_to_local_fixture(
     .unwrap_or_else(|error| {
         panic!("failed to write generated package manifest {package_json_path}: {error}")
     });
+}
+
+fn copy_library(source_path: &Utf8PathBuf, destination_path: &Utf8PathBuf, context: &str) {
+    if let Some(parent) = destination_path.parent() {
+        fs::create_dir_all(parent.as_std_path()).unwrap_or_else(|error| {
+            panic!("failed to create {context} library dir {parent}: {error}")
+        });
+    }
+
+    fs::copy(source_path.as_std_path(), destination_path.as_std_path()).unwrap_or_else(|error| {
+        panic!("failed to copy {context} library {source_path} to {destination_path}: {error}")
+    });
+}
+
+fn current_node_platform() -> &'static str {
+    match env::consts::OS {
+        "macos" => "darwin",
+        "windows" => "win32",
+        "linux" => "linux",
+        "android" => "android",
+        "aix" => "aix",
+        "freebsd" => "freebsd",
+        "openbsd" => "openbsd",
+        other => panic!("unsupported host OS for Node bundled-prebuild tests: {other}"),
+    }
+}
+
+fn current_node_arch() -> &'static str {
+    match env::consts::ARCH {
+        "x86_64" => "x64",
+        "x86" => "ia32",
+        "aarch64" => "arm64",
+        "arm" => "arm",
+        "loongarch64" => "loong64",
+        "powerpc64" => "ppc64",
+        "riscv64" => "riscv64",
+        "s390x" => "s390x",
+        other => panic!("unsupported host architecture for Node bundled-prebuild tests: {other}"),
+    }
+}
+
+fn current_linux_libc() -> &'static str {
+    if cfg!(target_env = "gnu") {
+        "gnu"
+    } else if cfg!(target_env = "musl") {
+        "musl"
+    } else {
+        panic!("unsupported Linux target environment for Node bundled-prebuild tests");
+    }
 }
 
 fn run_cargo_command(

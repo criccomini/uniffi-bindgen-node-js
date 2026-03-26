@@ -110,18 +110,18 @@ Downstream consumers do not need a TypeScript build step to use the generated pa
 
 ## Compatibility
 
-The first-class target for this generator is the UniFFI 0.29 line used by SlateDB today.
+The first-class target for this generator is UniFFI 0.29.
 
 This repo currently pins:
 
 - `uniffi = 0.29.5`
 - `uniffi_bindgen = 0.29.5`
 
-Support for newer UniFFI releases is follow-up work after the SlateDB path is stable.
+Support for newer UniFFI releases is follow-up work.
 
 ## Supported UniFFI surface
 
-The current generator is scoped to the feature set exercised by SlateDB and the local fixtures:
+The current generator is scoped to:
 
 - top-level functions
 - objects, constructors, and synchronous methods
@@ -166,4 +166,3 @@ Local tests cover:
 - generated package creation and dependency installation
 - plain JavaScript smoke tests
 - TypeScript declaration checks
-- local SlateDB package generation and smoke coverage

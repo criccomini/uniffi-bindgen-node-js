@@ -444,10 +444,20 @@ function cloneBlobRecord(record) {
 }
 
 function parseFfiMetadata(libraryPath) {
-  const packageDir = dirname(libraryPath);
-  const ffiFileName = readdirSync(packageDir).find((entry) => entry.endsWith("-ffi.js"));
-  if (ffiFileName == null) {
-    throw new Error(`failed to locate generated ffi module next to ${libraryPath}`);
+  let packageDir = dirname(libraryPath);
+  let ffiFileName = null;
+
+  while (ffiFileName == null) {
+    ffiFileName = readdirSync(packageDir).find((entry) => entry.endsWith("-ffi.js")) ?? null;
+    if (ffiFileName != null) {
+      break;
+    }
+
+    const parentDir = dirname(packageDir);
+    if (parentDir === packageDir) {
+      throw new Error(`failed to locate generated ffi module for ${libraryPath}`);
+    }
+    packageDir = parentDir;
   }
 
   const ffiSource = readFileSync(join(packageDir, ffiFileName), "utf8");

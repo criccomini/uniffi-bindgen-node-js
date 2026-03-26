@@ -72,7 +72,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add BundledPrebuilds(bool) to NodeBindingConfigOverride and parse the bundled_prebuilds / bundled-prebuilds override keys.
 - [x] Remove lib_path_modules from NodeBindingGeneratorConfig, its serde aliases, and its default initialization.
 - [x] Remove NodeBindingConfigOverride::LibPathModules and delete all lib_path_module[s] and out_lib_path_module[s] override aliases.
-- [ ] Update config validation to reject bundled_prebuilds = true together with lib_path_literal.
+- [x] Update config validation to reject bundled_prebuilds = true together with lib_path_literal.
 - [ ] Thread bundled_prebuilds through GeneratedPackage, TemplateContext, and template inputs.
 - [ ] Extend generated JS and DTS metadata so componentMetadata and ffiMetadata expose bundledPrebuilds.
 - [ ] Update templates/component/component-ffi.js.j2 to compute the default library filename, compute the bundled target id, and resolve prebuilds/<target>/<filename> when
@@ -83,7 +83,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [ ] Update templates/component/component-ffi.d.ts.j2 and templates/component/component.d.ts.j2 to match the new metadata surface without changing load().
 - [ ] Update README examples and limitations text to describe bundled prebuilds and remove references to lib_path_modules.
 - [ ] Replace existing lib_path_modules rejection tests with tests that assert old TOML keys now fail as unknown fields and old CLI override keys now fail as unsupported.
-- [ ] Add config tests that accept bundled_prebuilds = true and reject bundled_prebuilds + lib_path_literal.
+- [x] Add config tests that accept bundled_prebuilds = true and reject bundled_prebuilds + lib_path_literal.
 - [ ] Add codegen tests that assert the emitted bundled metadata, target-resolution helpers, resolver precedence, and bundled missing-file diagnostic.
 - [ ] Extend test support helpers so a generated fixture package can stage the current host library under prebuilds/<current-target>/.
 - [ ] Add a bundled-mode package-generation test that verifies the package works when only the prebuilds/<current-target>/ artifact is present.

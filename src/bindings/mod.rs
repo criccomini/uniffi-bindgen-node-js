@@ -240,6 +240,11 @@ impl NodeBindingGeneratorConfig {
         {
             bail!("node binding lib_path_literal cannot be empty");
         }
+        if self.bundled_prebuilds && self.lib_path_literal.is_some() {
+            bail!(
+                "node binding bundled_prebuilds cannot be enabled together with lib_path_literal"
+            );
+        }
         if let Some(module_format) = self.module_format.as_deref() {
             let normalized = module_format.trim();
             if normalized.is_empty() {
@@ -1832,6 +1837,7 @@ mod tests {
             cdylib_name = "fixture_cdylib"
             node_engine = ">=20"
             lib_path_literal = "./native/libfixture.node"
+            bundled_prebuilds = false
             manual_load = true
             "#,
         );
@@ -1843,6 +1849,7 @@ mod tests {
             explicit.lib_path_literal.as_deref(),
             Some("./native/libfixture.node")
         );
+        assert!(!explicit.bundled_prebuilds);
         assert!(explicit.manual_load);
 
         let defaulted = parse_node_config(
@@ -1855,7 +1862,42 @@ mod tests {
         assert_eq!(defaulted.cdylib_name, None);
         assert_eq!(defaulted.node_engine, ">=16");
         assert_eq!(defaulted.lib_path_literal, None);
+        assert!(!defaulted.bundled_prebuilds);
         assert!(!defaulted.manual_load);
+    }
+
+    #[test]
+    fn new_config_accepts_bundled_prebuilds() {
+        let config = parse_node_config(
+            r#"
+            [bindings.node]
+            bundled_prebuilds = true
+            "#,
+        );
+
+        assert!(config.bundled_prebuilds);
+    }
+
+    #[test]
+    fn config_validation_rejects_bundled_prebuilds_with_lib_path_literal() {
+        let config = parse_node_config(
+            r#"
+            [bindings.node]
+            bundled_prebuilds = true
+            lib_path_literal = "./native/libfixture.node"
+            "#,
+        );
+
+        let error = config
+            .validate()
+            .expect_err("bundled_prebuilds with lib_path_literal should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("bundled_prebuilds cannot be enabled together with lib_path_literal"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]

@@ -133,13 +133,14 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
       return `${process.platform}-${process.arch}-${linuxLibc}`;
     }
 
-    function defaultBundledLibraryPath() {
-      return join(
-        moduleDirectory,
-        "prebuilds",
-        defaultBundledTarget(),
-        defaultSiblingLibraryFilename(),
-      );
+    function defaultBundledLibrary() {
+      const target = defaultBundledTarget();
+      const filename = defaultSiblingLibraryFilename();
+      return Object.freeze({
+        target,
+        packageRelativePath: `prebuilds/${target}/${filename}`,
+        libraryPath: join(moduleDirectory, "prebuilds", target, filename),
+      });
     }
 
     function defaultSiblingLibraryPath() {
@@ -149,21 +150,33 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     function resolveLibraryPath(libraryPath = undefined) {
       const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
       if (rawLibraryPath != null) {
-        return isAbsolute(rawLibraryPath)
-          ? rawLibraryPath
-          : join(moduleDirectory, rawLibraryPath);
+        return Object.freeze({
+          libraryPath: isAbsolute(rawLibraryPath)
+            ? rawLibraryPath
+            : join(moduleDirectory, rawLibraryPath),
+          bundledPrebuild: null,
+        });
       }
 
       if (ffiMetadata.bundledPrebuilds) {
-        return defaultBundledLibraryPath();
+        const bundledPrebuild = defaultBundledLibrary();
+        return Object.freeze({
+          libraryPath: bundledPrebuild.libraryPath,
+          bundledPrebuild,
+        });
       }
 
-      return defaultSiblingLibraryPath();
+      return Object.freeze({
+        libraryPath: defaultSiblingLibraryPath(),
+        bundledPrebuild: null,
+      });
     }
 
     === lifecycle ===
     export function load(libraryPath = undefined) {
-      const resolvedLibraryPath = resolveLibraryPath(libraryPath);
+      const resolution = resolveLibraryPath(libraryPath);
+      const resolvedLibraryPath = resolution.libraryPath;
+      const bundledPrebuild = resolution.bundledPrebuild;
 
       if (loadedBindings !== null) {
         if (loadedBindings.libraryPath === resolvedLibraryPath) {
@@ -172,6 +185,12 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
 
         throw new Error(
           `The native library is already loaded from ${JSON.stringify(loadedBindings.libraryPath)}. Call unload() before loading a different library path.`,
+        );
+      }
+
+      if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {
+        throw new Error(
+          `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.`,
         );
       }
 

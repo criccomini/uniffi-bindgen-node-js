@@ -1663,6 +1663,10 @@ mod tests {
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
         assert!(
+            component_ffi_js.contains("import { existsSync } from \"node:fs\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
             component_ffi_js.contains("import { dirname, isAbsolute, join } from \"node:path\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
@@ -1680,7 +1684,11 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("return isAbsolute(rawLibraryPath)"),
+            component_ffi_js.contains("libraryPath: isAbsolute(rawLibraryPath)"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("bundledPrebuild: null,"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
 

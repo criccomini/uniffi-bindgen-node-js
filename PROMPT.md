@@ -164,7 +164,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Fix the local `koffi` test shim so self-encoding `RustCallStatus` preserves callback success state.
 - [x] Make test temp output paths collision-resistant across concurrent Rust test threads.
 - [x] Add a README for this repo describing installation, CLI usage, supported UniFFI features, and current limitations.
-- [ ] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
+- [x] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
 - [ ] Document that v1 targets UniFFI 0.29.x first.
 - [ ] Run Rust tests last.
 - [ ] Run the end-to-end Node tests after Rust tests pass.

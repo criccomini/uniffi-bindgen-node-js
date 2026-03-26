@@ -96,6 +96,18 @@ Each invocation writes a package directory containing:
 
 The generated `package.json` declares `koffi` as the runtime FFI dependency.
 
+## Output format
+
+v1 output is ESM-only. Generated packages set `"type": "module"` and export the generated entrypoints through `index.js`.
+
+The generator emits ready-to-consume JavaScript and declaration files directly:
+
+- `index.js` and `index.d.ts`
+- `<namespace>.js` and `<namespace>.d.ts`
+- `<namespace>-ffi.js` and `<namespace>-ffi.d.ts`
+
+Downstream consumers do not need a TypeScript build step to use the generated package.
+
 ## Supported UniFFI surface
 
 The current generator is scoped to the feature set exercised by SlateDB and the local fixtures:

@@ -56,4 +56,5 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
   it_logging(LogLevel.Info, collector) plus the undefined callback path.
 - [x] Add a callback TypeScript test to the existing TS suite that typechecks Settings, WriteBatch, LogLevel, LogRecord, LogCollector, emit, last_message, and init_logging.
 - [x] Update the callback snapshot to match the expanded generated API and runtime hook registration output.
-- [ ] Verify there are no remaining SlateDB references in integration tests or integration support code.
+- [x] Verify there are no remaining SlateDB references in integration tests or integration support code.
+✅

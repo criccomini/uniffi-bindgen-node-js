@@ -3,6 +3,7 @@
 use std::{
     env, fs, process,
     process::Command,
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -369,12 +370,15 @@ pub fn remove_dir_all(path: &Utf8PathBuf) {
 }
 
 pub fn temp_dir_path(name: &str) -> Utf8PathBuf {
+    static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system time should be after unix epoch")
         .as_nanos();
+    let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
     Utf8PathBuf::from_path_buf(env::temp_dir().join(format!(
-        "uniffi-bindgen-node-js-tests-{name}-{}-{unique}",
+        "uniffi-bindgen-node-js-tests-{name}-{}-{unique}-{counter}",
         process::id()
     )))
     .expect("temp dir path should be utf-8")

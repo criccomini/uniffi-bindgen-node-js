@@ -1,9 +1,46 @@
 namespace callbacks_fixture {
     void emit(LogSink sink, string message);
     string? last_message(LogSink? sink);
+    void init_logging(LogLevel level, LogCollector? collector);
+};
+
+enum LogLevel {
+    "Off",
+    "Error",
+    "Warn",
+    "Info",
+    "Debug",
+    "Trace"
+};
+
+dictionary LogRecord {
+    LogLevel level;
+    string target;
+    string message;
+    string? module_path;
+    string? file;
+    u32? line;
 };
 
 callback interface LogSink {
     void write(string message);
     string? latest();
+};
+
+callback interface LogCollector {
+    void log(LogRecord record);
+};
+
+interface Settings {
+    [Name=default]
+    constructor();
+    void set(string key, string value_json);
+    string to_json_string();
+};
+
+interface WriteBatch {
+    constructor();
+    void put(bytes key, bytes value);
+    void delete(bytes key);
+    u32 operation_count();
 };

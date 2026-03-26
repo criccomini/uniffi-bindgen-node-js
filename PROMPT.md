@@ -167,4 +167,4 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
 - [x] Document that v1 targets UniFFI 0.29.x first.
 - [x] Run Rust tests last.
-- [ ] Run the end-to-end Node tests after Rust tests pass.
+- [x] Run the end-to-end Node tests after Rust tests pass.

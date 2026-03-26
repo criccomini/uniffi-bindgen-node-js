@@ -1063,10 +1063,32 @@ mod tests {
             .write_bindings(&settings, &[component])
             .expect("write_bindings should succeed");
 
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
         assert!(
+            component_js.contains("createCallbackRegistry"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("configureRuntimeHooks({"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("loadFfi();"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
             component_ffi_js.contains("koffi.proto(\"CallbackInterfaceLogCallbackMethod0\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("export function configureRuntimeHooks"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            !component_ffi_js.contains("if (!ffiMetadata.manualLoad) {\n  load();\n}"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

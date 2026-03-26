@@ -44,6 +44,24 @@ impl ComponentModel {
             }
         }
 
+        let callback_interfaces = ci
+            .callback_interface_definitions()
+            .iter()
+            .map(|callback_interface| {
+                CallbackInterfaceModel::from_callback_interface(callback_interface, ci)
+            })
+            .chain(
+                ci.object_definitions()
+                    .iter()
+                    .filter(|object| object.has_callback_interface())
+                    .map(|object| CallbackInterfaceModel::from_object(object, ci)),
+            )
+            .collect::<Vec<_>>();
+        let callback_interface_names = callback_interfaces
+            .iter()
+            .map(|callback_interface| callback_interface.name.clone())
+            .collect::<BTreeSet<_>>();
+
         let model = Self {
             functions: ci
                 .function_definitions()
@@ -57,16 +75,14 @@ impl ComponentModel {
             flat_enums,
             tagged_enums,
             errors,
-            callback_interfaces: ci
-                .callback_interface_definitions()
-                .iter()
-                .map(|callback_interface| {
-                    CallbackInterfaceModel::from_callback_interface(callback_interface, ci)
-                })
-                .collect(),
+            callback_interfaces,
             objects: ci
                 .object_definitions()
                 .iter()
+                .filter(|object| {
+                    !callback_interface_names.contains(object.name())
+                        && !object.has_callback_interface()
+                })
                 .map(|object| ObjectModel::from_object(object, ci))
                 .collect(),
             ffi_rustbuffer_from_bytes_identifier: ffi_symbol_identifier(
@@ -235,11 +251,11 @@ impl ComponentModel {
             lines.push(render_js_error_converter(error)?);
         }
         for callback_interface in &self.callback_interfaces {
-            lines.push(format!(
-                "const {} = uniffiNotImplementedConverter({});",
-                type_converter_name(&callback_interface.name),
-                json_string_literal(&callback_interface.name)?
-            ));
+            lines.push(render_js_callback_interface_converter(callback_interface)?);
+        }
+
+        if !self.callback_interfaces.is_empty() {
+            lines.push(render_js_callback_runtime_hooks(&self.callback_interfaces)?);
         }
 
         Ok(lines.join("\n"))
@@ -485,6 +501,9 @@ impl ErrorModel {
 pub(crate) struct CallbackInterfaceModel {
     pub name: String,
     pub methods: Vec<MethodModel>,
+    pub ffi_init_callback_identifier: String,
+    pub ffi_object_clone_identifier: String,
+    pub ffi_object_free_identifier: String,
 }
 
 impl CallbackInterfaceModel {
@@ -497,8 +516,39 @@ impl CallbackInterfaceModel {
             methods: callback_interface
                 .methods()
                 .into_iter()
-                .map(|method| MethodModel::from_method(method, ci))
+                .enumerate()
+                .map(|(index, method)| {
+                    MethodModel::from_callback_method(method, ci, callback_interface.name(), index)
+                })
                 .collect(),
+            ffi_init_callback_identifier: ffi_symbol_identifier(
+                callback_interface.ffi_init_callback().name(),
+            ),
+            ffi_object_clone_identifier: ffi_symbol_identifier(&ffi_clone_symbol_name(
+                callback_interface.module_path(),
+                callback_interface.name(),
+            )),
+            ffi_object_free_identifier: ffi_symbol_identifier(&ffi_free_symbol_name(
+                callback_interface.module_path(),
+                callback_interface.name(),
+            )),
+        }
+    }
+
+    fn from_object(object: &Object, ci: &ComponentInterface) -> Self {
+        Self {
+            name: object.name().to_string(),
+            methods: object
+                .methods()
+                .into_iter()
+                .enumerate()
+                .map(|(index, method)| {
+                    MethodModel::from_callback_method(method, ci, object.name(), index)
+                })
+                .collect(),
+            ffi_init_callback_identifier: ffi_symbol_identifier(object.ffi_init_callback().name()),
+            ffi_object_clone_identifier: ffi_symbol_identifier(object.ffi_object_clone().name()),
+            ffi_object_free_identifier: ffi_symbol_identifier(object.ffi_object_free().name()),
         }
     }
 }
@@ -569,6 +619,7 @@ pub(crate) struct MethodModel {
     pub return_type: Option<Type>,
     pub throws_type: Option<Type>,
     pub ffi_func_identifier: String,
+    pub ffi_callback_identifier: Option<String>,
     pub async_ffi: Option<AsyncScaffoldingModel>,
 }
 
@@ -586,8 +637,23 @@ impl MethodModel {
             return_type: method.return_type().cloned(),
             throws_type: method.throws_type().cloned(),
             ffi_func_identifier: ffi_symbol_identifier(method.ffi_func().name()),
+            ffi_callback_identifier: None,
             async_ffi: AsyncScaffoldingModel::from_callable(method, ci),
         }
+    }
+
+    fn from_callback_method(
+        method: &Method,
+        ci: &ComponentInterface,
+        callback_interface_name: &str,
+        index: usize,
+    ) -> Self {
+        let mut model = Self::from_method(method, ci);
+        model.ffi_callback_identifier = Some(ffi_symbol_identifier(&callback_method_ffi_name(
+            callback_interface_name,
+            index,
+        )));
+        model
     }
 }
 
@@ -693,6 +759,12 @@ fn validate_supported_features(ci: &ComponentInterface) -> Result<()> {
         .iter()
         .filter(|callback| callback.has_async_method())
         .map(|callback| callback.name().to_string())
+        .chain(
+            ci.object_definitions()
+                .iter()
+                .filter(|object| object.has_callback_interface() && object.has_async_method())
+                .map(|object| object.name().to_string()),
+        )
         .collect::<BTreeSet<_>>();
     if !async_callback_interfaces.is_empty() {
         unsupported.push(format!(
@@ -750,13 +822,21 @@ fn describe_type(type_: &Type) -> String {
 }
 
 fn render_js_function(function: &FunctionModel) -> Result<String> {
-    Ok(format!(
-        "export {}function {}({}) {{\n  return uniffiNotImplemented({});\n}}",
+    let mut lines = vec![format!(
+        "export {}function {}({}) {{",
         if function.is_async { "async " } else { "" },
         js_identifier(&function.name),
-        render_js_params(&function.arguments),
-        json_string_literal(&function.name)?
-    ))
+        render_js_params(&function.arguments)
+    )];
+
+    if function.is_async {
+        lines.extend(render_js_async_function_body(function)?);
+    } else {
+        lines.extend(render_js_sync_function_body(function)?);
+    }
+    lines.push("}".to_string());
+
+    Ok(lines.join("\n"))
 }
 
 fn render_dts_function(function: &FunctionModel) -> Result<String> {
@@ -841,6 +921,234 @@ fn render_js_record_converter(record: &RecordModel) -> Result<String> {
     lines.push("    };".to_string());
     lines.push("  }".to_string());
     lines.push("})();".to_string());
+    Ok(lines.join("\n"))
+}
+
+fn render_js_callback_interface_converter(
+    callback_interface: &CallbackInterfaceModel,
+) -> Result<String> {
+    let proxy_class_name = callback_interface_proxy_class_name(&callback_interface.name);
+    let factory_name = callback_interface_factory_name(&callback_interface.name);
+    let registry_name = callback_interface_registry_name(&callback_interface.name);
+    let validator_name = callback_interface_validator_name(&callback_interface.name);
+    let register_name = callback_interface_register_name(&callback_interface.name);
+    let converter_name = type_converter_name(&callback_interface.name);
+    let interface_name = json_string_literal(&callback_interface.name)?;
+    let mut lines = vec![format!(
+        "class {} extends UniffiObjectBase {{",
+        proxy_class_name
+    )];
+
+    for method in &callback_interface.methods {
+        lines.push(String::new());
+        lines.push(format!(
+            "  {}({}) {{",
+            js_member_identifier(&method.name),
+            render_js_params(&method.arguments)
+        ));
+        lines.extend(render_js_sync_method_body(
+            method,
+            &factory_name,
+            &callback_interface.name,
+        )?);
+        lines.push("  }".to_string());
+    }
+    lines.push("}".to_string());
+    lines.push(String::new());
+    lines.push(format!("const {} = createObjectFactory({{", factory_name));
+    lines.push(format!("  typeName: {},", interface_name));
+    lines.push(format!(
+        "  createInstance: () => Object.create({}.prototype),",
+        proxy_class_name
+    ));
+    lines.push("  cloneHandle(handle) {".to_string());
+    lines.push("    return defaultRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "      (status) => ffiFunctions.{}(handle, status),",
+        callback_interface.ffi_object_clone_identifier
+    ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
+    lines.push("  freeHandle(handle) {".to_string());
+    lines.push("    defaultRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "      (status) => ffiFunctions.{}(handle, status),",
+        callback_interface.ffi_object_free_identifier
+    ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
+    lines.push("});".to_string());
+    lines.push(String::new());
+    lines.push(format!("function {}(implementation) {{", validator_name));
+    lines.push(format!(
+        "  if ((typeof implementation !== \"object\" && typeof implementation !== \"function\") || implementation == null) {{"
+    ));
+    lines.push(format!(
+        "    throw new TypeError(`${{{}}} implementations must be objects with callable methods.`);",
+        interface_name
+    ));
+    lines.push("  }".to_string());
+    for method in &callback_interface.methods {
+        lines.push(format!(
+            "  if (typeof implementation.{} !== \"function\") {{",
+            js_member_identifier(&method.name)
+        ));
+        lines.push(format!(
+            "    throw new TypeError(`${{{}}} is missing required method {}().`);",
+            interface_name,
+            js_member_identifier(&method.name)
+        ));
+        lines.push("  }".to_string());
+    }
+    lines.push("  return implementation;".to_string());
+    lines.push("}".to_string());
+    lines.push(String::new());
+    lines.push(format!(
+        "const {} = createCallbackRegistry({{",
+        registry_name
+    ));
+    lines.push(format!("  interfaceName: {},", interface_name));
+    lines.push(format!("  validate: {},", validator_name));
+    lines.push("});".to_string());
+    lines.push(String::new());
+    lines.push(format!(
+        "function {}(bindings, registrations) {{",
+        register_name
+    ));
+
+    for method in &callback_interface.methods {
+        let callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
+            format!(
+                "callback interface {}.{} is missing an FFI callback identifier",
+                callback_interface.name, method.name
+            )
+        })?;
+        lines.push(format!(
+            "  const {}Callback = koffi.register(",
+            js_member_identifier(&method.name)
+        ));
+        lines.push(
+            "    (uniffiHandle, ".to_string()
+                + &method
+                    .arguments
+                    .iter()
+                    .map(|argument| js_identifier(&argument.name))
+                    .chain(["uniffiOutReturn".to_string(), "callStatus".to_string()].into_iter())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+                + ") => {",
+        );
+        lines.push(
+            "      const uniffiStatus = callStatus == null
+        ? createRustCallStatus()
+        : koffi.decode(callStatus, bindings.ffiTypes.RustCallStatus);"
+                .to_string(),
+        );
+        lines.push("      const uniffiResult = invokeCallbackMethod({".to_string());
+        lines.push(format!("        registry: {},", registry_name));
+        lines.push("        handle: uniffiHandle,".to_string());
+        lines.push(format!(
+            "        methodName: {},",
+            json_string_literal(&method.name)?
+        ));
+        lines.push("        args: [".to_string());
+        for argument in &method.arguments {
+            lines.push(format!(
+                "          {},",
+                render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))?
+            ));
+        }
+        lines.push("        ],".to_string());
+        if let Some(throws_type) = method.throws_type.as_ref() {
+            lines.push(format!(
+                "        lowerError: (error) => error instanceof {} ? uniffiLowerIntoRustBuffer({}, error) : null,",
+                render_public_type(throws_type)?,
+                render_js_type_converter_expression(throws_type)?
+            ));
+        }
+        lines.push(
+            "        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),"
+                .to_string(),
+        );
+        lines.push("        status: uniffiStatus,".to_string());
+        lines.push("      });".to_string());
+        lines.push("      if (callStatus != null) {".to_string());
+        lines.push(
+            "        koffi.encode(callStatus, bindings.ffiTypes.RustCallStatus, uniffiStatus);"
+                .to_string(),
+        );
+        lines.push("      }".to_string());
+        lines.push("      if (uniffiStatus.code !== CALL_SUCCESS) {".to_string());
+        lines.push("        return;".to_string());
+        lines.push("      }".to_string());
+        if let Some(return_type) = method.return_type.as_ref() {
+            lines.push(format!(
+                "      const loweredReturn = {};",
+                render_js_lower_expression(return_type, "uniffiResult")?
+            ));
+            lines.push(format!(
+                "      koffi.encode(uniffiOutReturn, {}, loweredReturn);",
+                render_js_koffi_type_expression(return_type, "bindings")?
+            ));
+        }
+        lines.push("    },".to_string());
+        lines.push(format!(
+            "    koffi.pointer(bindings.ffiCallbacks.{}),",
+            callback_identifier
+        ));
+        lines.push("  );".to_string());
+        lines.push(format!(
+            "  registrations.push({}Callback);",
+            js_member_identifier(&method.name)
+        ));
+    }
+
+    lines.push("  const uniffiFree = koffi.register(".to_string());
+    lines.push(format!(
+        "    (uniffiHandle) => {}.remove(uniffiHandle),",
+        registry_name
+    ));
+    lines.push("    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),".to_string());
+    lines.push("  );".to_string());
+    lines.push("  registrations.push(uniffiFree);".to_string());
+    lines.push(format!(
+        "  bindings.ffiFunctions.{}({{",
+        callback_interface.ffi_init_callback_identifier
+    ));
+    for method in &callback_interface.methods {
+        lines.push(format!(
+            "    {}: {}Callback,",
+            quoted_property_name(&method.name)?,
+            js_member_identifier(&method.name)
+        ));
+    }
+    lines.push("    uniffi_free: uniffiFree,".to_string());
+    lines.push("  });".to_string());
+    lines.push("}".to_string());
+    lines.push(String::new());
+    lines.push(format!("const {} = Object.freeze({{", converter_name));
+    lines.push("  lower(value) {".to_string());
+    lines.push(format!("    if ({}.isInstance(value)) {{", factory_name));
+    lines.push(format!("      return {}.cloneHandle(value);", factory_name));
+    lines.push("    }".to_string());
+    lines.push(format!("    return {}.register(value);", registry_name));
+    lines.push("  },".to_string());
+    lines.push("  lift(handle) {".to_string());
+    lines.push(format!("    return {}.create(handle);", factory_name));
+    lines.push("  },".to_string());
+    lines.push("  write(value, writer) {".to_string());
+    lines.push("    writer.writeUInt64(this.lower(value));".to_string());
+    lines.push("  },".to_string());
+    lines.push("  read(reader) {".to_string());
+    lines.push("    return this.lift(reader.readUInt64());".to_string());
+    lines.push("  },".to_string());
+    lines.push("  allocationSize() {".to_string());
+    lines.push("    return UNIFFI_OBJECT_HANDLE_SIZE;".to_string());
+    lines.push("  },".to_string());
+    lines.push("});".to_string());
+
     Ok(lines.join("\n"))
 }
 
@@ -1200,7 +1508,10 @@ fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
                 .collect::<Result<Vec<_>>>()?;
             format!("4 + {}", field_terms.join(" + "))
         };
-        lines.push(format!("    if (value instanceof {}) {{", variant_class_name));
+        lines.push(format!(
+            "    if (value instanceof {}) {{",
+            variant_class_name
+        ));
         lines.push(format!("      return {};", allocation_size));
         lines.push("    }".to_string());
     }
@@ -1216,7 +1527,10 @@ fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
     lines.push("  write(value, writer) {".to_string());
     for (index, variant) in error.variants.iter().enumerate() {
         let variant_class_name = variant_type_name(&error.name, &variant.name);
-        lines.push(format!("    if (value instanceof {}) {{", variant_class_name));
+        lines.push(format!(
+            "    if (value instanceof {}) {{",
+            variant_class_name
+        ));
         lines.push(format!("      writer.writeInt32({});", index + 1));
         if !error.is_flat {
             for field in &variant.fields {
@@ -1845,6 +2159,77 @@ fn render_js_type_converter_expression(type_: &Type) -> Result<String> {
     }
 }
 
+fn render_js_callback_runtime_hooks(
+    callback_interfaces: &[CallbackInterfaceModel],
+) -> Result<String> {
+    let mut lines = vec![
+        "const uniffiRegisteredCallbackPointers = [];".to_string(),
+        String::new(),
+        "function uniffiRegisterCallbackVtables(bindings) {".to_string(),
+    ];
+
+    for callback_interface in callback_interfaces {
+        lines.push(format!(
+            "  {}(bindings, uniffiRegisteredCallbackPointers);",
+            callback_interface_register_name(&callback_interface.name)
+        ));
+    }
+    lines.push("}".to_string());
+    lines.push(String::new());
+    lines.push("function uniffiUnregisterCallbackVtables() {".to_string());
+    for callback_interface in callback_interfaces {
+        lines.push(format!(
+            "  {}.clear();",
+            callback_interface_registry_name(&callback_interface.name)
+        ));
+    }
+    lines.push("  while (uniffiRegisteredCallbackPointers.length > 0) {".to_string());
+    lines.push("    koffi.unregister(uniffiRegisteredCallbackPointers.pop());".to_string());
+    lines.push("  }".to_string());
+    lines.push("}".to_string());
+    lines.push(String::new());
+    lines.push("configureRuntimeHooks({".to_string());
+    lines.push("  onLoad(bindings) {".to_string());
+    lines.push("    uniffiRegisterCallbackVtables(bindings);".to_string());
+    lines.push("  },".to_string());
+    lines.push("  onUnload() {".to_string());
+    lines.push("    uniffiUnregisterCallbackVtables();".to_string());
+    lines.push("  },".to_string());
+    lines.push("});".to_string());
+
+    Ok(lines.join("\n"))
+}
+
+fn render_js_koffi_type_expression(type_: &Type, ffi_bindings_expr: &str) -> Result<String> {
+    match type_ {
+        Type::UInt8 => Ok("\"uint8_t\"".to_string()),
+        Type::Int8 => Ok("\"int8_t\"".to_string()),
+        Type::UInt16 => Ok("\"uint16_t\"".to_string()),
+        Type::Int16 => Ok("\"int16_t\"".to_string()),
+        Type::UInt32 => Ok("\"uint32_t\"".to_string()),
+        Type::Int32 => Ok("\"int32_t\"".to_string()),
+        Type::UInt64 | Type::CallbackInterface { .. } => Ok("\"uint64_t\"".to_string()),
+        Type::Int64 => Ok("\"int64_t\"".to_string()),
+        Type::Float32 => Ok("\"float\"".to_string()),
+        Type::Float64 => Ok("\"double\"".to_string()),
+        Type::Boolean => Ok("\"int8_t\"".to_string()),
+        Type::String
+        | Type::Bytes
+        | Type::Record { .. }
+        | Type::Enum { .. }
+        | Type::Optional { .. }
+        | Type::Sequence { .. }
+        | Type::Map { .. }
+        | Type::Timestamp
+        | Type::Duration => Ok(format!("{ffi_bindings_expr}.ffiTypes.RustBuffer")),
+        Type::Object { name, .. } => Ok(format!(
+            "{ffi_bindings_expr}.ffiTypes.{}",
+            ffi_opaque_identifier(name)
+        )),
+        Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+    }
+}
+
 fn render_dts_params(arguments: &[ArgumentModel]) -> Result<String> {
     arguments
         .iter()
@@ -1935,6 +2320,29 @@ fn variant_type_name(type_name: &str, variant_name: &str) -> String {
     format!("{type_name}{}", variant_name.to_upper_camel_case())
 }
 
+fn callback_interface_proxy_class_name(type_name: &str) -> String {
+    format!("Uniffi{}Proxy", type_name.to_upper_camel_case())
+}
+
+fn callback_interface_factory_name(type_name: &str) -> String {
+    format!("uniffi{}Factory", type_name.to_upper_camel_case())
+}
+
+fn callback_interface_registry_name(type_name: &str) -> String {
+    format!("uniffi{}Registry", type_name.to_upper_camel_case())
+}
+
+fn callback_interface_validator_name(type_name: &str) -> String {
+    format!(
+        "uniffiValidate{}Implementation",
+        type_name.to_upper_camel_case()
+    )
+}
+
+fn callback_interface_register_name(type_name: &str) -> String {
+    format!("uniffiRegister{}Vtable", type_name.to_upper_camel_case())
+}
+
 fn object_factory_name(type_name: &str) -> String {
     format!("uniffi{}ObjectFactory", type_name.to_upper_camel_case())
 }
@@ -1997,6 +2405,26 @@ fn ffi_symbol_identifier(name: &str) -> String {
     } else {
         identifier
     }
+}
+
+fn ffi_clone_symbol_name(namespace: &str, object_name: &str) -> String {
+    let namespace = namespace.replace("::", "__");
+    let object_name = object_name.to_ascii_lowercase();
+    format!("uniffi_{namespace}_fn_clone_{object_name}")
+}
+
+fn ffi_free_symbol_name(namespace: &str, object_name: &str) -> String {
+    let namespace = namespace.replace("::", "__");
+    let object_name = object_name.to_ascii_lowercase();
+    format!("uniffi_{namespace}_fn_free_{object_name}")
+}
+
+fn callback_method_ffi_name(callback_interface_name: &str, index: usize) -> String {
+    format!("CallbackInterface{callback_interface_name}Method{index}")
+}
+
+fn ffi_opaque_identifier(name: &str) -> String {
+    ffi_symbol_identifier(&format!("RustArcPtr{name}"))
 }
 
 fn sanitize_identifier(name: &str, allow_reserved: bool) -> String {
@@ -2079,6 +2507,85 @@ fn is_reserved_identifier(identifier: &str) -> bool {
             | "with"
             | "yield"
     )
+}
+
+fn render_js_sync_function_body(function: &FunctionModel) -> Result<Vec<String>> {
+    let mut lines = render_js_argument_lowering(&function.arguments)?;
+    let call_args = render_js_ffi_call_args(&function.arguments, Some("status"));
+
+    if let Some(return_type) = function.return_type.as_ref() {
+        lines.push("  const uniffiResult = defaultRustCaller.rustCall(".to_string());
+        lines.push(format!(
+            "    (status) => ffiFunctions.{}({}),",
+            function.ffi_func_identifier, call_args
+        ));
+        lines.push(format!(
+            "    {},",
+            render_js_rust_call_options_expression(function.throws_type.as_ref())?
+        ));
+        lines.push("  );".to_string());
+        lines.push(format!(
+            "  return {};",
+            render_js_lift_expression(return_type, "uniffiResult")?
+        ));
+    } else {
+        lines.push("  defaultRustCaller.rustCall(".to_string());
+        lines.push(format!(
+            "    (status) => ffiFunctions.{}({}),",
+            function.ffi_func_identifier, call_args
+        ));
+        lines.push(format!(
+            "    {},",
+            render_js_rust_call_options_expression(function.throws_type.as_ref())?
+        ));
+        lines.push("  );".to_string());
+    }
+
+    Ok(lines)
+}
+
+fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>> {
+    let async_ffi = function.async_ffi.as_ref().with_context(|| {
+        format!(
+            "async function {} is missing future scaffolding identifiers",
+            function.name
+        )
+    })?;
+    let mut lines = render_js_argument_lowering(&function.arguments)?;
+    let start_args = render_js_ffi_call_args(&function.arguments, None);
+
+    lines.push("  return rustCallAsync({".to_string());
+    lines.push(format!(
+        "    rustFutureFunc: () => ffiFunctions.{}({}),",
+        function.ffi_func_identifier, start_args
+    ));
+    lines.push(format!(
+        "    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, continuationCallback, continuationHandle),",
+        async_ffi.poll_identifier
+    ));
+    lines.push(format!(
+        "    cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.cancel_identifier
+    ));
+    lines.push(format!(
+        "    completeFunc: (rustFuture, status) => ffiFunctions.{}(rustFuture, status),",
+        async_ffi.complete_identifier
+    ));
+    lines.push(format!(
+        "    freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.free_identifier
+    ));
+    lines.push(format!(
+        "    liftFunc: {},",
+        render_js_async_lift_closure(function.return_type.as_ref())?
+    ));
+    lines.push(format!(
+        "    ...{},",
+        render_js_rust_call_options_expression(function.throws_type.as_ref())?
+    ));
+    lines.push("  });".to_string());
+
+    Ok(lines)
 }
 
 fn validate_arguments_renderable(arguments: &[ArgumentModel], context: &str) -> Result<()> {
@@ -2529,9 +3036,9 @@ mod tests {
             rendered.dts
         );
         assert!(
-            rendered
-                .js
-                .contains("const FfiConverterProfile = new (class extends AbstractFfiConverterByteArray {"),
+            rendered.js.contains(
+                "const FfiConverterProfile = new (class extends AbstractFfiConverterByteArray {"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -2550,30 +3057,26 @@ mod tests {
             rendered.js
         );
         assert!(
-            !rendered
-                .js
-                .contains("const FfiConverterProfile = uniffiNotImplementedConverter(\"Profile\");"),
+            !rendered.js.contains(
+                "const FfiConverterProfile = uniffiNotImplementedConverter(\"Profile\");"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
-            rendered
-                .js
-                .contains("const FfiConverterFlavor = new (class extends AbstractFfiConverterByteArray {"),
+            rendered.js.contains(
+                "const FfiConverterFlavor = new (class extends AbstractFfiConverterByteArray {"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
-            rendered
-                .js
-                .contains("writer.writeInt32(1);"),
+            rendered.js.contains("writer.writeInt32(1);"),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
-            rendered
-                .js
-                .contains("return Flavor[\"vanilla\"];"),
+            rendered.js.contains("return Flavor[\"vanilla\"];"),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -2585,9 +3088,9 @@ mod tests {
             rendered.js
         );
         assert!(
-            rendered
-                .js
-                .contains("const FfiConverterOutcome = new (class extends AbstractFfiConverterByteArray {"),
+            rendered.js.contains(
+                "const FfiConverterOutcome = new (class extends AbstractFfiConverterByteArray {"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -2606,16 +3109,16 @@ mod tests {
             rendered.js
         );
         assert!(
-            !rendered
-                .js
-                .contains("const FfiConverterOutcome = uniffiNotImplementedConverter(\"Outcome\");"),
+            !rendered.js.contains(
+                "const FfiConverterOutcome = uniffiNotImplementedConverter(\"Outcome\");"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
-            rendered
-                .js
-                .contains("const FfiConverterStoreError = new (class extends AbstractFfiConverterByteArray {"),
+            rendered.js.contains(
+                "const FfiConverterStoreError = new (class extends AbstractFfiConverterByteArray {"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -2627,9 +3130,9 @@ mod tests {
             rendered.js
         );
         assert!(
-            !rendered
-                .js
-                .contains("const FfiConverterStoreError = uniffiNotImplementedConverter(\"StoreError\");"),
+            !rendered.js.contains(
+                "const FfiConverterStoreError = uniffiNotImplementedConverter(\"StoreError\");"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -2833,6 +3336,35 @@ mod tests {
             ),
             "unexpected DTS output: {}",
             rendered.dts
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const uniffiLogCallbackRegistry = createCallbackRegistry({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("function uniffiRegisterLogCallbackVtable(bindings, registrations) {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("configureRuntimeHooks({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("defaultRustCaller.rustCall("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            !rendered.js.contains("init_logging is not implemented yet"),
+            "unexpected JS output: {}",
+            rendered.js
         );
     }
 }

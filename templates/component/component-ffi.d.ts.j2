@@ -20,8 +20,14 @@ export interface FfiIntegrity {
   checksums: Readonly<Record<string, number>>;
 }
 
+export interface FfiRuntimeHooks {
+  onLoad?(bindings: Readonly<FfiBindings>): void;
+  onUnload?(bindings: Readonly<FfiBindings>): void;
+}
+
 export declare const ffiMetadata: Readonly<FfiMetadata>;
 export declare const ffiIntegrity: Readonly<FfiIntegrity>;
+export declare function configureRuntimeHooks(hooks?: FfiRuntimeHooks | null): void;
 export declare function load(libraryPath?: string | null): Readonly<FfiBindings>;
 export declare function unload(): boolean;
 export declare function isLoaded(): boolean;

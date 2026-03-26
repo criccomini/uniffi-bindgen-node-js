@@ -40,6 +40,7 @@ export const ffiIntegrity = Object.freeze({
 });
 
 let loadedBindings = null;
+let runtimeHooks = Object.freeze({});
 const moduleFilename = fileURLToPath(import.meta.url);
 const moduleDirectory = dirname(moduleFilename);
 
@@ -146,9 +147,15 @@ export function load(libraryPath = undefined) {
 
   const bindings = createBindings(resolvedLibraryPath);
   try {
+    runtimeHooks.onLoad?.(bindings);
     validateContractVersion(bindings);
     validateChecksums(bindings);
   } catch (error) {
+    try {
+      runtimeHooks.onUnload?.(bindings);
+    } catch {
+      // Preserve the original initialization failure.
+    }
     try {
       bindings.library.unload();
     } catch {
@@ -166,8 +173,17 @@ export function unload() {
     return false;
   }
 
+  let hookError = null;
+  try {
+    runtimeHooks.onUnload?.(loadedBindings);
+  } catch (error) {
+    hookError = error;
+  }
   loadedBindings.library.unload();
   loadedBindings = null;
+  if (hookError != null) {
+    throw hookError;
+  }
   return true;
 }
 
@@ -175,9 +191,15 @@ export function isLoaded() {
   return loadedBindings !== null;
 }
 
+export function configureRuntimeHooks(hooks = undefined) {
+  runtimeHooks = Object.freeze(hooks ?? {});
+}
+
+{% if !context.requires_runtime_hooks %}
 if (!ffiMetadata.manualLoad) {
   load();
 }
+{% endif %}
 
 export function getFfiBindings() {
   if (loadedBindings === null) {

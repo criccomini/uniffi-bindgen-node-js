@@ -1,4 +1,9 @@
-import { ffiFunctions } from "./{{ namespace }}-ffi.js";
+import koffi from "koffi";
+import {
+  configureRuntimeHooks,
+  ffiFunctions,
+  load as loadFfi,
+} from "./{{ namespace }}-ffi.js";
 import { createForeignBytes, RustBufferValue } from "./runtime/ffi-types.js";
 import {
   AbstractFfiConverterByteArray,
@@ -24,11 +29,20 @@ import {
 import { UnexpectedEnumCase } from "./runtime/errors.js";
 import { rustCallAsync } from "./runtime/async-rust-call.js";
 import {
+  createCallbackRegistry,
+  invokeCallbackMethod,
+} from "./runtime/callbacks.js";
+import {
   createObjectConverter,
   createObjectFactory,
   UniffiObjectBase,
+  UNIFFI_OBJECT_HANDLE_SIZE,
 } from "./runtime/objects.js";
-import { defaultRustCaller } from "./runtime/rust-call.js";
+import {
+  CALL_SUCCESS,
+  createRustCallStatus,
+  defaultRustCaller,
+} from "./runtime/rust-call.js";
 
 export const componentMetadata = Object.freeze({
   namespace: {{ namespace_json }},
@@ -45,3 +59,7 @@ export { load, unload } from "./{{ namespace }}-ffi.js";
 {% endif %}
 
 {{ public_api_js }}
+
+if (!componentMetadata.manualLoad) {
+  loadFfi();
+}

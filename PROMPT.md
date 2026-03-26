@@ -129,9 +129,10 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate flat enum runtime representations and converters.
 - [x] Generate tagged enum runtime representations and converters.
 - [x] Generate error classes and error converters.
-- [ ] Generate callback-interface wrappers for `LogCallback` and `MergeOperator`.
-- [ ] Register callback-interface vtables during package initialization.
-- [ ] Confirm generated bindings compile against the full SlateDB UniFFI surface without unsupported-feature failures.
+- [x] Generate callback-interface wrappers for `LogCallback` and `MergeOperator`.
+- [x] Register callback-interface vtables during package initialization.
+- [x] Confirm generated bindings compile against the full SlateDB UniFFI surface without unsupported-feature failures.
+- [ ] Accept both hyphenated Cargo package names and underscored library crate names in `--crate-name` for library-mode generation.
 - [ ] Ensure `HashMap<String, i64>` maps cleanly to `Map<string, bigint | number>` according to the chosen converter rules.
 - [ ] Ensure nested `Vec<Vec<u8>>` arguments and returns work correctly.
 - [ ] Ensure `Option<Vec<u8>>` and `Option<Arc<Object>>` patterns work correctly.

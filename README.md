@@ -108,6 +108,17 @@ The generator emits ready-to-consume JavaScript and declaration files directly:
 
 Downstream consumers do not need a TypeScript build step to use the generated package.
 
+## Compatibility
+
+The first-class target for this generator is the UniFFI 0.29 line used by SlateDB today.
+
+This repo currently pins:
+
+- `uniffi = 0.29.5`
+- `uniffi_bindgen = 0.29.5`
+
+Support for newer UniFFI releases is follow-up work after the SlateDB path is stable.
+
 ## Supported UniFFI surface
 
 The current generator is scoped to the feature set exercised by SlateDB and the local fixtures:

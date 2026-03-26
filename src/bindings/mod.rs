@@ -1193,6 +1193,108 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_emits_slatedb_callback_interface_paths() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("slatedb-callbacks");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+        let component = component_from_webidl(
+            r#"
+            namespace example {
+                void init_logging(LogLevel level, LogCallback? callback);
+            };
+
+            enum LogLevel {
+                "off",
+                "info"
+            };
+
+            dictionary LogRecord {
+                LogLevel level;
+                string target;
+                string message;
+            };
+
+            [Error]
+            interface MergeOperatorCallbackError {
+                Callback(string message);
+            };
+
+            callback interface LogCallback {
+                void log(LogRecord record);
+            };
+
+            callback interface MergeOperator {
+                [Throws=MergeOperatorCallbackError]
+                bytes merge(bytes key, bytes? existing_value, bytes operand);
+            };
+
+            interface DbBuilder {
+                constructor();
+                void with_merge_operator(MergeOperator merge_operator);
+            };
+            "#,
+        );
+
+        generator
+            .write_bindings(&settings, &[component])
+            .expect("write_bindings should succeed");
+
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
+
+        assert!(
+            component_js.contains("export function init_logging(level, callback)"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "const loweredCallback = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogCallback), callback);"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("function uniffiRegisterLogCallbackVtable(bindings, registrations) {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("function uniffiRegisterMergeOperatorVtable(bindings, registrations) {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("args: [\n          uniffiLiftFromRustBuffer(FfiConverterLogRecord, record),\n        ],"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("const loweredMergeOperator = FfiConverterMergeOperator.lower(mergeOperator);"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "args: [\n          uniffiLiftFromRustBuffer(FfiConverterBytes, key),\n          uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterBytes), existing_value),\n          uniffiLiftFromRustBuffer(FfiConverterBytes, operand),\n        ],"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "lowerError: (error) => error instanceof MergeOperatorCallbackError ? uniffiLowerIntoRustBuffer(FfiConverterMergeOperatorCallbackError, error) : null,"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "const loweredReturn = uniffiLowerIntoRustBuffer(FfiConverterBytes, uniffiResult);"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_makes_ffi_load_idempotent() {
         let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-idempotent-load");

@@ -165,7 +165,7 @@ export const ScanResult = Object.freeze({
   },
 });
 
-export class FixtureError extends Error {
+export class FixtureError extends globalThis.Error {
   constructor(tag, message = tag) {
     super(message);
     this.name = "FixtureError";
@@ -479,7 +479,7 @@ export declare const ScanResult: Readonly<{
   Miss(): ScanResultMiss;
 }>;
 
-export declare class FixtureError extends Error {
+export declare class FixtureError extends globalThis.Error {
   readonly tag: string;
   protected constructor(tag: string, message?: string);
 }

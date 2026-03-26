@@ -1257,11 +1257,13 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("function uniffiRegisterLogCallbackVtable(bindings, registrations) {"),
+            component_js
+                .contains("function uniffiRegisterLogCallbackVtable(bindings, registrations) {"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("function uniffiRegisterMergeOperatorVtable(bindings, registrations) {"),
+            component_js
+                .contains("function uniffiRegisterMergeOperatorVtable(bindings, registrations) {"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
@@ -1269,7 +1271,9 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("const loweredMergeOperator = FfiConverterMergeOperator.lower(mergeOperator);"),
+            component_js.contains(
+                "const loweredMergeOperator = FfiConverterMergeOperator.lower(mergeOperator);"
+            ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
@@ -1287,6 +1291,232 @@ mod tests {
         assert!(
             component_js.contains(
                 "const loweredReturn = uniffiLowerIntoRustBuffer(FfiConverterBytes, uniffiResult);"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_emits_slatedb_async_api_paths() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("slatedb-async-apis");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+        let component = component_from_webidl(
+            r#"
+            namespace example {};
+
+            enum IsolationLevel {
+                "read_committed",
+                "serializable"
+            };
+
+            dictionary KeyRange {
+                bytes start;
+                bytes end;
+            };
+
+            dictionary KeyValue {
+                bytes key;
+                bytes value;
+            };
+
+            dictionary WriteHandle {
+                u64 seq;
+            };
+
+            dictionary WalFileMetadata {
+                i64 last_modified_seconds;
+                u32 last_modified_nanos;
+                u64 size_bytes;
+                string location;
+            };
+
+            dictionary RowEntry {
+                bytes key;
+                bytes value;
+            };
+
+            interface WriteBatch {
+                constructor();
+            };
+
+            interface DbIterator {
+                constructor();
+                [Async] KeyValue? next();
+                [Async] void seek(bytes key);
+            };
+
+            interface DbSnapshot {
+                constructor();
+                [Async] bytes? get(bytes key);
+                [Async] KeyValue? get_key_value(bytes key);
+                [Async] DbIterator scan(KeyRange range);
+                [Async] DbIterator scan_prefix(bytes prefix);
+            };
+
+            interface DbReader {
+                constructor();
+                [Async] bytes? get(bytes key);
+                [Async] DbIterator scan(KeyRange range);
+                [Async] DbIterator scan_prefix(bytes prefix);
+                [Async] void shutdown();
+            };
+
+            interface DbTransaction {
+                constructor();
+                [Async] void put(bytes key, bytes value);
+                [Async] bytes? get(bytes key);
+                [Async] KeyValue? get_key_value(bytes key);
+                [Async] DbIterator scan(KeyRange range);
+                [Async] DbIterator scan_prefix(bytes prefix);
+                [Async] WriteHandle? commit();
+            };
+
+            interface Db {
+                constructor();
+                [Async] void shutdown();
+                [Async] bytes? get(bytes key);
+                [Async] KeyValue? get_key_value(bytes key);
+                [Async] DbIterator scan(KeyRange range);
+                [Async] DbIterator scan_prefix(bytes prefix);
+                [Async] WriteHandle put(bytes key, bytes value);
+                [Async] void flush();
+                [Async] DbSnapshot snapshot();
+                [Async] DbTransaction begin(IsolationLevel isolation_level);
+                [Async] void write(WriteBatch batch);
+            };
+
+            interface WalFile {
+                constructor();
+                [Async] WalFileMetadata metadata();
+                [Async] WalFileIterator iterator();
+            };
+
+            interface WalFileIterator {
+                constructor();
+                [Async] RowEntry? next();
+            };
+
+            interface WalReader {
+                constructor();
+                WalFile get(u64 id);
+                [Async] sequence<WalFile> list(u64? start_id, u64? end_id);
+            };
+            "#,
+        );
+
+        generator
+            .write_bindings(&settings, &[component])
+            .expect("write_bindings should succeed");
+
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
+
+        assert!(
+            component_js.contains("export class Db extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class DbReader extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class DbIterator extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class DbSnapshot extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class DbTransaction extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class WalReader extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class WalFile extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("export class WalFileIterator extends UniffiObjectBase {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterBytes), uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterKeyValue), uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiDbIteratorObjectFactory.create(uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiDbSnapshotObjectFactory.create(uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiDbTransactionObjectFactory.create(uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiWalFileIteratorObjectFactory.create(uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterWriteHandle), uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterWalFileMetadata, uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterRowEntry), uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterArray(FfiConverterWalFile), uniffiResult),"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("const loweredBatch = uniffiWriteBatchObjectFactory.cloneHandle(batch);"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "const loweredIsolationLevel = uniffiLowerIntoRustBuffer(FfiConverterIsolationLevel, isolation_level);"
             ),
             "unexpected component JS contents: {component_js}"
         );

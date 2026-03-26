@@ -1,0 +1,38 @@
+namespace fixture {
+    BlobRecord echo_record(BlobRecord record);
+    bytes echo_bytes(bytes value);
+
+    enum Flavor {
+        "vanilla",
+        "chocolate"
+    };
+
+    [Enum]
+    interface ScanResult {
+        Hit(bytes value);
+        Miss();
+    };
+
+    [Error]
+    interface FixtureError {
+        Missing();
+        InvalidState(string message);
+    };
+
+    interface Store {
+        constructor(BlobRecord seed);
+        BlobRecord current();
+        bytes replace(bytes next_value);
+        Flavor flavor();
+        ScanResult inspect(boolean include_payload);
+        [Throws=FixtureError] bytes require_value(boolean present);
+        [Throws=FixtureError, Async] BlobRecord fetch_async(boolean succeed);
+    };
+};
+
+dictionary BlobRecord {
+    string name;
+    bytes value;
+    bytes? maybe_value;
+    sequence<bytes> chunks;
+};

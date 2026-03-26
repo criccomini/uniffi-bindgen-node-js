@@ -1,0 +1,13 @@
+[package]
+name = "uniffi-bindgen-node-js-fixture-basic"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "fixture_basic"
+crate-type = ["cdylib"]
+
+[dependencies]
+thiserror = "1"
+uniffi = { version = "=0.29.5", features = ["tokio"] }

@@ -96,7 +96,6 @@ enum NodeBindingConfigOverride {
     ManualLoad(bool),
     ModuleFormat(String),
     Commonjs(bool),
-    LibPathModules(String),
 }
 
 impl NodeBindingConfigOverride {
@@ -146,22 +145,6 @@ impl NodeBindingConfigOverride {
             "commonjs" | "bindings.node.commonjs" => {
                 Ok(Self::Commonjs(parse_bool_override(&raw, &value)?))
             }
-            "lib_path_module"
-            | "lib-path-module"
-            | "lib_path_modules"
-            | "lib-path-modules"
-            | "out_lib_path_module"
-            | "out-lib-path-module"
-            | "out_lib_path_modules"
-            | "out-lib-path-modules"
-            | "bindings.node.lib_path_module"
-            | "bindings.node.lib-path-module"
-            | "bindings.node.lib_path_modules"
-            | "bindings.node.lib-path-modules"
-            | "bindings.node.out_lib_path_module"
-            | "bindings.node.out-lib-path-module"
-            | "bindings.node.out_lib_path_modules"
-            | "bindings.node.out-lib-path-modules" => Ok(Self::LibPathModules(value)),
             _ => bail!("unsupported --config-override key '{key}'"),
         }
     }
@@ -176,9 +159,6 @@ impl NodeBindingConfigOverride {
             Self::ManualLoad(value) => config.manual_load = *value,
             Self::ModuleFormat(value) => config.module_format = Some(value.clone()),
             Self::Commonjs(value) => config.commonjs = Some(*value),
-            Self::LibPathModules(value) => {
-                config.lib_path_modules = Some(toml::Value::String(value.clone()))
-            }
         }
     }
 }
@@ -1840,8 +1820,8 @@ mod tests {
     }
 
     #[test]
-    fn config_override_validation_rejects_platform_switch_packaging() {
-        let overrides = NodeBindingCliOverrides::from_parts(
+    fn config_override_rejects_legacy_platform_switch_packaging_keys() {
+        let error = NodeBindingCliOverrides::from_parts(
             None,
             None,
             None,
@@ -1850,18 +1830,12 @@ mod tests {
             false,
             vec!["out_lib_path_module=@scope/example-darwin".to_string()],
         )
-        .expect("override should parse");
-        let mut config = NodeBindingGeneratorConfig::default();
-
-        overrides.apply_to(&mut config);
-        let error = config
-            .validate()
-            .expect_err("platform-switch override should be rejected");
+        .expect_err("legacy platform-switch override keys should be unsupported");
 
         assert!(
             error
                 .to_string()
-                .contains("multi-package platform-switch packaging"),
+                .contains("unsupported --config-override key 'out_lib_path_module'"),
             "unexpected error: {error}"
         );
     }

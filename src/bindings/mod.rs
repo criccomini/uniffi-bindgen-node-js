@@ -944,6 +944,14 @@ mod tests {
             ffi_types_js.contains("export function normalizeUInt64"),
             "unexpected runtime FFI types JS contents: {ffi_types_js}"
         );
+        assert!(
+            ffi_types_js.contains("export class RustBufferValue"),
+            "unexpected runtime FFI types JS contents: {ffi_types_js}"
+        );
+        assert!(
+            ffi_types_js.contains("export function readRustBufferBytes"),
+            "unexpected runtime FFI types JS contents: {ffi_types_js}"
+        );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }

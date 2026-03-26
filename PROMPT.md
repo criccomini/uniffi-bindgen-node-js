@@ -128,7 +128,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate record type definitions and record converters.
 - [x] Generate flat enum runtime representations and converters.
 - [x] Generate tagged enum runtime representations and converters.
-- [ ] Generate error classes and error converters.
+- [x] Generate error classes and error converters.
 - [ ] Generate callback-interface wrappers for `LogCallback` and `MergeOperator`.
 - [ ] Register callback-interface vtables during package initialization.
 - [ ] Confirm generated bindings compile against the full SlateDB UniFFI surface without unsupported-feature failures.

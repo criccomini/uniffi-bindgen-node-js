@@ -232,11 +232,7 @@ impl ComponentModel {
             lines.push(render_js_tagged_enum_converter(enum_def)?);
         }
         for error in &self.errors {
-            lines.push(format!(
-                "const {} = uniffiNotImplementedConverter({});",
-                type_converter_name(&error.name),
-                json_string_literal(&error.name)?
-            ));
+            lines.push(render_js_error_converter(error)?);
         }
         for callback_interface in &self.callback_interfaces {
             lines.push(format!(
@@ -1116,8 +1112,8 @@ fn render_dts_tagged_enum(enum_def: &EnumModel) -> Result<String> {
 fn render_js_error(error: &ErrorModel) -> Result<String> {
     let mut lines = vec![
         format!("export class {} extends Error {{", error.name),
-        "  constructor(tag) {".to_string(),
-        "    super(tag);".to_string(),
+        "  constructor(tag, message = tag) {".to_string(),
+        "    super(message);".to_string(),
         format!("    this.name = {};", json_string_literal(&error.name)?),
         "    this.tag = tag;".to_string(),
         "  }".to_string(),
@@ -1131,24 +1127,40 @@ fn render_js_error(error: &ErrorModel) -> Result<String> {
             "export class {} extends {} {{",
             variant_class_name, error.name
         ));
-        lines.push(format!(
-            "  constructor({}) {{",
-            render_js_fields_as_params(&variant.fields)
-        ));
-        lines.push(format!(
-            "    super({});",
-            json_string_literal(&variant.name)?
-        ));
+        if error.is_flat {
+            lines.push("  constructor(message = undefined) {".to_string());
+            lines.push(format!(
+                "    super({}, message ?? {});",
+                json_string_literal(&variant.name)?,
+                json_string_literal(&variant.name)?
+            ));
+        } else {
+            lines.push(format!(
+                "  constructor({}) {{",
+                render_js_fields_as_params(&variant.fields)
+            ));
+            lines.push(format!(
+                "    super({});",
+                json_string_literal(&variant.name)?
+            ));
+        }
         lines.push(format!(
             "    this.name = {};",
             json_string_literal(&variant_class_name)?
         ));
-        for field in &variant.fields {
+        if error.is_flat {
             lines.push(format!(
-                "    this[{}] = {};",
-                json_string_literal(&field.name)?,
-                js_identifier(&field.name)
+                "    this.message = message ?? {};",
+                json_string_literal(&variant.name)?
             ));
+        } else {
+            for field in &variant.fields {
+                lines.push(format!(
+                    "    this[{}] = {};",
+                    json_string_literal(&field.name)?,
+                    js_identifier(&field.name)
+                ));
+            }
         }
         lines.push("  }".to_string());
         lines.push("}".to_string());
@@ -1157,11 +1169,122 @@ fn render_js_error(error: &ErrorModel) -> Result<String> {
     Ok(lines.join("\n"))
 }
 
+fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
+    let converter_name = type_converter_name(&error.name);
+    let allowed_variants = error
+        .variants
+        .iter()
+        .map(|variant| variant_type_name(&error.name, &variant.name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut lines = vec![format!(
+        "const {} = new (class extends AbstractFfiConverterByteArray {{",
+        converter_name
+    )];
+    lines.push("  allocationSize(value) {".to_string());
+    for variant in &error.variants {
+        let variant_class_name = variant_type_name(&error.name, &variant.name);
+        let allocation_size = if error.is_flat || variant.fields.is_empty() {
+            "4".to_string()
+        } else {
+            let field_terms = variant
+                .fields
+                .iter()
+                .map(|field| {
+                    Ok(format!(
+                        "{}.allocationSize({})",
+                        render_js_type_converter_expression(&field.type_)?,
+                        render_js_property_access("value", &field.name)?
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            format!("4 + {}", field_terms.join(" + "))
+        };
+        lines.push(format!("    if (value instanceof {}) {{", variant_class_name));
+        lines.push(format!("      return {};", allocation_size));
+        lines.push("    }".to_string());
+    }
+    lines.push(format!(
+        "    throw new TypeError({});",
+        json_string_literal(&format!(
+            "{} values must be instances of {}.",
+            error.name, allowed_variants
+        ))?
+    ));
+    lines.push("  }".to_string());
+    lines.push(String::new());
+    lines.push("  write(value, writer) {".to_string());
+    for (index, variant) in error.variants.iter().enumerate() {
+        let variant_class_name = variant_type_name(&error.name, &variant.name);
+        lines.push(format!("    if (value instanceof {}) {{", variant_class_name));
+        lines.push(format!("      writer.writeInt32({});", index + 1));
+        if !error.is_flat {
+            for field in &variant.fields {
+                lines.push(format!(
+                    "      {}.write({}, writer);",
+                    render_js_type_converter_expression(&field.type_)?,
+                    render_js_property_access("value", &field.name)?
+                ));
+            }
+        }
+        lines.push("      return;".to_string());
+        lines.push("    }".to_string());
+    }
+    lines.push(format!(
+        "    throw new TypeError({});",
+        json_string_literal(&format!(
+            "{} values must be instances of {}.",
+            error.name, allowed_variants
+        ))?
+    ));
+    lines.push("  }".to_string());
+    lines.push(String::new());
+    lines.push("  read(reader) {".to_string());
+    lines.push("    const enumTag = reader.readInt32();".to_string());
+    lines.push("    switch (enumTag) {".to_string());
+    for (index, variant) in error.variants.iter().enumerate() {
+        let variant_class_name = variant_type_name(&error.name, &variant.name);
+        lines.push(format!("      case {}:", index + 1));
+        if error.is_flat {
+            lines.push(format!(
+                "        return new {}({}.read(reader));",
+                variant_class_name,
+                render_js_type_converter_expression(&Type::String)?
+            ));
+        } else {
+            let field_values = variant
+                .fields
+                .iter()
+                .map(|field| {
+                    Ok(format!(
+                        "{}.read(reader)",
+                        render_js_type_converter_expression(&field.type_)?
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            lines.push(format!(
+                "        return new {}({});",
+                variant_class_name,
+                field_values.join(", ")
+            ));
+        }
+    }
+    lines.push("      default:".to_string());
+    lines.push(format!(
+        "        throw new UnexpectedEnumCase(`Unexpected {} case ${{String(enumTag)}}.`);",
+        error.name
+    ));
+    lines.push("    }".to_string());
+    lines.push("  }".to_string());
+    lines.push("})();".to_string());
+    Ok(lines.join("\n"))
+}
+
 fn render_dts_error(error: &ErrorModel) -> Result<String> {
     let mut lines = vec![
         format!("export declare class {} extends Error {{", error.name),
         "  readonly tag: string;".to_string(),
-        "  protected constructor(tag: string);".to_string(),
+        "  protected constructor(tag: string, message?: string);".to_string(),
         "}".to_string(),
     ];
 
@@ -1183,10 +1306,14 @@ fn render_dts_error(error: &ErrorModel) -> Result<String> {
                 render_public_type(&field.type_)?
             ));
         }
-        lines.push(format!(
-            "  constructor({});",
-            render_dts_fields_as_params(&variant.fields)?
-        ));
+        if error.is_flat {
+            lines.push("  constructor(message?: string);".to_string());
+        } else {
+            lines.push(format!(
+                "  constructor({});",
+                render_dts_fields_as_params(&variant.fields)?
+            ));
+        }
         lines.push("}".to_string());
     }
 
@@ -1363,7 +1490,7 @@ fn render_js_runtime_helpers(
     ffi_rustbuffer_free_identifier: &str,
 ) -> String {
     format!(
-        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiRequireTaggedEnumValue(typeName, value) {{\n  const enumValue = uniffiRequireRecordObject(typeName, value);\n  if (typeof enumValue.tag !== \"string\") {{\n    throw new TypeError(`${{typeName}} values must be tagged objects with a string tag field.`);\n  }}\n  return enumValue;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
+        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions(errorConverter = undefined) {{\n  const options = {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n  if (errorConverter != null) {{\n    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);\n  }}\n  return options;\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiRequireTaggedEnumValue(typeName, value) {{\n  const enumValue = uniffiRequireRecordObject(typeName, value);\n  if (typeof enumValue.tag !== \"string\") {{\n    throw new TypeError(`${{typeName}} values must be tagged objects with a string tag field.`);\n  }}\n  return enumValue;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
     )
 }
 
@@ -1391,7 +1518,10 @@ fn render_js_sync_constructor_body(
         "      (status) => ffiFunctions.{}({}),",
         constructor.ffi_func_identifier, call_args
     ));
-    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push(format!(
+        "      {},",
+        render_js_rust_call_options_expression(constructor.throws_type.as_ref())?
+    ));
     lines.push("    );".to_string());
     lines.push(match attach_target {
         Some(target) => format!("    return {}.attach({}, pointer);", factory_name, target),
@@ -1438,7 +1568,10 @@ fn render_js_async_constructor_body(
         "      liftFunc: (pointer) => {}.create(pointer),",
         factory_name
     ));
-    lines.push("      ...uniffiRustCallOptions(),".to_string());
+    lines.push(format!(
+        "      ...{},",
+        render_js_rust_call_options_expression(constructor.throws_type.as_ref())?
+    ));
     lines.push("    });".to_string());
     Ok(lines)
 }
@@ -1487,7 +1620,7 @@ fn render_js_ffi_call_args_with_leading(
 fn render_js_sync_method_body(
     method: &MethodModel,
     factory_name: &str,
-    object_name: &str,
+    _object_name: &str,
 ) -> Result<Vec<String>> {
     let mut lines = vec![format!(
         "    const loweredSelf = {}.cloneHandle(this);",
@@ -1506,7 +1639,10 @@ fn render_js_sync_method_body(
             "      (status) => ffiFunctions.{}({}),",
             method.ffi_func_identifier, call_args
         ));
-        lines.push("      uniffiRustCallOptions(),".to_string());
+        lines.push(format!(
+            "      {},",
+            render_js_rust_call_options_expression(method.throws_type.as_ref())?
+        ));
         lines.push("    );".to_string());
         lines.push(format!(
             "    return {};",
@@ -1518,15 +1654,11 @@ fn render_js_sync_method_body(
             "      (status) => ffiFunctions.{}({}),",
             method.ffi_func_identifier, call_args
         ));
-        lines.push("      uniffiRustCallOptions(),".to_string());
-        lines.push("    );".to_string());
-    }
-
-    if method.throws_type.is_some() {
         lines.push(format!(
-            "    // {}.{} throws a typed error, but error lifting is still pending.",
-            object_name, method.name
+            "      {},",
+            render_js_rust_call_options_expression(method.throws_type.as_ref())?
         ));
+        lines.push("    );".to_string());
     }
 
     Ok(lines)
@@ -1579,15 +1711,11 @@ fn render_js_async_method_body(
         "      liftFunc: {},",
         render_js_async_lift_closure(method.return_type.as_ref())?
     ));
-    lines.push("      ...uniffiRustCallOptions(),".to_string());
+    lines.push(format!(
+        "      ...{},",
+        render_js_rust_call_options_expression(method.throws_type.as_ref())?
+    ));
     lines.push("    });".to_string());
-
-    if method.throws_type.is_some() {
-        lines.push(format!(
-            "    // {}.{} throws a typed error, but error lifting is still pending.",
-            object_name, method.name
-        ));
-    }
 
     Ok(lines)
 }
@@ -1770,6 +1898,16 @@ fn render_named_return_type(type_name: &str, is_async: bool) -> String {
         format!("Promise<{type_name}>")
     } else {
         type_name.to_string()
+    }
+}
+
+fn render_js_rust_call_options_expression(throws_type: Option<&Type>) -> Result<String> {
+    match throws_type {
+        Some(throws_type) => Ok(format!(
+            "uniffiRustCallOptions({})",
+            render_js_type_converter_expression(throws_type)?
+        )),
+        None => Ok("uniffiRustCallOptions()".to_string()),
     }
 }
 
@@ -2471,6 +2609,73 @@ mod tests {
             !rendered
                 .js
                 .contains("const FfiConverterOutcome = uniffiNotImplementedConverter(\"Outcome\");"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const FfiConverterStoreError = new (class extends AbstractFfiConverterByteArray {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("return new StoreErrorConflict(FfiConverterString.read(reader));"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            !rendered
+                .js
+                .contains("const FfiConverterStoreError = uniffiNotImplementedConverter(\"StoreError\");"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_wires_typed_error_lifting_for_methods_and_constructors() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            [Error]
+            interface StoreError {
+                NotFound();
+                Conflict(string message);
+            };
+
+            interface Store {
+                [Throws=StoreError]
+                constructor();
+                [Throws=StoreError]
+                void put(string key);
+                [Async, Throws=StoreError]
+                string get(string key);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .js
+                .contains("uniffiRustCallOptions(FfiConverterStoreError)"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            !rendered
+                .js
+                .contains("throws a typed error, but error lifting is still pending"),
             "unexpected JS output: {}",
             rendered.js
         );

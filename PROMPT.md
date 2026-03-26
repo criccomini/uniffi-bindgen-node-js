@@ -135,7 +135,8 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Accept both hyphenated Cargo package names and underscored library crate names in `--crate-name` for library-mode generation.
 - [x] Ensure `HashMap<String, i64>` maps cleanly to `Map<string, bigint | number>` according to the chosen converter rules.
 - [x] Ensure nested `Vec<Vec<u8>>` arguments and returns work correctly.
-- [ ] Ensure `Option<Vec<u8>>` and `Option<Arc<Object>>` patterns work correctly.
+- [x] Ensure `Option<Vec<u8>>` patterns work correctly.
+- [ ] Ensure `Option<Arc<Object>>` patterns work correctly.
 - [ ] Ensure synchronous callback interfaces work for `init_logging` and merge operators.
 - [ ] Ensure async methods work for DB, reader, iterator, snapshot, transaction, and WAL APIs.
 - [ ] Create a minimal local UniFFI fixture crate for objects, records, enums, errors, async methods, and bytes.

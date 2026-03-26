@@ -3425,4 +3425,44 @@ mod tests {
             rendered.dts
         );
     }
+
+    #[test]
+    fn render_public_api_emits_optional_byte_array_converters() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                bytes? round_trip_bytes(bytes? value);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains(
+                "const loweredValue = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterBytes), value);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterBytes), uniffiResult);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export declare function round_trip_bytes(value: Uint8Array | undefined): Uint8Array | undefined;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+    }
 }

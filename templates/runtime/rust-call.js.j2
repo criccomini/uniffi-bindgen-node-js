@@ -1,1 +1,159 @@
-// Runtime rust-call template scaffold.
+import {
+  AbortError,
+  RustPanic,
+  UnexpectedRustCallError,
+  UnexpectedRustCallStatusCode,
+} from "./errors.js";
+import { FfiConverterString } from "./ffi-converters.js";
+import {
+  EMPTY_RUST_BUFFER,
+  RustBufferValue,
+  RustCallStatusCodes,
+  normalizeRustBuffer,
+  normalizeRustCallStatus,
+} from "./ffi-types.js";
+
+export const CALL_SUCCESS = RustCallStatusCodes.SUCCESS;
+export const CALL_ERROR = RustCallStatusCodes.ERROR;
+export const CALL_UNEXPECTED_ERROR = RustCallStatusCodes.UNEXPECTED_ERROR;
+export const CALL_CANCELLED = RustCallStatusCodes.CANCELLED;
+
+function defaultLiftString(bytes) {
+  return FfiConverterString.lift(bytes);
+}
+
+function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
+  return normalizeRustBuffer(buffer) ?? {
+    capacity: 0n,
+    len: 0n,
+    data: null,
+  };
+}
+
+function consumeRustBuffer(buffer, freeRustBuffer) {
+  const normalized = createMutableRustBuffer(buffer);
+  if (normalized.len === 0n) {
+    return new Uint8Array();
+  }
+
+  const rustBuffer = new RustBufferValue(normalized);
+  if (typeof freeRustBuffer === "function") {
+    return rustBuffer.consumeIntoUint8Array(freeRustBuffer);
+  }
+  return rustBuffer.toUint8Array();
+}
+
+export function createRustCallStatus(
+  code = CALL_SUCCESS,
+  error_buf = EMPTY_RUST_BUFFER,
+) {
+  return {
+    code,
+    error_buf: createMutableRustBuffer(error_buf),
+  };
+}
+
+export function createRustErrorStatus(
+  code = CALL_ERROR,
+  error_buf = EMPTY_RUST_BUFFER,
+) {
+  return createRustCallStatus(code, error_buf);
+}
+
+export function checkRustCallStatus(status, options = {}) {
+  const normalized = normalizeRustCallStatus(status) ?? createRustCallStatus();
+  const {
+    errorHandler,
+    freeRustBuffer,
+    liftString = defaultLiftString,
+  } = options;
+
+  switch (normalized.code) {
+    case CALL_SUCCESS:
+      return normalized;
+
+    case CALL_ERROR: {
+      const errorBytes = consumeRustBuffer(normalized.error_buf, freeRustBuffer);
+      if (typeof errorHandler === "function") {
+        throw errorHandler(errorBytes, normalized);
+      }
+      throw new UnexpectedRustCallError();
+    }
+
+    case CALL_UNEXPECTED_ERROR: {
+      const errorBytes = consumeRustBuffer(normalized.error_buf, freeRustBuffer);
+      const message =
+        errorBytes.byteLength === 0
+          ? "Rust panic"
+          : liftString(errorBytes);
+      throw new RustPanic(message);
+    }
+
+    case CALL_CANCELLED:
+      throw new AbortError();
+
+    default:
+      throw new UnexpectedRustCallStatusCode(normalized.code);
+  }
+}
+
+export function rustCall(caller, options = {}) {
+  const status = createRustCallStatus();
+  const result = caller(status);
+  checkRustCallStatus(status, options);
+  return result;
+}
+
+export function rustCallWithError(errorHandler, caller, options = {}) {
+  return rustCall(caller, {
+    ...options,
+    errorHandler,
+  });
+}
+
+export class UniffiRustCaller {
+  constructor({
+    createStatus = () => createRustCallStatus(),
+    freeRustBuffer = undefined,
+    liftString = defaultLiftString,
+  } = {}) {
+    this._createStatus = createStatus;
+    this._freeRustBuffer = freeRustBuffer;
+    this._liftString = liftString;
+  }
+
+  createCallStatus() {
+    return this._createStatus();
+  }
+
+  createErrorStatus(code = CALL_ERROR, error_buf = EMPTY_RUST_BUFFER) {
+    const status = this.createCallStatus();
+    status.code = code;
+    status.error_buf = createMutableRustBuffer(error_buf);
+    return status;
+  }
+
+  makeRustCall(caller, options = {}) {
+    const status = this.createCallStatus();
+    const result = caller(status);
+    checkRustCallStatus(status, {
+      ...options,
+      freeRustBuffer: options.freeRustBuffer ?? this._freeRustBuffer,
+      liftString: options.liftString ?? this._liftString,
+    });
+    return result;
+  }
+
+  rustCall(caller, options = {}) {
+    return this.makeRustCall(caller, options);
+  }
+
+  rustCallWithError(errorHandler, caller, options = {}) {
+    return this.makeRustCall(caller, {
+      ...options,
+      errorHandler,
+    });
+  }
+}
+
+export const defaultRustCaller = new UniffiRustCaller();

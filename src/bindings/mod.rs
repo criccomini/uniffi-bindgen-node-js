@@ -963,6 +963,17 @@ mod tests {
             ffi_converters_js.contains("export const FfiConverterString"),
             "unexpected runtime FFI converters JS contents: {ffi_converters_js}"
         );
+        let rust_call_js =
+            fs::read_to_string(output_dir.join("runtime/rust-call.js").as_std_path())
+                .expect("runtime rust-call JS should be readable");
+        assert!(
+            rust_call_js.contains("export function checkRustCallStatus"),
+            "unexpected runtime rust-call JS contents: {rust_call_js}"
+        );
+        assert!(
+            rust_call_js.contains("export class UniffiRustCaller"),
+            "unexpected runtime rust-call JS contents: {rust_call_js}"
+        );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }

@@ -54,6 +54,6 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a callback package-generation test to the existing package suite that verifies emitted files and local koffi installation for a compiled callback fixture package.
 - [x] Add a callback smoke test to the existing smoke suite that covers emit, last_message, Settings.default/set/to_json_string, WriteBatch.put/delete/operation_count, and in
   it_logging(LogLevel.Info, collector) plus the undefined callback path.
-- [ ] Add a callback TypeScript test to the existing TS suite that typechecks Settings, WriteBatch, LogLevel, LogRecord, LogCollector, emit, last_message, and init_logging.
+- [x] Add a callback TypeScript test to the existing TS suite that typechecks Settings, WriteBatch, LogLevel, LogRecord, LogCollector, emit, last_message, and init_logging.
 - [ ] Update the callback snapshot to match the expanded generated API and runtime hook registration output.
 - [ ] Verify there are no remaining SlateDB references in integration tests or integration support code.

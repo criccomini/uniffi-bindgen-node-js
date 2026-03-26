@@ -84,7 +84,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Update README examples and limitations text to describe bundled prebuilds and remove references to lib_path_modules.
 - [x] Replace existing lib_path_modules rejection tests with tests that assert old TOML keys now fail as unknown fields and old CLI override keys now fail as unsupported.
 - [x] Add config tests that accept bundled_prebuilds = true and reject bundled_prebuilds + lib_path_literal.
-- [ ] Add codegen tests that assert the emitted bundled metadata, target-resolution helpers, resolver precedence, and bundled missing-file diagnostic.
+- [x] Add codegen tests that assert the emitted bundled metadata, target-resolution helpers, resolver precedence, and bundled missing-file diagnostic.
 - [ ] Extend test support helpers so a generated fixture package can stage the current host library under prebuilds/<current-target>/.
 - [ ] Add a bundled-mode package-generation test that verifies the package works when only the prebuilds/<current-target>/ artifact is present.
 - [ ] Add a bundled-mode Node smoke test that imports the package, auto-loads the host prebuild, and exercises the existing fixture API successfully.

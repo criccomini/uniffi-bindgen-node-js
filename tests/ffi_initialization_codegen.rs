@@ -2,6 +2,7 @@ mod support;
 
 use insta::assert_snapshot;
 use uniffi_bindgen::BindingGenerator;
+use uniffi_bindgen_node_js::bindings::NodeBindingGeneratorConfig;
 
 use self::support::{
     component_from_webidl, generation_settings, generator, read_generated_file, remove_dir_all,
@@ -36,26 +37,46 @@ fn normalize_checksum_value(contents: &str) -> String {
         .join("\n")
 }
 
-fn generate_simple_component_ffi() -> (String, String) {
+fn assert_contains_in_order(contents: &str, snippets: &[&str]) {
+    let mut search_start = 0;
+
+    for snippet in snippets {
+        let relative_offset = contents[search_start..]
+            .find(snippet)
+            .unwrap_or_else(|| panic!("missing ordered snippet {snippet:?}"));
+        search_start += relative_offset + snippet.len();
+    }
+}
+
+fn generate_simple_component_files(
+    configure: impl FnOnce(&mut NodeBindingGeneratorConfig),
+) -> (String, String, String) {
     let generator = generator();
     let settings = generation_settings("ffi-initialization");
     let output_dir = settings.out_dir.clone();
-    let component = component_from_webidl(
+    let mut component = component_from_webidl(
         r#"
         namespace example {
             u64 current_generation();
         };
         "#,
     );
+    configure(&mut component.config);
 
     generator
         .write_bindings(&settings, &[component])
         .expect("write_bindings should succeed");
 
+    let component_js = read_generated_file(&output_dir, "example.js");
     let ffi_js = read_generated_file(&output_dir, "example-ffi.js");
     let ffi_dts = read_generated_file(&output_dir, "example-ffi.d.ts");
     remove_dir_all(&output_dir);
 
+    (component_js, ffi_js, ffi_dts)
+}
+
+fn generate_simple_component_ffi() -> (String, String) {
+    let (_, ffi_js, ffi_dts) = generate_simple_component_files(|_| {});
     (ffi_js, ffi_dts)
 }
 
@@ -354,5 +375,73 @@ fn generated_ffi_dts_snapshots_initialization_contract() {
       bindings?: Readonly<FfiBindings>,
     ): Readonly<Record<string, number>>;
     "#
+    );
+}
+
+#[test]
+fn generated_bundled_ffi_js_emits_bundled_resolution_contract() {
+    let (component_js, ffi_js, _) = generate_simple_component_files(|config| {
+        config.bundled_prebuilds = true;
+    });
+    let component_metadata = extract_section(
+        &component_js,
+        "export const componentMetadata = Object.freeze({",
+        "export { ffiMetadata } from",
+    );
+    let metadata_and_resolution = extract_section(
+        &ffi_js,
+        "export const ffiMetadata = Object.freeze({",
+        "function createBindings(",
+    );
+    let lifecycle_section = extract_section(
+        &ffi_js,
+        "export function load(libraryPath = undefined) {",
+        "export const ffiFunctions = Object.freeze({",
+    );
+
+    assert!(
+        component_metadata.contains("bundledPrebuilds: true"),
+        "component metadata should expose bundledPrebuilds:\n{component_metadata}"
+    );
+    assert!(
+        metadata_and_resolution.contains("bundledPrebuilds: true"),
+        "ffi metadata should expose bundledPrebuilds:\n{metadata_and_resolution}"
+    );
+    assert!(
+        metadata_and_resolution.contains("function defaultBundledTarget()"),
+        "bundled target helper should be emitted:\n{metadata_and_resolution}"
+    );
+    assert!(
+        metadata_and_resolution.contains(
+            "const glibcVersionRuntime =\n    process.report?.getReport?.().header?.glibcVersionRuntime;"
+        ),
+        "linux libc detection should use process.report:\n{metadata_and_resolution}"
+    );
+    assert!(
+        metadata_and_resolution
+            .contains("const linuxLibc = glibcVersionRuntime == null ? \"musl\" : \"gnu\";"),
+        "linux libc suffix should distinguish musl and gnu:\n{metadata_and_resolution}"
+    );
+    assert!(
+        metadata_and_resolution.contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
+        "bundled libraries should resolve under prebuilds/<target>/<filename>:\n{metadata_and_resolution}"
+    );
+    assert_contains_in_order(
+        &metadata_and_resolution,
+        &[
+            "const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;",
+            "if (rawLibraryPath != null) {",
+            "if (ffiMetadata.bundledPrebuilds) {",
+            "libraryPath: defaultSiblingLibraryPath(),",
+        ],
+    );
+    assert_contains_in_order(
+        &lifecycle_section,
+        &[
+            "if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {",
+            "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
+            "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.",
+            "const bindings = createBindings(resolvedLibraryPath);",
+        ],
     );
 }

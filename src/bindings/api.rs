@@ -385,7 +385,7 @@ pub(crate) fn render_public_type(type_: &Type) -> Result<String> {
         | Type::Int32
         | Type::Float32
         | Type::Float64 => Ok("number".to_string()),
-        Type::UInt64 | Type::Int64 => Ok("bigint".to_string()),
+        Type::UInt64 | Type::Int64 => Ok("bigint | number".to_string()),
         Type::Boolean => Ok("boolean".to_string()),
         Type::String => Ok("string".to_string()),
         Type::Bytes => Ok("Uint8Array".to_string()),
@@ -2816,8 +2816,14 @@ mod tests {
     #[test]
     fn render_public_type_maps_slatedb_primitives_and_collections() {
         assert_eq!(render_public_type(&Type::Bytes).unwrap(), "Uint8Array");
-        assert_eq!(render_public_type(&Type::UInt64).unwrap(), "bigint");
-        assert_eq!(render_public_type(&Type::Int64).unwrap(), "bigint");
+        assert_eq!(
+            render_public_type(&Type::UInt64).unwrap(),
+            "bigint | number"
+        );
+        assert_eq!(
+            render_public_type(&Type::Int64).unwrap(),
+            "bigint | number"
+        );
         assert_eq!(
             render_public_type(&Type::Optional {
                 inner_type: Box::new(Type::Bytes),
@@ -2832,7 +2838,7 @@ mod tests {
                 }),
             })
             .unwrap(),
-            "Array<bigint | undefined>"
+            "Array<bigint | number | undefined>"
         );
         assert_eq!(
             render_public_type(&Type::Map {
@@ -2875,7 +2881,19 @@ mod tests {
                 }),
             })
             .unwrap(),
-            "Map<string, bigint | undefined>"
+            "Map<string, bigint | number | undefined>"
+        );
+    }
+
+    #[test]
+    fn render_public_type_allows_number_inputs_for_i64_map_values() {
+        assert_eq!(
+            render_public_type(&Type::Map {
+                key_type: Box::new(Type::String),
+                value_type: Box::new(Type::Int64),
+            })
+            .unwrap(),
+            "Map<string, bigint | number>"
         );
     }
 

@@ -189,6 +189,26 @@ pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
     }
 }
 
+pub fn run_node_script(package_dir: &Utf8PathBuf, script_name: &str, source: &str) {
+    let script_path = package_dir.join(script_name);
+    fs::write(script_path.as_std_path(), source)
+        .unwrap_or_else(|error| panic!("failed to write Node script {script_path}: {error}"));
+
+    let output = Command::new("node")
+        .arg(script_path.as_str())
+        .current_dir(package_dir.as_std_path())
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run Node script {script_path}: {error}"));
+
+    if !output.status.success() {
+        panic!(
+            "Node script {script_path} failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 pub fn remove_dir_all(path: &Utf8PathBuf) {
     if path.exists() {
         fs::remove_dir_all(path.as_std_path())

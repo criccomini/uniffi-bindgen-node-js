@@ -92,6 +92,7 @@ enum NodeBindingConfigOverride {
     CdylibName(String),
     NodeEngine(String),
     LibPathLiteral(String),
+    BundledPrebuilds(bool),
     ManualLoad(bool),
     ModuleFormat(String),
     Commonjs(bool),
@@ -126,6 +127,12 @@ impl NodeBindingConfigOverride {
             | "lib-path-literal"
             | "bindings.node.lib_path_literal"
             | "bindings.node.lib-path-literal" => Ok(Self::LibPathLiteral(value)),
+            "bundled_prebuilds"
+            | "bundled-prebuilds"
+            | "bindings.node.bundled_prebuilds"
+            | "bindings.node.bundled-prebuilds" => {
+                Ok(Self::BundledPrebuilds(parse_bool_override(&raw, &value)?))
+            }
             "manual_load"
             | "manual-load"
             | "bindings.node.manual_load"
@@ -165,6 +172,7 @@ impl NodeBindingConfigOverride {
             Self::CdylibName(value) => config.cdylib_name = Some(value.clone()),
             Self::NodeEngine(value) => config.node_engine = value.clone(),
             Self::LibPathLiteral(value) => config.lib_path_literal = Some(value.clone()),
+            Self::BundledPrebuilds(value) => config.bundled_prebuilds = *value,
             Self::ManualLoad(value) => config.manual_load = *value,
             Self::ModuleFormat(value) => config.module_format = Some(value.clone()),
             Self::Commonjs(value) => config.commonjs = Some(*value),

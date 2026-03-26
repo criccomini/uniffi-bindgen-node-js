@@ -18,6 +18,7 @@ pub(crate) fn render_component_ffi(
     ci: &ComponentInterface,
     cdylib_name: &str,
     lib_path_literal: Option<&str>,
+    bundled_prebuilds: bool,
     manual_load: bool,
 ) -> Result<RenderedComponentFfi> {
     let model = ComponentFfiModel::from_ci(ci);
@@ -25,6 +26,7 @@ pub(crate) fn render_component_ffi(
         namespace_json: json_string(ci.namespace())?,
         cdylib_name_json: json_string(cdylib_name)?,
         lib_path_literal_json: json_optional_string(lib_path_literal)?,
+        bundled_prebuilds,
         manual_load,
         requires_runtime_hooks: ci.has_callback_definitions(),
         contract_version: model.contract_version,
@@ -128,6 +130,7 @@ struct ComponentFfiTemplateContext {
     namespace_json: String,
     cdylib_name_json: String,
     lib_path_literal_json: String,
+    bundled_prebuilds: bool,
     manual_load: bool,
     requires_runtime_hooks: bool,
     contract_version: ContractVersionModel,

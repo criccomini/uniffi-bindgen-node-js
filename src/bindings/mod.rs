@@ -398,6 +398,7 @@ struct GeneratedPackage {
     cdylib_name: String,
     node_engine: String,
     lib_path_literal: Option<String>,
+    bundled_prebuilds: bool,
     manual_load: bool,
     public_api: RenderedComponentApi,
     ffi_api: RenderedComponentFfi,
@@ -421,6 +422,7 @@ impl GeneratedPackage {
             &component.ci,
             cdylib_name,
             component.config.lib_path_literal.as_deref(),
+            component.config.bundled_prebuilds,
             component.config.manual_load,
         )?;
 
@@ -429,6 +431,7 @@ impl GeneratedPackage {
             cdylib_name: cdylib_name.to_string(),
             node_engine: component.config.node_engine.trim().to_string(),
             lib_path_literal: component.config.lib_path_literal.clone(),
+            bundled_prebuilds: component.config.bundled_prebuilds,
             manual_load: component.config.manual_load,
             public_api,
             ffi_api,
@@ -470,6 +473,7 @@ impl GeneratedPackage {
                 cdylib_name_json: template_context.cdylib_name_json.clone(),
                 node_engine_json: template_context.node_engine_json.clone(),
                 lib_path_literal_json: template_context.lib_path_literal_json.clone(),
+                bundled_prebuilds: template_context.bundled_prebuilds,
                 manual_load: self.manual_load,
                 public_api_js: self.public_api.js.clone(),
             },
@@ -478,6 +482,7 @@ impl GeneratedPackage {
             &self.layout.component_dts_path(),
             &ComponentDtsTemplate {
                 namespace: self.layout.namespace.clone(),
+                bundled_prebuilds: template_context.bundled_prebuilds,
                 manual_load: self.manual_load,
                 public_api_dts: self.public_api.dts.clone(),
             },
@@ -576,6 +581,7 @@ struct TemplateContext {
     cdylib_name_json: String,
     node_engine_json: String,
     lib_path_literal_json: String,
+    bundled_prebuilds: bool,
 }
 
 impl TemplateContext {
@@ -586,6 +592,7 @@ impl TemplateContext {
             cdylib_name_json: json_string(&package.cdylib_name)?,
             node_engine_json: json_string(&package.node_engine)?,
             lib_path_literal_json: json_optional_string(package.lib_path_literal.as_deref())?,
+            bundled_prebuilds: package.bundled_prebuilds,
         })
     }
 }
@@ -635,6 +642,7 @@ struct ComponentJsTemplate {
     cdylib_name_json: String,
     node_engine_json: String,
     lib_path_literal_json: String,
+    bundled_prebuilds: bool,
     manual_load: bool,
     public_api_js: String,
 }
@@ -643,6 +651,7 @@ struct ComponentJsTemplate {
 #[template(path = "component/component.d.ts.j2", escape = "none")]
 struct ComponentDtsTemplate {
     namespace: String,
+    bundled_prebuilds: bool,
     manual_load: bool,
     public_api_dts: String,
 }

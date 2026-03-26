@@ -313,6 +313,12 @@ function writeOptionalString(writer, value) {
   writer.writeBytes(encodeString(value));
 }
 
+function encodeOptionalString(value) {
+  const writer = new ByteWriter(optionalStringAllocationSize(value));
+  writeOptionalString(writer, value);
+  return writer.finish();
+}
+
 function writeOptionalUInt32(writer, value) {
   if (value == null) {
     writer.writeInt8(0);
@@ -402,13 +408,27 @@ function encodeLogRecord(record) {
   return writer.finish();
 }
 
-function applyDottedJsonPath(root, key, value) {
+function createJsonObjectNode() {
+  return {
+    kind: "object",
+    entries: new Map(),
+  };
+}
+
+function createJsonRawNode(valueJson) {
+  return {
+    kind: "raw",
+    valueJson,
+  };
+}
+
+function setJsonPathValue(root, key, valueJson) {
   if (key.length === 0) {
     throw new Error("key cannot be empty");
   }
 
-  let current = root;
   const parts = key.split(".");
+  let current = root;
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
     if (part.length === 0) {
@@ -417,21 +437,30 @@ function applyDottedJsonPath(root, key, value) {
 
     const isLast = index === parts.length - 1;
     if (isLast) {
-      current[part] = value;
+      current.entries.set(part, createJsonRawNode(valueJson));
       return;
     }
 
-    const next = current[part];
-    if (next == null) {
-      current[part] = {};
-      current = current[part];
+    const next = current.entries.get(part);
+    if (next?.kind === "object") {
+      current = next;
       continue;
     }
-    if (typeof next !== "object" || Array.isArray(next)) {
-      throw new Error(`segment '${part}' is not an object`);
-    }
-    current = next;
+
+    const child = createJsonObjectNode();
+    current.entries.set(part, child);
+    current = child;
   }
+}
+
+function renderJsonNode(node) {
+  if (node.kind === "raw") {
+    return node.valueJson;
+  }
+
+  const keys = [...node.entries.keys()].sort();
+  const items = keys.map((key) => `${JSON.stringify(key)}:${renderJsonNode(node.entries.get(key))}`);
+  return `{${items.join(",")}}`;
 }
 
 function cloneBlobRecord(record) {
@@ -689,14 +718,14 @@ function createBasicFixtureRuntime(libraryPath) {
   return handlers;
 }
 
-function createSlateDbRuntime(libraryPath) {
+function createCallbacksFixtureRuntime(libraryPath) {
   const metadata = parseFfiMetadata(libraryPath);
   const settings = new Map();
   const writeBatches = new Map();
   let nextSettingsHandle = 1n;
   let nextWriteBatchHandle = 1000n;
-  let logCallbackVtable = null;
-  let mergeOperatorVtable = null;
+  let logCollectorVtable = null;
+  let logSinkVtable = null;
 
   function getSettings(handle) {
     const normalizedHandle = normalizeBigInt(handle);
@@ -716,33 +745,95 @@ function createSlateDbRuntime(libraryPath) {
     return value;
   }
 
+  function requireCallbackMethod(vtable, interfaceName, methodName, context) {
+    const method = vtable?.[methodName];
+    if (typeof method !== "function") {
+      throw new Error(
+        `${interfaceName} vtable method ${methodName} was not registered before ${context}`,
+      );
+    }
+    return method;
+  }
+
+  function invokeLogCollectorCallback(handle, recordBuffer) {
+    const callbackStatus = {
+      code: CALL_SUCCESS,
+      error_buf: emptyRustBuffer(),
+    };
+    requireCallbackMethod(
+      logCollectorVtable,
+      "LogCollector",
+      "log",
+      "invoking log collector callbacks",
+    )(normalizeBigInt(handle), recordBuffer, undefined, callbackStatus);
+    return callbackStatus;
+  }
+
+  function invokeLogSinkWriteCallback(handle, messageBuffer) {
+    const callbackStatus = {
+      code: CALL_SUCCESS,
+      error_buf: emptyRustBuffer(),
+    };
+    requireCallbackMethod(
+      logSinkVtable,
+      "LogSink",
+      "write",
+      "invoking log sink write callbacks",
+    )(normalizeBigInt(handle), messageBuffer, undefined, callbackStatus);
+    return callbackStatus;
+  }
+
+  function invokeLogSinkLatestCallback(handle) {
+    const callbackStatus = {
+      code: CALL_SUCCESS,
+      error_buf: emptyRustBuffer(),
+    };
+    const outReturn = {};
+    requireCallbackMethod(
+      logSinkVtable,
+      "LogSink",
+      "latest",
+      "invoking log sink latest callbacks",
+    )(normalizeBigInt(handle), outReturn, callbackStatus);
+    return { callbackStatus, outReturn };
+  }
+
+  function freeCallbackHandle(vtable, interfaceName, handle) {
+    requireCallbackMethod(
+      vtable,
+      interfaceName,
+      "uniffi_free",
+      `freeing ${interfaceName} handles`,
+    )(normalizeBigInt(handle));
+  }
+
   const handlers = new Map([
     [
       metadata.contractVersionFunction,
       () => metadata.contractVersion,
     ],
     [
-      "ffi_slatedb_uniffi_rustbuffer_alloc",
+      "ffi_fixture_callbacks_rustbuffer_alloc",
       (size, status) => {
         setCallSuccess(status);
         return rustBufferFromBytes(new Uint8Array(Number(size)));
       },
     ],
     [
-      "ffi_slatedb_uniffi_rustbuffer_from_bytes",
+      "ffi_fixture_callbacks_rustbuffer_from_bytes",
       (foreignBytes, status) => {
         setCallSuccess(status);
         return rustBufferFromBytes(foreignBytesToUint8Array(foreignBytes));
       },
     ],
     [
-      "ffi_slatedb_uniffi_rustbuffer_free",
+      "ffi_fixture_callbacks_rustbuffer_free",
       (_buffer, status) => {
         setCallSuccess(status);
       },
     ],
     [
-      "ffi_slatedb_uniffi_rustbuffer_reserve",
+      "ffi_fixture_callbacks_rustbuffer_reserve",
       (buffer, additional, status) => {
         const current = rustBufferToUint8Array(buffer);
         const reserved = new Uint8Array(current.byteLength + Number(additional));
@@ -752,31 +843,7 @@ function createSlateDbRuntime(libraryPath) {
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_init_callback_vtable_logcallback",
-      (vtable) => {
-        logCallbackVtable = vtable;
-      },
-    ],
-    [
-      "uniffi_slatedb_uniffi_fn_init_callback_vtable_mergeoperator",
-      (vtable) => {
-        mergeOperatorVtable = vtable;
-      },
-    ],
-    [
-      "uniffi_slatedb_uniffi_fn_constructor_settings_default",
-      (status) => {
-        const handle = nextSettingsHandle;
-        nextSettingsHandle += 1n;
-        settings.set(handle, {
-          flush_interval: "100ms",
-        });
-        setCallSuccess(status);
-        return handle;
-      },
-    ],
-    [
-      "uniffi_slatedb_uniffi_fn_clone_settings",
+      "uniffi_fixture_callbacks_fn_clone_settings",
       (handle, status) => {
         getSettings(handle);
         setCallSuccess(status);
@@ -784,35 +851,56 @@ function createSlateDbRuntime(libraryPath) {
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_free_settings",
+      "uniffi_fixture_callbacks_fn_free_settings",
       (handle, status) => {
         settings.delete(normalizeBigInt(handle));
         setCallSuccess(status);
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_method_settings_set",
+      "uniffi_fixture_callbacks_fn_constructor_settings_default",
+      (status) => {
+        const handle = nextSettingsHandle;
+        nextSettingsHandle += 1n;
+        settings.set(handle, createJsonObjectNode());
+        setCallSuccess(status);
+        return handle;
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_method_settings_set",
       (handle, keyBuffer, valueJsonBuffer, status) => {
         const settingsValue = getSettings(handle);
         const key = decodeSerializedString(rustBufferToUint8Array(keyBuffer));
-        const value = JSON.parse(
-          decodeSerializedString(rustBufferToUint8Array(valueJsonBuffer)),
-        );
-        applyDottedJsonPath(settingsValue, key, value);
+        const valueJson = decodeSerializedString(rustBufferToUint8Array(valueJsonBuffer));
+        setJsonPathValue(settingsValue, key, valueJson);
         setCallSuccess(status);
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_method_settings_to_json_string",
+      "uniffi_fixture_callbacks_fn_method_settings_to_json_string",
       (handle, status) => {
         setCallSuccess(status);
-        return rustBufferFromBytes(
-          encodeString(JSON.stringify(getSettings(handle))),
-        );
+        return rustBufferFromBytes(encodeString(renderJsonNode(getSettings(handle))));
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_constructor_writebatch_new",
+      "uniffi_fixture_callbacks_fn_clone_writebatch",
+      (handle, status) => {
+        getWriteBatch(handle);
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_free_writebatch",
+      (handle, status) => {
+        writeBatches.delete(normalizeBigInt(handle));
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_constructor_writebatch_new",
       (status) => {
         const handle = nextWriteBatchHandle;
         nextWriteBatchHandle += 1n;
@@ -822,22 +910,7 @@ function createSlateDbRuntime(libraryPath) {
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_clone_writebatch",
-      (handle, status) => {
-        getWriteBatch(handle);
-        setCallSuccess(status);
-        return normalizeBigInt(handle);
-      },
-    ],
-    [
-      "uniffi_slatedb_uniffi_fn_free_writebatch",
-      (handle, status) => {
-        writeBatches.delete(normalizeBigInt(handle));
-        setCallSuccess(status);
-      },
-    ],
-    [
-      "uniffi_slatedb_uniffi_fn_method_writebatch_put",
+      "uniffi_fixture_callbacks_fn_method_writebatch_put",
       (handle, keyBuffer, valueBuffer, status) => {
         const batch = getWriteBatch(handle);
         batch.push({
@@ -849,7 +922,7 @@ function createSlateDbRuntime(libraryPath) {
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_method_writebatch_delete",
+      "uniffi_fixture_callbacks_fn_method_writebatch_delete",
       (handle, keyBuffer, status) => {
         const batch = getWriteBatch(handle);
         batch.push({
@@ -860,36 +933,118 @@ function createSlateDbRuntime(libraryPath) {
       },
     ],
     [
-      "uniffi_slatedb_uniffi_fn_func_init_logging",
-      (levelBuffer, callbackBuffer, status) => {
+      "uniffi_fixture_callbacks_fn_method_writebatch_operation_count",
+      (handle, status) => {
+        setCallSuccess(status);
+        return getWriteBatch(handle).length;
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector",
+      (vtable) => {
+        logCollectorVtable = vtable;
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_clone_logcollector",
+      (handle, status) => {
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_free_logcollector",
+      (handle, status) => {
+        freeCallbackHandle(logCollectorVtable, "LogCollector", handle);
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_method_logcollector_log",
+      (handle, recordBuffer, status) => {
+        const callbackStatus = invokeLogCollectorCallback(handle, recordBuffer);
+        if (callbackStatus.code !== CALL_SUCCESS) {
+          setCallError(status, callbackStatus.error_buf ?? emptyRustBuffer());
+          return;
+        }
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_init_callback_vtable_logsink",
+      (vtable) => {
+        logSinkVtable = vtable;
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_clone_logsink",
+      (handle, status) => {
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_free_logsink",
+      (handle, status) => {
+        freeCallbackHandle(logSinkVtable, "LogSink", handle);
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_method_logsink_write",
+      (handle, messageBuffer, status) => {
+        const callbackStatus = invokeLogSinkWriteCallback(handle, messageBuffer);
+        if (callbackStatus.code !== CALL_SUCCESS) {
+          setCallError(status, callbackStatus.error_buf ?? emptyRustBuffer());
+          return;
+        }
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_method_logsink_latest",
+      (handle, status) => {
+        const { callbackStatus, outReturn } = invokeLogSinkLatestCallback(handle);
+        if (callbackStatus.code !== CALL_SUCCESS) {
+          setCallError(status, callbackStatus.error_buf ?? emptyRustBuffer());
+          return emptyRustBuffer();
+        }
+        setCallSuccess(status);
+        return outReturn;
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_emit",
+      (sinkHandle, messageBuffer, status) => {
+        const callbackStatus = invokeLogSinkWriteCallback(sinkHandle, messageBuffer);
+        if (callbackStatus.code !== CALL_SUCCESS) {
+          setCallError(status, callbackStatus.error_buf ?? emptyRustBuffer());
+          return;
+        }
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_init_logging",
+      (levelBuffer, collectorBuffer, status) => {
         const level = decodeLogLevel(rustBufferToUint8Array(levelBuffer));
-        const callbackHandle = decodeOptionalHandle(
-          rustBufferToUint8Array(callbackBuffer),
+        const collectorHandle = decodeOptionalHandle(
+          rustBufferToUint8Array(collectorBuffer),
         );
 
-        if (callbackHandle != null) {
-          if (logCallbackVtable?.log == null) {
-            throw new Error("LogCallback vtable was not registered before init_logging");
-          }
-
-          const callbackStatus = {
-            code: CALL_SUCCESS,
-            error_buf: emptyRustBuffer(),
-          };
-          logCallbackVtable.log(
-            callbackHandle,
+        if (collectorHandle != null) {
+          const callbackStatus = invokeLogCollectorCallback(
+            collectorHandle,
             rustBufferFromBytes(
               encodeLogRecord({
                 level,
-                target: "slatedb",
+                target: "callbacks_fixture",
                 message: "logging initialized",
-                module_path: "slatedb::logging",
+                module_path: "callbacks_fixture::logging",
                 file: undefined,
                 line: undefined,
               }),
             ),
-            undefined,
-            callbackStatus,
           );
 
           if (callbackStatus.code !== CALL_SUCCESS) {
@@ -898,11 +1053,26 @@ function createSlateDbRuntime(libraryPath) {
           }
         }
 
-        if (mergeOperatorVtable?.merge == null && mergeOperatorVtable != null) {
-          throw new Error("MergeOperator vtable was registered without a merge callback");
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_last_message",
+      (sinkBuffer, status) => {
+        const sinkHandle = decodeOptionalHandle(rustBufferToUint8Array(sinkBuffer));
+        if (sinkHandle == null) {
+          setCallSuccess(status);
+          return rustBufferFromBytes(encodeOptionalString(undefined));
+        }
+
+        const { callbackStatus, outReturn } = invokeLogSinkLatestCallback(sinkHandle);
+        if (callbackStatus.code !== CALL_SUCCESS) {
+          setCallError(status, callbackStatus.error_buf ?? emptyRustBuffer());
+          return emptyRustBuffer();
         }
 
         setCallSuccess(status);
+        return outReturn;
       },
     ],
   ]);
@@ -919,8 +1089,8 @@ function createFixtureHandlers(libraryPath) {
   if (libraryName.includes("fixture_basic")) {
     return createBasicFixtureRuntime(libraryPath);
   }
-  if (libraryName.includes("slatedb_uniffi")) {
-    return createSlateDbRuntime(libraryPath);
+  if (libraryName.includes("fixture_callbacks")) {
+    return createCallbacksFixtureRuntime(libraryPath);
   }
   return {
     get(name) {

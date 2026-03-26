@@ -3385,4 +3385,44 @@ mod tests {
             rendered.js
         );
     }
+
+    #[test]
+    fn render_public_api_emits_nested_byte_sequence_converters() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                sequence<bytes> round_trip_chunks(sequence<bytes> chunks);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains(
+                "const loweredChunks = uniffiLowerIntoRustBuffer(new FfiConverterArray(FfiConverterBytes), chunks);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "return uniffiLiftFromRustBuffer(new FfiConverterArray(FfiConverterBytes), uniffiResult);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export declare function round_trip_chunks(chunks: Array<Uint8Array>): Array<Uint8Array>;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+    }
 }

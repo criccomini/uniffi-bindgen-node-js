@@ -1803,44 +1803,58 @@ mod tests {
     }
 
     #[test]
-    fn new_config_rejects_legacy_platform_switch_packaging_keys() {
-        let root = r#"
+    fn new_config_rejects_removed_legacy_library_path_keys() {
+        for key in [
+            "lib_path_module",
+            "lib_path_modules",
+            "out_lib_path_module",
+            "out_lib_path_modules",
+        ] {
+            let root = format!(
+                r#"
             [bindings.node]
-            out_lib_path_module = ["@scope/example-darwin", "@scope/example-linux"]
+            {key} = "./native/example.node"
             "#
-        .parse::<toml::Value>()
-        .expect("test TOML should deserialize");
-        let error = NodeBindingGenerator::new(NodeBindingCliOverrides::default())
-            .new_config(&root)
-            .expect_err("legacy platform-switch packaging keys should be unknown");
+            )
+            .parse::<toml::Value>()
+            .expect("test TOML should deserialize");
+            let error = NodeBindingGenerator::new(NodeBindingCliOverrides::default())
+                .new_config(&root)
+                .unwrap_err();
 
-        assert!(
-            error
-                .to_string()
-                .contains("unknown field `out_lib_path_module`"),
-            "unexpected error: {error}"
-        );
+            assert!(
+                error.to_string().contains(&format!("unknown field `{key}`")),
+                "unexpected error for {key}: {error}"
+            );
+        }
     }
 
     #[test]
-    fn config_override_rejects_legacy_platform_switch_packaging_keys() {
-        let error = NodeBindingCliOverrides::from_parts(
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            vec!["out_lib_path_module=@scope/example-darwin".to_string()],
-        )
-        .expect_err("legacy platform-switch override keys should be unsupported");
+    fn config_override_rejects_removed_legacy_library_path_keys() {
+        for key in [
+            "lib_path_module",
+            "lib_path_modules",
+            "out_lib_path_module",
+            "out_lib_path_modules",
+        ] {
+            let error = NodeBindingCliOverrides::from_parts(
+                None,
+                None,
+                None,
+                None,
+                false,
+                false,
+                vec![format!("{key}=./native/example.node")],
+            )
+            .unwrap_err();
 
-        assert!(
-            error
-                .to_string()
-                .contains("unsupported --config-override key 'out_lib_path_module'"),
-            "unexpected error: {error}"
-        );
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("unsupported --config-override key '{key}'")),
+                "unexpected error for {key}: {error}"
+            );
+        }
     }
 
     #[test]

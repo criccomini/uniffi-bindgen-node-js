@@ -75,11 +75,11 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Update config validation to reject bundled_prebuilds = true together with lib_path_literal.
 - [x] Thread bundled_prebuilds through GeneratedPackage, TemplateContext, and template inputs.
 - [x] Extend generated JS and DTS metadata so componentMetadata and ffiMetadata expose bundledPrebuilds.
-- [ ] Update templates/component/component-ffi.js.j2 to compute the default library filename, compute the bundled target id, and resolve prebuilds/<target>/<filename> when
+- [x] Update templates/component/component-ffi.js.j2 to compute the default library filename, compute the bundled target id, and resolve prebuilds/<target>/<filename> when
   bundled mode is enabled.
 - [ ] Implement Linux gnu vs musl detection in the generated loader using process.report?.getReport?.().header.glibcVersionRuntime.
 - [ ] Add a bundled-mode missing-file guard before koffi.load and emit an error that names the computed target id and expected path.
-- [ ] Keep load(libraryPath) override semantics intact and update resolver order to explicit path -> libPathLiteral -> bundled prebuild -> sibling library.
+- [x] Keep load(libraryPath) override semantics intact and update resolver order to explicit path -> libPathLiteral -> bundled prebuild -> sibling library.
 - [ ] Update templates/component/component-ffi.d.ts.j2 and templates/component/component.d.ts.j2 to match the new metadata surface without changing load().
 - [ ] Update README examples and limitations text to describe bundled prebuilds and remove references to lib_path_modules.
 - [ ] Replace existing lib_path_modules rejection tests with tests that assert old TOML keys now fail as unknown fields and old CLI override keys now fail as unsupported.

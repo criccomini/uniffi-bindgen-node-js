@@ -122,19 +122,36 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
         : `${libraryBaseName}${extension}`;
     }
 
+    function defaultBundledTarget() {
+      return `${process.platform}-${process.arch}`;
+    }
+
+    function defaultBundledLibraryPath() {
+      return join(
+        moduleDirectory,
+        "prebuilds",
+        defaultBundledTarget(),
+        defaultSiblingLibraryFilename(),
+      );
+    }
+
     function defaultSiblingLibraryPath() {
       return join(moduleDirectory, defaultSiblingLibraryFilename());
     }
 
     function resolveLibraryPath(libraryPath = undefined) {
       const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
-      if (rawLibraryPath == null) {
-        return defaultSiblingLibraryPath();
+      if (rawLibraryPath != null) {
+        return isAbsolute(rawLibraryPath)
+          ? rawLibraryPath
+          : join(moduleDirectory, rawLibraryPath);
       }
 
-      return isAbsolute(rawLibraryPath)
-        ? rawLibraryPath
-        : join(moduleDirectory, rawLibraryPath);
+      if (ffiMetadata.bundledPrebuilds) {
+        return defaultBundledLibraryPath();
+      }
+
+      return defaultSiblingLibraryPath();
     }
 
     === lifecycle ===

@@ -45,7 +45,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 ## TODO
 
 - [x] Delete the three SlateDB integration test files.
-- [ ] Remove BuiltSlateDbCdylib, GeneratedSlateDbPackage, build_slatedb_cdylib(), and generate_slatedb_package() from the integration support module, along with any remaining shared-support references to the deleted SlateDB path.
+- [x] Remove BuiltSlateDbCdylib, GeneratedSlateDbPackage, build_slatedb_cdylib(), and generate_slatedb_package() from the integration support module, along with any remaining shared-support references to the deleted SlateDB path.
 - [ ] Extend fixtures/callback-fixture/src/callbacks_fixture.udl with generic callback, record, enum, and object APIs that replace the removed SlateDB smoke surface.
 - [ ] Implement the new callback fixture APIs in fixtures/callback-fixture/src/lib.rs with simple deterministic in-memory behavior suitable for tests.
 - [ ] Teach the fixture lookup helpers in the test harness and snapshot generator about the expanded callbacks fixture shape without introducing any new external dependency.

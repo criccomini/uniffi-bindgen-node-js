@@ -33,6 +33,12 @@ pub struct GeneratedFixturePackage {
     pub package_dir: Utf8PathBuf,
 }
 
+pub struct GeneratedSlateDbPackage {
+    pub built_slatedb: BuiltSlateDbCdylib,
+    pub namespace: String,
+    pub package_dir: Utf8PathBuf,
+}
+
 pub fn generator() -> NodeBindingGenerator {
     NodeBindingGenerator::new(NodeBindingCliOverrides::default())
 }
@@ -220,6 +226,51 @@ pub fn build_slatedb_cdylib() -> BuiltSlateDbCdylib {
         crate_name: crate_name.to_owned(),
         library_path,
         target_dir,
+    }
+}
+
+pub fn generate_slatedb_package() -> GeneratedSlateDbPackage {
+    let built_slatedb = build_slatedb_cdylib();
+    let package_dir = temp_dir_path("slatedb-package");
+    let namespace = "slatedb".to_owned();
+
+    uniffi_bindgen_node_js::subcommands::generate::run(
+        uniffi_bindgen_node_js::subcommands::generate::GenerateArgs {
+            lib_source: built_slatedb.library_path.clone(),
+            crate_name: "slatedb-uniffi".to_owned(),
+            out_dir: package_dir.clone(),
+            package_name: Some(namespace.clone()),
+            cdylib_name: Some(built_slatedb.crate_name.clone()),
+            node_engine: None,
+            lib_path_literal: None,
+            manual_load: false,
+            config_override: Vec::new(),
+        },
+    )
+    .unwrap_or_else(|error| panic!("failed to generate SlateDB package: {error:#}"));
+
+    let library_filename = built_slatedb.library_path.file_name().unwrap_or_else(|| {
+        panic!(
+            "SlateDB library path has no filename: {}",
+            built_slatedb.library_path
+        )
+    });
+    let packaged_library_path = package_dir.join(library_filename);
+    fs::copy(
+        built_slatedb.library_path.as_std_path(),
+        packaged_library_path.as_std_path(),
+    )
+    .unwrap_or_else(|error| {
+        panic!(
+            "failed to copy SlateDB library {} to {}: {error}",
+            built_slatedb.library_path, packaged_library_path
+        )
+    });
+
+    GeneratedSlateDbPackage {
+        built_slatedb,
+        namespace,
+        package_dir,
     }
 }
 

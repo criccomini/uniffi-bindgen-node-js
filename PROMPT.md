@@ -146,7 +146,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add Rust tests for unsupported-feature diagnostics.
 - [x] Add Rust tests for generated checksum and contract-version initialization code.
 - [x] Build a fixture cdylib during tests.
-- [ ] Generate a Node package into a temp directory.
+- [x] Generate a Node package into a temp directory.
 - [ ] Install npm dependencies in the temp directory.
 - [ ] Run a plain JS smoke script that imports the generated package and exercises sync and async calls.
 - [ ] Run a TypeScript smoke script or `tsc --noEmit` check against the generated `.d.ts` output.

@@ -16,8 +16,14 @@ use uniffi_bindgen_node_js::bindings::{
 pub struct BuiltFixtureCdylib {
     pub workspace_dir: Utf8PathBuf,
     pub manifest_path: Utf8PathBuf,
+    pub namespace: String,
     pub crate_name: String,
     pub library_path: Utf8PathBuf,
+}
+
+pub struct GeneratedFixturePackage {
+    pub built_fixture: BuiltFixtureCdylib,
+    pub package_dir: Utf8PathBuf,
 }
 
 pub fn generator() -> NodeBindingGenerator {
@@ -75,11 +81,23 @@ pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {
 
     copy_dir_all(&source_dir, &fixture_dir);
 
+    run_cargo_command(
+        name,
+        "generate-lockfile",
+        &manifest_path,
+        &target_dir,
+        &["generate-lockfile", "--offline"],
+    );
+
     let output = Command::new(env!("CARGO"))
-        .arg("build")
-        .arg("--manifest-path")
-        .arg(manifest_path.as_str())
-        .arg("--message-format=json-render-diagnostics")
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            manifest_path.as_str(),
+            "--message-format=json-render-diagnostics",
+        ])
         .env("CARGO_TARGET_DIR", target_dir.as_str())
         .output()
         .unwrap_or_else(|error| panic!("failed to run cargo build for fixture {name}: {error}"));
@@ -104,8 +122,52 @@ pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {
     BuiltFixtureCdylib {
         workspace_dir,
         manifest_path,
+        namespace: spec.namespace.to_string(),
         crate_name: spec.crate_name.to_string(),
         library_path,
+    }
+}
+
+pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
+    let built_fixture = build_fixture_cdylib(name);
+    let package_dir = temp_dir_path(&format!("fixture-{name}-package"));
+
+    uniffi_bindgen_node_js::subcommands::generate::run(
+        uniffi_bindgen_node_js::subcommands::generate::GenerateArgs {
+            lib_source: built_fixture.library_path.clone(),
+            crate_name: built_fixture.crate_name.clone(),
+            out_dir: package_dir.clone(),
+            package_name: Some(format!("{}-package", built_fixture.namespace)),
+            cdylib_name: Some(built_fixture.crate_name.clone()),
+            node_engine: None,
+            lib_path_literal: None,
+            manual_load: false,
+            config_override: Vec::new(),
+        },
+    )
+    .unwrap_or_else(|error| panic!("failed to generate fixture package {name}: {error:#}"));
+
+    let library_filename = built_fixture.library_path.file_name().unwrap_or_else(|| {
+        panic!(
+            "fixture library path has no filename: {}",
+            built_fixture.library_path
+        )
+    });
+    let packaged_library_path = package_dir.join(library_filename);
+    fs::copy(
+        built_fixture.library_path.as_std_path(),
+        packaged_library_path.as_std_path(),
+    )
+    .unwrap_or_else(|error| {
+        panic!(
+            "failed to copy fixture library {} to {}: {error}",
+            built_fixture.library_path, packaged_library_path
+        )
+    });
+
+    GeneratedFixturePackage {
+        built_fixture,
+        package_dir,
     }
 }
 
@@ -130,6 +192,7 @@ pub fn temp_dir_path(name: &str) -> Utf8PathBuf {
 
 struct FixtureSpec {
     dir_name: &'static str,
+    namespace: &'static str,
     crate_name: &'static str,
 }
 
@@ -137,10 +200,12 @@ fn fixture_spec(name: &str) -> FixtureSpec {
     match name {
         "basic" => FixtureSpec {
             dir_name: "basic-fixture",
+            namespace: "fixture",
             crate_name: "fixture_basic",
         },
         "callbacks" => FixtureSpec {
             dir_name: "callback-fixture",
+            namespace: "callbacks_fixture",
             crate_name: "fixture_callbacks",
         },
         _ => panic!("unknown fixture '{name}'"),
@@ -167,6 +232,32 @@ fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) {
                 panic!("failed to copy fixture file {entry_path} to {target_path}: {error}")
             });
         }
+    }
+}
+
+fn run_cargo_command(
+    fixture_name: &str,
+    operation: &str,
+    manifest_path: &Utf8PathBuf,
+    target_dir: &Utf8PathBuf,
+    args: &[&str],
+) {
+    let output = Command::new(env!("CARGO"))
+        .args(args)
+        .arg("--manifest-path")
+        .arg(manifest_path.as_str())
+        .env("CARGO_TARGET_DIR", target_dir.as_str())
+        .output()
+        .unwrap_or_else(|error| {
+            panic!("failed to run cargo {operation} for fixture {fixture_name}: {error}")
+        });
+
+    if !output.status.success() {
+        panic!(
+            "failed to run cargo {operation} for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 

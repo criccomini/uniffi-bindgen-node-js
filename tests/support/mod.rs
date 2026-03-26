@@ -21,6 +21,13 @@ pub struct BuiltFixtureCdylib {
     pub library_path: Utf8PathBuf,
 }
 
+pub struct BuiltSlateDbCdylib {
+    pub manifest_path: Utf8PathBuf,
+    pub crate_name: String,
+    pub library_path: Utf8PathBuf,
+    pub target_dir: Utf8PathBuf,
+}
+
 pub struct GeneratedFixturePackage {
     pub built_fixture: BuiltFixtureCdylib,
     pub package_dir: Utf8PathBuf,
@@ -168,6 +175,51 @@ pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
     GeneratedFixturePackage {
         built_fixture,
         package_dir,
+    }
+}
+
+pub fn build_slatedb_cdylib() -> BuiltSlateDbCdylib {
+    let manifest_path =
+        Utf8PathBuf::from("/Users/chrisriccomini/Code/slatedb/bindings/uniffi/Cargo.toml");
+    let crate_name = "slatedb_uniffi";
+    let target_dir = temp_dir_path("slatedb-uniffi-cdylib-target");
+
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            manifest_path.as_str(),
+            "--message-format=json-render-diagnostics",
+        ])
+        .env("CARGO_TARGET_DIR", target_dir.as_str())
+        .output()
+        .unwrap_or_else(|error| {
+            panic!("failed to run cargo build for SlateDB UniFFI crate: {error}")
+        });
+
+    if !output.status.success() {
+        panic!(
+            "failed to build SlateDB UniFFI crate\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let library_path = find_cdylib_artifact(&output.stdout, crate_name).unwrap_or_else(|| {
+        panic!(
+            "failed to locate SlateDB UniFFI cdylib artifact\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+
+    BuiltSlateDbCdylib {
+        manifest_path,
+        crate_name: crate_name.to_owned(),
+        library_path,
+        target_dir,
     }
 }
 

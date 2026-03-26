@@ -985,6 +985,17 @@ mod tests {
             handle_map_js.contains("export const FIRST_FOREIGN_HANDLE"),
             "unexpected runtime handle-map JS contents: {handle_map_js}"
         );
+        let async_rust_call_js =
+            fs::read_to_string(output_dir.join("runtime/async-rust-call.js").as_std_path())
+                .expect("runtime async rust-call JS should be readable");
+        assert!(
+            async_rust_call_js.contains("export async function rustCallAsync"),
+            "unexpected runtime async rust-call JS contents: {async_rust_call_js}"
+        );
+        assert!(
+            async_rust_call_js.contains("export const rustFutureContinuationCallback"),
+            "unexpected runtime async rust-call JS contents: {async_rust_call_js}"
+        );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }

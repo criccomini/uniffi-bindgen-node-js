@@ -2,7 +2,7 @@ fn main() -> std::process::ExitCode {
     match uniffi_bindgen_node_js::run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("{error:#}");
             std::process::ExitCode::FAILURE
         }
     }

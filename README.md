@@ -46,10 +46,11 @@ Available generator flags:
 - `--cdylib-name <name>`: native library basename used for sibling-library lookup.
 - `--node-engine <range>`: value written to `package.json` `engines.node`.
 - `--lib-path-literal <path>`: emitted literal path for the native library.
+- `--bundled-prebuilds`: emit runtime resolution for packaged native libraries under `prebuilds/<target>/`.
 - `--manual-load`: disables eager library loading and exposes explicit load helpers.
 - `--config-override KEY=VALUE`: override supported `[bindings.node]` settings from the CLI.
 
-The CLI expects a built `cdylib` as `lib_source`. By default the generated package looks for a sibling native library next to the emitted JS files.
+The CLI expects a built `cdylib` as `lib_source`. By default the generated package looks for a sibling native library next to the emitted JS files. With `--bundled-prebuilds`, the generated loader instead resolves `prebuilds/<target>/<default-library-filename>` inside the package, while still allowing `load(path)` to override the runtime path explicitly.
 
 ## UniFFI config
 
@@ -60,7 +61,7 @@ Generator settings can also come from `uniffi.toml`:
 package_name = "your-package"
 cdylib_name = "your_crate"
 node_engine = ">=16"
-lib_path_literal = "./native/libyour_crate.dylib"
+bundled_prebuilds = true
 manual_load = false
 ```
 
@@ -70,9 +71,10 @@ Defaults:
 - `cdylib_name`: UniFFI `cdylib` name from generation settings
 - `node_engine`: `>=16`
 - `lib_path_literal`: unset
+- `bundled_prebuilds`: `false`
 - `manual_load`: `false`
 
-CLI flags apply after config-file settings.
+CLI flags apply after config-file settings. `bundled_prebuilds = true` cannot be combined with `lib_path_literal`, because both would otherwise define the default auto-load path. Legacy `lib_path_modules`, `lib_path_module`, `out_lib_path_module`, and `out_lib_path_modules` settings are no longer supported.
 
 ## Generated package layout
 
@@ -95,6 +97,13 @@ Each invocation writes a package directory containing:
 - `runtime/objects.js`
 
 The generated `package.json` declares `koffi` as the runtime FFI dependency.
+
+Default native-library packaging modes:
+
+- sibling mode: copy the built library next to the generated JS files, for example `<package>/libyour_crate.dylib`
+- bundled-prebuild mode: stage one library per target under `prebuilds/<target>/<filename>`, for example `prebuilds/darwin-arm64/libyour_crate.dylib`, `prebuilds/linux-x64-gnu/libyour_crate.so`, or `prebuilds/win32-x64/your_crate.dll`
+
+Bundled target IDs use Node's `process.platform` and `process.arch`. Linux targets add a libc suffix: `-gnu` when `process.report?.getReport?.().header.glibcVersionRuntime` is present, otherwise `-musl`.
 
 ## Output format
 
@@ -155,7 +164,7 @@ The generator rejects or does not yet support:
 - async callback-interface methods
 - timestamps in the public Node API
 - durations in the public Node API
-- multi-package platform-switch packaging
+- automatic multi-target package assembly; bundled prebuilds only define the runtime lookup contract and still require the release pipeline to stage `prebuilds/<target>/...`
 
 ## Development
 

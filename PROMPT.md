@@ -81,7 +81,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a bundled-mode missing-file guard before koffi.load and emit an error that names the computed target id and expected path.
 - [x] Keep load(libraryPath) override semantics intact and update resolver order to explicit path -> libPathLiteral -> bundled prebuild -> sibling library.
 - [x] Update templates/component/component-ffi.d.ts.j2 and templates/component/component.d.ts.j2 to match the new metadata surface without changing load().
-- [ ] Update README examples and limitations text to describe bundled prebuilds and remove references to lib_path_modules.
+- [x] Update README examples and limitations text to describe bundled prebuilds and remove references to lib_path_modules.
 - [ ] Replace existing lib_path_modules rejection tests with tests that assert old TOML keys now fail as unknown fields and old CLI override keys now fail as unsupported.
 - [x] Add config tests that accept bundled_prebuilds = true and reject bundled_prebuilds + lib_path_literal.
 - [ ] Add codegen tests that assert the emitted bundled metadata, target-resolution helpers, resolver precedence, and bundled missing-file diagnostic.

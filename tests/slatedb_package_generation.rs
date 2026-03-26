@@ -1,6 +1,8 @@
 mod support;
 
-use self::support::{generate_slatedb_package, remove_dir_all};
+use self::support::{
+    generate_slatedb_package, install_generated_package_dependencies, remove_dir_all,
+};
 
 #[test]
 fn generates_slatedb_node_package_in_a_temp_directory() {
@@ -35,6 +37,12 @@ fn generates_slatedb_node_package_in_a_temp_directory() {
         let path = package_dir.join(relative_path);
         assert!(path.is_file(), "expected generated SlateDB package file at {path}");
     }
+
+    install_generated_package_dependencies(package_dir);
+    assert!(
+        package_dir.join("node_modules").join("koffi").join("package.json").is_file(),
+        "expected generated SlateDB package dependencies to be installed in {package_dir}"
+    );
 
     remove_dir_all(&generated.built_slatedb.target_dir);
     remove_dir_all(package_dir);

@@ -274,7 +274,7 @@ pub fn generate_slatedb_package() -> GeneratedSlateDbPackage {
     }
 }
 
-pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
+pub fn install_generated_package_dependencies(package_dir: &Utf8PathBuf) {
     rewrite_package_dependency_to_local_fixture(package_dir, "koffi", &local_koffi_fixture_dir());
 
     let output = Command::new("npm")
@@ -290,6 +290,10 @@ pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+}
+
+pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
+    install_generated_package_dependencies(package_dir);
 }
 
 pub fn run_node_script(package_dir: &Utf8PathBuf, script_name: &str, source: &str) {

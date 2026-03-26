@@ -60,6 +60,7 @@ export const componentMetadata = Object.freeze({
   cdylibName: "fixture_basic",
   nodeEngine: ">=16",
   libPathLiteral: null,
+  bundledPrebuilds: false,
   manualLoad: false,
 });
 
@@ -443,6 +444,7 @@ export interface ComponentMetadata {
   cdylibName: string;
   nodeEngine: string;
   libPathLiteral: string | null;
+  bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
 
@@ -537,6 +539,7 @@ export const ffiMetadata = Object.freeze({
   namespace: "fixture",
   cdylibName: "fixture_basic",
   libPathLiteral: null,
+  bundledPrebuilds: false,
   manualLoad: false,
 });
 
@@ -2075,6 +2078,7 @@ export interface FfiMetadata {
   namespace: string;
   cdylibName: string;
   libPathLiteral: string | null;
+  bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
 

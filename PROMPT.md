@@ -74,7 +74,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Remove NodeBindingConfigOverride::LibPathModules and delete all lib_path_module[s] and out_lib_path_module[s] override aliases.
 - [x] Update config validation to reject bundled_prebuilds = true together with lib_path_literal.
 - [x] Thread bundled_prebuilds through GeneratedPackage, TemplateContext, and template inputs.
-- [ ] Extend generated JS and DTS metadata so componentMetadata and ffiMetadata expose bundledPrebuilds.
+- [x] Extend generated JS and DTS metadata so componentMetadata and ffiMetadata expose bundledPrebuilds.
 - [ ] Update templates/component/component-ffi.js.j2 to compute the default library filename, compute the bundled target id, and resolve prebuilds/<target>/<filename> when
   bundled mode is enabled.
 - [ ] Implement Linux gnu vs musl detection in the generated loader using process.report?.getReport?.().header.glibcVersionRuntime.

@@ -1,5 +1,4 @@
 import { UniffiObjectBase } from "./runtime/objects.js";
-{% if bundled_prebuilds %}{% endif %}
 
 export interface ComponentMetadata {
   namespace: string;
@@ -7,6 +6,7 @@ export interface ComponentMetadata {
   cdylibName: string;
   nodeEngine: string;
   libPathLiteral: string | null;
+  bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
 

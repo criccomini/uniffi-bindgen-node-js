@@ -482,7 +482,6 @@ impl GeneratedPackage {
             &self.layout.component_dts_path(),
             &ComponentDtsTemplate {
                 namespace: self.layout.namespace.clone(),
-                bundled_prebuilds: template_context.bundled_prebuilds,
                 manual_load: self.manual_load,
                 public_api_dts: self.public_api.dts.clone(),
             },
@@ -651,7 +650,6 @@ struct ComponentJsTemplate {
 #[template(path = "component/component.d.ts.j2", escape = "none")]
 struct ComponentDtsTemplate {
     namespace: String,
-    bundled_prebuilds: bool,
     manual_load: bool,
     public_api_dts: String,
 }

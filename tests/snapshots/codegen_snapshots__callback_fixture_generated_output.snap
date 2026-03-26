@@ -60,6 +60,7 @@ export const componentMetadata = Object.freeze({
   cdylibName: "fixture_callbacks",
   nodeEngine: ">=16",
   libPathLiteral: null,
+  bundledPrebuilds: false,
   manualLoad: false,
 });
 
@@ -338,6 +339,7 @@ export interface ComponentMetadata {
   cdylibName: string;
   nodeEngine: string;
   libPathLiteral: string | null;
+  bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
 
@@ -383,6 +385,7 @@ export const ffiMetadata = Object.freeze({
   namespace: "callbacks_fixture",
   cdylibName: "fixture_callbacks",
   libPathLiteral: null,
+  bundledPrebuilds: false,
   manualLoad: false,
 });
 
@@ -1685,6 +1688,7 @@ export interface FfiMetadata {
   namespace: string;
   cdylibName: string;
   libPathLiteral: string | null;
+  bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
 

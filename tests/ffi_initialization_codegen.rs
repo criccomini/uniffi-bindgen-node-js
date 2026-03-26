@@ -81,6 +81,7 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
       namespace: "example",
       cdylibName: "fixture",
       libPathLiteral: null,
+      bundledPrebuilds: false,
       manualLoad: false,
     });
 
@@ -270,6 +271,7 @@ fn generated_ffi_dts_snapshots_initialization_contract() {
       namespace: string;
       cdylibName: string;
       libPathLiteral: string | null;
+      bundledPrebuilds: boolean;
       manualLoad: boolean;
     }
 

@@ -985,10 +985,11 @@ const koffi = {
       return;
     }
     if (typeof value === "object" && value != null) {
+      const source = target === value ? { ...value } : value;
       for (const key of Object.keys(target)) {
         delete target[key];
       }
-      Object.assign(target, value);
+      Object.assign(target, source);
       return;
     }
     target.value = value;

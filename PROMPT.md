@@ -161,6 +161,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Treat successful import plus these calls as the first end-to-end acceptance gate.
 - [x] Fix generated JS and `.d.ts` error base classes so UniFFI errors named `Error` import cleanly.
 - [x] Refresh codegen snapshots for the `globalThis.Error` error-base rendering change.
+- [x] Fix the local `koffi` test shim so self-encoding `RustCallStatus` preserves callback success state.
 - [ ] Add a README for this repo describing installation, CLI usage, supported UniFFI features, and current limitations.
 - [ ] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
 - [ ] Document that v1 targets UniFFI 0.29.x first.

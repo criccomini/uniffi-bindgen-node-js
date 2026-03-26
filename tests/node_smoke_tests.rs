@@ -31,6 +31,30 @@ import {{ Flavor, ScanResult, Store, echo_bytes, echo_record }} from "./index.js
 }
 
 #[test]
+fn runs_plain_js_smoke_script_against_generated_callback_fixture_package() {
+    let generated = generate_fixture_package("callbacks");
+    let package_dir = &generated.package_dir;
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "callback-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{ LogLevel, Settings, WriteBatch, emit, init_logging, last_message }} from "./index.js";
+
+{}
+"#,
+            callback_fixture_api_smoke_body()
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn runs_plain_js_smoke_script_against_generated_bundled_basic_fixture_package() {
     let generated = generate_fixture_package_with_options(
         "basic",
@@ -227,4 +251,58 @@ assert.deepStrictEqual(
   asyncRecord.chunks.map((chunk) => Array.from(chunk)),
   [[3], [4, 5], [9, 8]],
 );"#
+}
+
+fn callback_fixture_api_smoke_body() -> &'static str {
+    r#"const messages = [];
+const sink = {
+  write(message) {
+    messages.push(message);
+  },
+  latest() {
+    return messages.at(-1);
+  },
+};
+
+assert.equal(last_message(undefined), undefined);
+emit(sink, "first");
+emit(sink, "second");
+assert.deepStrictEqual(messages, ["first", "second"]);
+assert.equal(last_message(sink), "second");
+
+const settings = Settings.default();
+settings.set("writer.cache_size", "1024");
+settings.set("logging.level", "\"debug\"");
+settings.set("writer.enabled", "true");
+assert.equal(
+  settings.to_json_string(),
+  "{\"logging\":{\"level\":\"debug\"},\"writer\":{\"cache_size\":1024,\"enabled\":true}}",
+);
+
+const batch = new WriteBatch();
+batch.put(Buffer.from([1, 2]), Buffer.from([3, 4]));
+batch.delete(Buffer.from([5]));
+batch.put(Buffer.from("k"), Buffer.from("value"));
+assert.equal(batch.operation_count(), 3);
+
+const records = [];
+const collector = {
+  log(record) {
+    records.push(record);
+  },
+};
+
+init_logging(LogLevel.Info, collector);
+assert.deepStrictEqual(records, [
+  {
+    level: LogLevel.Info,
+    target: "callbacks_fixture",
+    message: "logging initialized",
+    module_path: "callbacks_fixture::logging",
+    file: undefined,
+    line: undefined,
+  },
+]);
+
+init_logging(LogLevel.Info, undefined);"#
 }

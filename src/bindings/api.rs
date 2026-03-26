@@ -1045,10 +1045,18 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
             js_member_identifier(&method.name),
             render_js_params(&method.arguments)
         ));
-        lines.push(format!(
-            "    return uniffiNotImplemented({});",
-            json_string_literal(&format!("{}.{}", object.name, method.name))?
-        ));
+        if method.is_async {
+            lines.push(format!(
+                "    return uniffiNotImplemented({});",
+                json_string_literal(&format!("{}.{}", object.name, method.name))?
+            ));
+        } else {
+            lines.extend(render_js_sync_method_body(
+                method,
+                &factory_name,
+                &object.name,
+            )?);
+        }
         lines.push("  }".to_string());
     }
 
@@ -1250,6 +1258,71 @@ fn render_js_ffi_call_args(arguments: &[ArgumentModel], trailing: Option<&str>) 
     args.join(", ")
 }
 
+fn render_js_ffi_call_args_with_leading(
+    leading: &[String],
+    arguments: &[ArgumentModel],
+    trailing: Option<&str>,
+) -> String {
+    let mut args = leading.to_vec();
+    args.extend(
+        arguments
+            .iter()
+            .map(|argument| lowered_argument_name(&argument.name)),
+    );
+    if let Some(trailing) = trailing {
+        args.push(trailing.to_string());
+    }
+    args.join(", ")
+}
+
+fn render_js_sync_method_body(
+    method: &MethodModel,
+    factory_name: &str,
+    object_name: &str,
+) -> Result<Vec<String>> {
+    let mut lines = vec![format!(
+        "    const loweredSelf = {}.cloneHandle(this);",
+        factory_name
+    )];
+    lines.extend(render_js_argument_lowering(&method.arguments)?);
+    let call_args = render_js_ffi_call_args_with_leading(
+        &[String::from("loweredSelf")],
+        &method.arguments,
+        Some("status"),
+    );
+
+    if let Some(return_type) = method.return_type.as_ref() {
+        lines.push("    const uniffiResult = defaultRustCaller.rustCall(".to_string());
+        lines.push(format!(
+            "      (status) => ffiFunctions.{}({}),",
+            method.ffi_func_identifier, call_args
+        ));
+        lines.push("      uniffiRustCallOptions(),".to_string());
+        lines.push("    );".to_string());
+        lines.push(format!(
+            "    return {};",
+            render_js_lift_expression(return_type, "uniffiResult")?
+        ));
+    } else {
+        lines.push("    defaultRustCaller.rustCall(".to_string());
+        lines.push(format!(
+            "      (status) => ffiFunctions.{}({}),",
+            method.ffi_func_identifier, call_args
+        ));
+        lines.push("      uniffiRustCallOptions(),".to_string());
+        lines.push("    );".to_string());
+    }
+
+    if method.throws_type.is_some() {
+        lines.push(format!(
+            "    // {}.{} throws a typed error, but error lifting is still pending.",
+            object_name, method.name
+        ));
+    }
+
+    Ok(lines)
+}
+
 fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> {
     match type_ {
         Type::UInt8 => Ok(format!("FfiConverterUInt8.lower({value_expr})")),
@@ -1281,6 +1354,43 @@ fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> 
         )),
         Type::CallbackInterface { .. } => Ok(format!(
             "{}.lower({value_expr})",
+            render_js_type_converter_expression(type_)?
+        )),
+        Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+    }
+}
+
+fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
+    match type_ {
+        Type::UInt8 => Ok(format!("FfiConverterUInt8.lift({value_expr})")),
+        Type::Int8 => Ok(format!("FfiConverterInt8.lift({value_expr})")),
+        Type::UInt16 => Ok(format!("FfiConverterUInt16.lift({value_expr})")),
+        Type::Int16 => Ok(format!("FfiConverterInt16.lift({value_expr})")),
+        Type::UInt32 => Ok(format!("FfiConverterUInt32.lift({value_expr})")),
+        Type::Int32 => Ok(format!("FfiConverterInt32.lift({value_expr})")),
+        Type::UInt64 => Ok(format!("FfiConverterUInt64.lift({value_expr})")),
+        Type::Int64 => Ok(format!("FfiConverterInt64.lift({value_expr})")),
+        Type::Float32 => Ok(format!("FfiConverterFloat32.lift({value_expr})")),
+        Type::Float64 => Ok(format!("FfiConverterFloat64.lift({value_expr})")),
+        Type::Boolean => Ok(format!("FfiConverterBool.lift({value_expr})")),
+        Type::String
+        | Type::Bytes
+        | Type::Record { .. }
+        | Type::Enum { .. }
+        | Type::Optional { .. }
+        | Type::Sequence { .. }
+        | Type::Map { .. }
+        | Type::Timestamp
+        | Type::Duration => Ok(format!(
+            "uniffiLiftFromRustBuffer({}, {value_expr})",
+            render_js_type_converter_expression(type_)?
+        )),
+        Type::Object { name, .. } => Ok(format!(
+            "{}.create({value_expr})",
+            object_factory_name(name)
+        )),
+        Type::CallbackInterface { .. } => Ok(format!(
+            "{}.lift({value_expr})",
             render_js_type_converter_expression(type_)?
         )),
         Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
@@ -1925,6 +2035,20 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered
+                .js
+                .contains("const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "const loweredProfile = uniffiLowerIntoRustBuffer(FfiConverterProfile, profile);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered.dts.contains(
                 "export interface Profile {\n  \"name\": string;\n  \"bytes\": Uint8Array;\n}"
             ),
@@ -1996,6 +2120,43 @@ mod tests {
                 .contains("static new(path: string): Promise<AsyncStore>;"),
             "unexpected DTS output: {}",
             rendered.dts
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_sync_method_return_lifting() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            interface Store {
+                constructor();
+                string name();
+                Store clone();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .js
+                .contains("return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("return uniffiStoreObjectFactory.create(uniffiResult);"),
+            "unexpected JS output: {}",
+            rendered.js
         );
     }
 

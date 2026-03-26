@@ -51,7 +51,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Teach the fixture lookup helpers in the test harness and snapshot generator about the expanded callbacks fixture shape without introducing any new external dependency.
 - [x] Replace the SlateDB-specific mock runtime in tests/npm-fixtures/koffi/index.js with a fixture_callbacks runtime that handles callback registration, object handles, byte
   arguments, JSON-string settings updates, and emitted log records.
-- [ ] Add a callback package-generation test to the existing package suite that verifies emitted files and local koffi installation for a compiled callback fixture package.
+- [x] Add a callback package-generation test to the existing package suite that verifies emitted files and local koffi installation for a compiled callback fixture package.
 - [ ] Add a callback smoke test to the existing smoke suite that covers emit, last_message, Settings.default/set/to_json_string, WriteBatch.put/delete/operation_count, and in
   it_logging(LogLevel.Info, collector) plus the undefined callback path.
 - [ ] Add a callback TypeScript test to the existing TS suite that typechecks Settings, WriteBatch, LogLevel, LogRecord, LogCollector, emit, last_message, and init_logging.

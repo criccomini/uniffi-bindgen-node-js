@@ -1,9 +1,13 @@
 mod support;
 
+#[path = "support/fixtures.rs"]
+mod fixtures;
+
 use self::support::{
     FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
     install_fixture_package_dependencies, remove_dir_all,
 };
+use self::fixtures::fixture_spec;
 
 #[test]
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
@@ -47,6 +51,43 @@ fn generates_basic_fixture_node_package_in_a_temp_directory() {
 fn installs_fixture_package_npm_dependencies_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;
+
+    install_fixture_package_dependencies(package_dir);
+
+    let installed_koffi_manifest = package_dir
+        .join("node_modules")
+        .join("koffi")
+        .join("package.json");
+    assert!(
+        installed_koffi_manifest.is_file(),
+        "expected installed koffi package manifest at {}",
+        installed_koffi_manifest
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
+fn generates_callback_fixture_package_with_expected_files_and_local_koffi_fixture() {
+    let generated = generate_fixture_package("callbacks");
+    let package_dir = &generated.package_dir;
+    let spec = fixture_spec("callbacks");
+    let expected_library_filename = format!(
+        "{}{}.{}",
+        std::env::consts::DLL_PREFIX,
+        generated.built_fixture.crate_name,
+        std::env::consts::DLL_EXTENSION
+    );
+
+    for relative_path in spec
+        .generated_package_relative_paths()
+        .into_iter()
+        .chain(std::iter::once(expected_library_filename))
+    {
+        let path = package_dir.join(&relative_path);
+        assert!(path.is_file(), "expected generated package file at {path}");
+    }
 
     install_fixture_package_dependencies(package_dir);
 

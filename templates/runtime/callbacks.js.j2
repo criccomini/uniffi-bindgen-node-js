@@ -1,1 +1,182 @@
-// Runtime callbacks template scaffold.
+import { ensureError, getErrorMessage } from "./errors.js";
+import { UniffiHandleMap } from "./handle-map.js";
+import { EMPTY_RUST_BUFFER } from "./ffi-types.js";
+import {
+  CALL_ERROR,
+  CALL_SUCCESS,
+  CALL_UNEXPECTED_ERROR,
+  createRustCallStatus,
+} from "./rust-call.js";
+
+function requireCallbackImplementation(value, interfaceName = "callback interface") {
+  if ((typeof value !== "object" && typeof value !== "function") || value == null) {
+    throw new TypeError(`${interfaceName} implementations must be objects with callable methods.`);
+  }
+  return value;
+}
+
+function requireCallbackMethod(implementation, methodName, interfaceName = "callback interface") {
+  const method = implementation?.[methodName];
+  if (typeof method !== "function") {
+    throw new TypeError(
+      `${interfaceName} is missing required method ${String(methodName)}().`,
+    );
+  }
+  return method;
+}
+
+function lowerCallbackFailure(error, options = {}) {
+  const {
+    lowerError,
+    lowerString,
+    defaultMessage = "Callback invocation failed.",
+  } = options;
+  const normalizedError = ensureError(error, defaultMessage);
+
+  if (typeof lowerError === "function") {
+    const loweredError = lowerError(normalizedError);
+    if (loweredError != null) {
+      return {
+        code: CALL_ERROR,
+        error: normalizedError,
+        error_buf: loweredError,
+      };
+    }
+  }
+
+  if (typeof lowerString === "function") {
+    return {
+      code: CALL_UNEXPECTED_ERROR,
+      error: normalizedError,
+      error_buf: lowerString(getErrorMessage(normalizedError, defaultMessage)),
+    };
+  }
+
+  return {
+    code: CALL_UNEXPECTED_ERROR,
+    error: normalizedError,
+    error_buf: EMPTY_RUST_BUFFER,
+  };
+}
+
+export function resetCallbackCallStatus(status = undefined) {
+  const callbackStatus = status ?? createRustCallStatus();
+  callbackStatus.code = CALL_SUCCESS;
+  callbackStatus.error_buf = EMPTY_RUST_BUFFER;
+  return callbackStatus;
+}
+
+export function writeCallbackError(status, error, options = {}) {
+  const callbackStatus = status ?? createRustCallStatus();
+  const lowered = lowerCallbackFailure(error, options);
+  callbackStatus.code = lowered.code;
+  callbackStatus.error_buf = lowered.error_buf ?? EMPTY_RUST_BUFFER;
+  return lowered.error;
+}
+
+export function invokeCallbackMethod({
+  registry,
+  handle,
+  methodName,
+  args = [],
+  defaultReturnValue = undefined,
+  interfaceName = registry?.interfaceName ?? "callback interface",
+  lowerError,
+  lowerString,
+  status = undefined,
+}) {
+  try {
+    const implementation = registry.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, interfaceName);
+    const result = method.apply(implementation, Array.from(args));
+    if (status != null) {
+      resetCallbackCallStatus(status);
+    }
+    return result;
+  } catch (error) {
+    if (status == null) {
+      throw error;
+    }
+    writeCallbackError(status, error, {
+      lowerError,
+      lowerString,
+      defaultMessage: `${interfaceName}.${String(methodName)}() failed.`,
+    });
+    return defaultReturnValue;
+  }
+}
+
+export class UniffiCallbackRegistry {
+  constructor({
+    interfaceName = "callback interface",
+    firstHandle = undefined,
+    handleStep = undefined,
+    validate = undefined,
+  } = {}) {
+    this.interfaceName = interfaceName;
+    this._handleMap = new UniffiHandleMap({
+      firstHandle,
+      handleStep,
+    });
+    this._validate = validate;
+  }
+
+  _normalizeImplementation(value) {
+    const implementation = requireCallbackImplementation(value, this.interfaceName);
+    if (typeof this._validate === "function") {
+      this._validate(implementation);
+    }
+    return implementation;
+  }
+
+  register(value) {
+    return this._handleMap.insert(this._normalizeImplementation(value));
+  }
+
+  cloneHandle(handle) {
+    return this._handleMap.clone(handle);
+  }
+
+  get(handle) {
+    return this._handleMap.get(handle);
+  }
+
+  remove(handle) {
+    return this._handleMap.remove(handle);
+  }
+
+  take(handle) {
+    return this._handleMap.take(handle);
+  }
+
+  has(handle) {
+    return this._handleMap.has(handle);
+  }
+
+  clear() {
+    this._handleMap.clear();
+  }
+
+  invoke(handle, methodName, args = []) {
+    const implementation = this.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, this.interfaceName);
+    return method.apply(implementation, Array.from(args));
+  }
+
+  invokeWithRustCallStatus(handle, methodName, options = {}) {
+    return invokeCallbackMethod({
+      registry: this,
+      handle,
+      methodName,
+      ...options,
+    });
+  }
+
+  get size() {
+    return this._handleMap.size;
+  }
+}
+
+export function createCallbackRegistry(options = undefined) {
+  return new UniffiCallbackRegistry(options);
+}

@@ -1,1 +1,61 @@
-export {};
+import type { HandleMapOptions } from "./handle-map.js";
+import type { RustBufferStruct, RustCallStatusStruct } from "./ffi-types.js";
+
+export interface CallbackRegistryOptions<T extends object = Record<string, unknown>>
+  extends HandleMapOptions
+{
+  interfaceName?: string;
+  validate?: ((value: T) => void) | null;
+}
+
+export interface CallbackErrorOptions<E extends Error = Error> {
+  lowerError?: ((error: E) => RustBufferStruct | null | undefined) | null;
+  lowerString?: ((message: string) => RustBufferStruct) | null;
+  defaultMessage?: string;
+}
+
+export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Error>
+  extends CallbackErrorOptions<E>
+{
+  args?: readonly unknown[];
+  defaultReturnValue?: T;
+  interfaceName?: string;
+  status?: RustCallStatusStruct | null;
+}
+
+export declare function resetCallbackCallStatus(
+  status?: RustCallStatusStruct | null,
+): RustCallStatusStruct;
+export declare function writeCallbackError<E extends Error = Error>(
+  status: RustCallStatusStruct | null | undefined,
+  error: unknown,
+  options?: CallbackErrorOptions<E>,
+): E;
+export declare function invokeCallbackMethod<T = unknown, E extends Error = Error>(params: {
+  registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
+  handle: bigint | number;
+  methodName: string;
+} & InvokeCallbackMethodOptions<T, E>): T;
+
+export declare class UniffiCallbackRegistry<T extends object = Record<string, unknown>> {
+  readonly interfaceName: string;
+  constructor(options?: CallbackRegistryOptions<T>);
+  register(value: T): bigint;
+  cloneHandle(handle: bigint | number): bigint;
+  get(handle: bigint | number): T;
+  remove(handle: bigint | number | null | undefined): T | undefined;
+  take(handle: bigint | number): T;
+  has(handle: bigint | number | null | undefined): boolean;
+  clear(): void;
+  invoke<R>(handle: bigint | number, methodName: string, args?: readonly unknown[]): R;
+  invokeWithRustCallStatus<R, E extends Error = Error>(
+    handle: bigint | number,
+    methodName: string,
+    options?: InvokeCallbackMethodOptions<R, E>,
+  ): R;
+  readonly size: number;
+}
+
+export declare function createCallbackRegistry<T extends object = Record<string, unknown>>(
+  options?: CallbackRegistryOptions<T>,
+): UniffiCallbackRegistry<T>;

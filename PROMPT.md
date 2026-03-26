@@ -113,7 +113,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a `runtime/rust-call.js` + `.d.ts` module for sync Rust call handling and `RustCallStatus` checking.
 - [x] Add a `runtime/async-rust-call.js` + `.d.ts` module for Rust future polling, completion, cancellation, and cleanup.
 - [x] Add a `runtime/handle-map.js` + `.d.ts` module for foreign callback/object handles.
-- [ ] Add a `runtime/callbacks.js` + `.d.ts` module for callback-interface registration and callback error propagation.
+- [x] Add a `runtime/callbacks.js` + `.d.ts` module for callback-interface registration and callback error propagation.
 - [ ] Add a `runtime/objects.js` + `.d.ts` module for UniFFI object factories, object converters, and destruction semantics.
 - [ ] Generate Koffi declarations for every FFI function in `ci.ffi_definitions()`.
 - [ ] Generate Koffi struct definitions for every UniFFI FFI struct used by the component.

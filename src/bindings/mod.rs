@@ -198,6 +198,7 @@ pub struct NodeBindingGeneratorConfig {
     pub cdylib_name: Option<String>,
     pub node_engine: String,
     pub lib_path_literal: Option<String>,
+    pub bundled_prebuilds: bool,
     pub manual_load: bool,
     #[serde(alias = "module-format")]
     pub module_format: Option<String>,
@@ -221,6 +222,7 @@ impl Default for NodeBindingGeneratorConfig {
             cdylib_name: None,
             node_engine: ">=16".to_string(),
             lib_path_literal: None,
+            bundled_prebuilds: false,
             manual_load: false,
             module_format: None,
             commonjs: None,

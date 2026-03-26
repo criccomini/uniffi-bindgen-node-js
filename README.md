@@ -74,7 +74,7 @@ Defaults:
 - `bundled_prebuilds`: `false`
 - `manual_load`: `false`
 
-CLI flags apply after config-file settings. `bundled_prebuilds = true` cannot be combined with `lib_path_literal`, because both would otherwise define the default auto-load path. Legacy `lib_path_modules`, `lib_path_module`, `out_lib_path_module`, and `out_lib_path_modules` settings are no longer supported.
+CLI flags apply after config-file settings. `bundled_prebuilds = true` cannot be combined with `lib_path_literal`, because both would otherwise define the default auto-load path.
 
 ## Generated package layout
 

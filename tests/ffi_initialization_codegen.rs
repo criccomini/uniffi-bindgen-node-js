@@ -123,7 +123,14 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     }
 
     function defaultBundledTarget() {
-      return `${process.platform}-${process.arch}`;
+      if (process.platform !== "linux") {
+        return `${process.platform}-${process.arch}`;
+      }
+
+      const glibcVersionRuntime =
+        process.report?.getReport?.().header?.glibcVersionRuntime;
+      const linuxLibc = glibcVersionRuntime == null ? "musl" : "gnu";
+      return `${process.platform}-${process.arch}-${linuxLibc}`;
     }
 
     function defaultBundledLibraryPath() {

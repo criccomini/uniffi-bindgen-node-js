@@ -974,6 +974,17 @@ mod tests {
             rust_call_js.contains("export class UniffiRustCaller"),
             "unexpected runtime rust-call JS contents: {rust_call_js}"
         );
+        let handle_map_js =
+            fs::read_to_string(output_dir.join("runtime/handle-map.js").as_std_path())
+                .expect("runtime handle-map JS should be readable");
+        assert!(
+            handle_map_js.contains("export class UniffiHandleMap"),
+            "unexpected runtime handle-map JS contents: {handle_map_js}"
+        );
+        assert!(
+            handle_map_js.contains("export const FIRST_FOREIGN_HANDLE"),
+            "unexpected runtime handle-map JS contents: {handle_map_js}"
+        );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }

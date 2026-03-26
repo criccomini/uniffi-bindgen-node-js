@@ -225,7 +225,10 @@ impl ComponentModel {
         for record in &self.records {
             lines.push(render_js_record_converter(record)?);
         }
-        for enum_def in self.flat_enums.iter().chain(&self.tagged_enums) {
+        for enum_def in &self.flat_enums {
+            lines.push(render_js_flat_enum_converter(enum_def)?);
+        }
+        for enum_def in &self.tagged_enums {
             lines.push(format!(
                 "const {} = uniffiNotImplementedConverter({});",
                 type_converter_name(&enum_def.name),
@@ -859,6 +862,64 @@ fn render_js_flat_enum(enum_def: &EnumModel) -> Result<String> {
     Ok(lines.join("\n"))
 }
 
+fn render_js_flat_enum_converter(enum_def: &EnumModel) -> Result<String> {
+    let converter_name = type_converter_name(&enum_def.name);
+    let enum_type_name = json_string_literal(&enum_def.name)?;
+    let mut lines = vec![format!(
+        "const {} = new (class extends AbstractFfiConverterByteArray {{",
+        converter_name
+    )];
+    lines.push("  allocationSize(value) {".to_string());
+    lines.push(format!(
+        "    uniffiRequireFlatEnumValue({}, {}, value);",
+        enum_def.name, enum_type_name
+    ));
+    lines.push("    return 4;".to_string());
+    lines.push("  }".to_string());
+    lines.push(String::new());
+    lines.push("  write(value, writer) {".to_string());
+    lines.push(format!(
+        "    const enumValue = uniffiRequireFlatEnumValue({}, {}, value);",
+        enum_def.name, enum_type_name
+    ));
+    lines.push("    switch (enumValue) {".to_string());
+    for (index, variant) in enum_def.variants.iter().enumerate() {
+        lines.push(format!(
+            "      case {}:",
+            render_js_property_access(&enum_def.name, &variant.name)?
+        ));
+        lines.push(format!("        writer.writeInt32({});", index + 1));
+        lines.push("        return;".to_string());
+    }
+    lines.push("      default:".to_string());
+    lines.push(format!(
+        "        throw new UnexpectedEnumCase(`Unexpected {} case ${{String(enumValue)}}.`);",
+        enum_def.name
+    ));
+    lines.push("    }".to_string());
+    lines.push("  }".to_string());
+    lines.push(String::new());
+    lines.push("  read(reader) {".to_string());
+    lines.push("    const enumTag = reader.readInt32();".to_string());
+    lines.push("    switch (enumTag) {".to_string());
+    for (index, variant) in enum_def.variants.iter().enumerate() {
+        lines.push(format!("      case {}:", index + 1));
+        lines.push(format!(
+            "        return {};",
+            render_js_property_access(&enum_def.name, &variant.name)?
+        ));
+    }
+    lines.push("      default:".to_string());
+    lines.push(format!(
+        "        throw new UnexpectedEnumCase(`Unexpected {} case ${{String(enumTag)}}.`);",
+        enum_def.name
+    ));
+    lines.push("    }".to_string());
+    lines.push("  }".to_string());
+    lines.push("})();".to_string());
+    Ok(lines.join("\n"))
+}
+
 fn render_dts_flat_enum(enum_def: &EnumModel) -> Result<String> {
     let mut lines = vec![format!(
         "export declare const {}: Readonly<{{",
@@ -1198,7 +1259,7 @@ fn render_js_runtime_helpers(
     ffi_rustbuffer_free_identifier: &str,
 ) -> String {
     format!(
-        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
+        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
     )
 }
 
@@ -2250,6 +2311,34 @@ mod tests {
             !rendered
                 .js
                 .contains("const FfiConverterProfile = uniffiNotImplementedConverter(\"Profile\");"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const FfiConverterFlavor = new (class extends AbstractFfiConverterByteArray {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("writer.writeInt32(1);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("return Flavor[\"vanilla\"];"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            !rendered
+                .js
+                .contains("const FfiConverterFlavor = uniffiNotImplementedConverter(\"Flavor\");"),
             "unexpected JS output: {}",
             rendered.js
         );

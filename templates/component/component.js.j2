@@ -21,6 +21,7 @@ import {
   FfiConverterUInt32,
   FfiConverterUInt64,
 } from "./runtime/ffi-converters.js";
+import { UnexpectedEnumCase } from "./runtime/errors.js";
 import { rustCallAsync } from "./runtime/async-rust-call.js";
 import {
   createObjectConverter,

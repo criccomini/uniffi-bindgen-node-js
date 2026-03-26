@@ -1046,10 +1046,11 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
             render_js_params(&method.arguments)
         ));
         if method.is_async {
-            lines.push(format!(
-                "    return uniffiNotImplemented({});",
-                json_string_literal(&format!("{}.{}", object.name, method.name))?
-            ));
+            lines.extend(render_js_async_method_body(
+                method,
+                &factory_name,
+                &object.name,
+            )?);
         } else {
             lines.extend(render_js_sync_method_body(
                 method,
@@ -1323,6 +1324,66 @@ fn render_js_sync_method_body(
     Ok(lines)
 }
 
+fn render_js_async_method_body(
+    method: &MethodModel,
+    factory_name: &str,
+    object_name: &str,
+) -> Result<Vec<String>> {
+    let async_ffi = method.async_ffi.as_ref().with_context(|| {
+        format!(
+            "async method {}.{} is missing future scaffolding identifiers",
+            object_name, method.name
+        )
+    })?;
+    let mut lines = vec![format!(
+        "    const loweredSelf = {}.cloneHandle(this);",
+        factory_name
+    )];
+    lines.extend(render_js_argument_lowering(&method.arguments)?);
+    let start_args = render_js_ffi_call_args_with_leading(
+        &[String::from("loweredSelf")],
+        &method.arguments,
+        None,
+    );
+
+    lines.push("    return rustCallAsync({".to_string());
+    lines.push(format!(
+        "      rustFutureFunc: () => ffiFunctions.{}({}),",
+        method.ffi_func_identifier, start_args
+    ));
+    lines.push(format!(
+        "      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, continuationCallback, continuationHandle),",
+        async_ffi.poll_identifier
+    ));
+    lines.push(format!(
+        "      cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.cancel_identifier
+    ));
+    lines.push(format!(
+        "      completeFunc: (rustFuture, status) => ffiFunctions.{}(rustFuture, status),",
+        async_ffi.complete_identifier
+    ));
+    lines.push(format!(
+        "      freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.free_identifier
+    ));
+    lines.push(format!(
+        "      liftFunc: {},",
+        render_js_async_lift_closure(method.return_type.as_ref())?
+    ));
+    lines.push("      ...uniffiRustCallOptions(),".to_string());
+    lines.push("    });".to_string());
+
+    if method.throws_type.is_some() {
+        lines.push(format!(
+            "    // {}.{} throws a typed error, but error lifting is still pending.",
+            object_name, method.name
+        ));
+    }
+
+    Ok(lines)
+}
+
 fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> {
     match type_ {
         Type::UInt8 => Ok(format!("FfiConverterUInt8.lower({value_expr})")),
@@ -1394,6 +1455,16 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
             render_js_type_converter_expression(type_)?
         )),
         Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+    }
+}
+
+fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
+    match return_type {
+        Some(return_type) => Ok(format!(
+            "(uniffiResult) => {}",
+            render_js_lift_expression(return_type, "uniffiResult")?
+        )),
+        None => Ok("(_uniffiResult) => undefined".to_string()),
     }
 }
 
@@ -2049,6 +2120,13 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered.js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterProfile, uniffiResult),"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered.dts.contains(
                 "export interface Profile {\n  \"name\": string;\n  \"bytes\": Uint8Array;\n}"
             ),
@@ -2155,6 +2233,42 @@ mod tests {
             rendered
                 .js
                 .contains("return uniffiStoreObjectFactory.create(uniffiResult);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_async_method_object_lifting() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            interface Store {
+                constructor();
+                [Async] Store clone_async();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains(
+                "pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions."
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.create(uniffiResult),"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );

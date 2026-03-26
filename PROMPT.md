@@ -125,7 +125,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate constructor wrappers that lift returned handles into JS objects.
 - [x] Generate sync method wrappers that lower arguments, call FFI, check `RustCallStatus`, and lift results.
 - [x] Generate async method wrappers that create, poll, complete, and free Rust futures.
-- [ ] Generate record type definitions and record converters.
+- [x] Generate record type definitions and record converters.
 - [ ] Generate flat enum runtime representations and converters.
 - [ ] Generate tagged enum runtime representations and converters.
 - [ ] Generate error classes and error converters.

@@ -223,11 +223,7 @@ impl ComponentModel {
         let mut lines = Vec::new();
 
         for record in &self.records {
-            lines.push(format!(
-                "const {} = uniffiNotImplementedConverter({});",
-                type_converter_name(&record.name),
-                json_string_literal(&record.name)?
-            ));
+            lines.push(render_js_record_converter(record)?);
         }
         for enum_def in self.flat_enums.iter().chain(&self.tagged_enums) {
             lines.push(format!(
@@ -806,6 +802,53 @@ fn render_dts_callback_interface(callback_interface: &CallbackInterfaceModel) ->
     Ok(lines.join("\n"))
 }
 
+fn render_js_record_converter(record: &RecordModel) -> Result<String> {
+    let converter_name = type_converter_name(&record.name);
+    let record_type_name = json_string_literal(&record.name)?;
+    let mut lines = vec![format!(
+        "const {} = new (class extends AbstractFfiConverterByteArray {{",
+        converter_name
+    )];
+    lines.push("  allocationSize(value) {".to_string());
+    lines.push(format!(
+        "    const recordValue = uniffiRequireRecordObject({}, value);",
+        record_type_name
+    ));
+    lines.push(format!(
+        "    return {};",
+        render_js_record_allocation_size_expression(record)?
+    ));
+    lines.push("  }".to_string());
+    lines.push(String::new());
+    lines.push("  write(value, writer) {".to_string());
+    lines.push(format!(
+        "    const recordValue = uniffiRequireRecordObject({}, value);",
+        record_type_name
+    ));
+    for field in &record.fields {
+        lines.push(format!(
+            "    {}.write({}, writer);",
+            render_js_type_converter_expression(&field.type_)?,
+            render_js_property_access("recordValue", &field.name)?
+        ));
+    }
+    lines.push("  }".to_string());
+    lines.push(String::new());
+    lines.push("  read(reader) {".to_string());
+    lines.push("    return {".to_string());
+    for field in &record.fields {
+        lines.push(format!(
+            "      {}: {}.read(reader),",
+            quoted_property_name(&field.name)?,
+            render_js_type_converter_expression(&field.type_)?
+        ));
+    }
+    lines.push("    };".to_string());
+    lines.push("  }".to_string());
+    lines.push("})();".to_string());
+    Ok(lines.join("\n"))
+}
+
 fn render_js_flat_enum(enum_def: &EnumModel) -> Result<String> {
     let mut lines = vec![format!("export const {} = Object.freeze({{", enum_def.name)];
     for variant in &enum_def.variants {
@@ -1155,7 +1198,7 @@ fn render_js_runtime_helpers(
     ffi_rustbuffer_free_identifier: &str,
 ) -> String {
     format!(
-        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
+        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
     )
 }
 
@@ -1565,6 +1608,26 @@ fn render_named_return_type(type_name: &str, is_async: bool) -> String {
     }
 }
 
+fn render_js_record_allocation_size_expression(record: &RecordModel) -> Result<String> {
+    if record.fields.is_empty() {
+        return Ok("0".to_string());
+    }
+
+    let terms = record
+        .fields
+        .iter()
+        .map(|field| {
+            Ok(format!(
+                "{}.allocationSize({})",
+                render_js_type_converter_expression(&field.type_)?,
+                render_js_property_access("recordValue", &field.name)?
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(terms.join(" + "))
+}
+
 fn variant_type_name(type_name: &str, variant_name: &str) -> String {
     format!("{type_name}{}", variant_name.to_upper_camel_case())
 }
@@ -1587,6 +1650,14 @@ fn lowered_argument_name(argument_name: &str) -> String {
 
 fn quoted_property_name(name: &str) -> Result<String> {
     json_string_literal(name)
+}
+
+fn render_js_property_access(value_expr: &str, property_name: &str) -> Result<String> {
+    Ok(format!(
+        "{}[{}]",
+        value_expr,
+        json_string_literal(property_name)?
+    ))
 }
 
 fn json_string_literal(value: &str) -> Result<String> {
@@ -2153,6 +2224,34 @@ mod tests {
                 .contains("fetch(key: string): Promise<Profile>;"),
             "unexpected DTS output: {}",
             rendered.dts
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const FfiConverterProfile = new (class extends AbstractFfiConverterByteArray {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("FfiConverterString.write(recordValue[\"name\"], writer);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("FfiConverterBytes.write(recordValue[\"bytes\"], writer);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            !rendered
+                .js
+                .contains("const FfiConverterProfile = uniffiNotImplementedConverter(\"Profile\");"),
+            "unexpected JS output: {}",
+            rendered.js
         );
     }
 

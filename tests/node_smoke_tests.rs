@@ -73,6 +73,60 @@ assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
     remove_dir_all(package_dir);
 }
 
+#[test]
+fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempotent() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            bundled_prebuilds: true,
+            manual_load: true,
+            stage_root_sibling_library: true,
+            stage_host_prebuild: false,
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let expected_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("manual-load regression fixture should stage a sibling library");
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "manual-load-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{ realpathSync }} from "node:fs";
+import {{ Flavor, ScanResult, Store, echo_bytes, echo_record, load, unload }} from "./index.js";
+import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
+
+assert.equal(ffiMetadata.bundledPrebuilds, true);
+assert.equal(ffiMetadata.manualLoad, true);
+assert.equal(isLoaded(), false);
+
+const firstBindings = load("./libfixture_basic.dylib");
+assert.equal(isLoaded(), true);
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
+
+const secondBindings = load("libfixture_basic.dylib");
+assert.strictEqual(secondBindings, firstBindings);
+
+{}
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+"#,
+            serde_json::to_string(expected_library_path.as_str())
+                .expect("sibling library path should serialize"),
+            basic_fixture_api_smoke_body()
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
 fn basic_fixture_api_smoke_body() -> &'static str {
     r#"const seed = {
   name: "seed",

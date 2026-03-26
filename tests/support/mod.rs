@@ -171,6 +171,24 @@ pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
     }
 }
 
+pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
+    rewrite_package_dependency_to_local_fixture(package_dir, "koffi", &local_koffi_fixture_dir());
+
+    let output = Command::new("npm")
+        .args(["install", "--no-package-lock"])
+        .current_dir(package_dir.as_std_path())
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run npm install in {package_dir}: {error}"));
+
+    if !output.status.success() {
+        panic!(
+            "failed to run npm install in {package_dir}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 pub fn remove_dir_all(path: &Utf8PathBuf) {
     if path.exists() {
         fs::remove_dir_all(path.as_std_path())
@@ -233,6 +251,46 @@ fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) {
             });
         }
     }
+}
+
+fn local_koffi_fixture_dir() -> Utf8PathBuf {
+    Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("npm-fixtures")
+        .join("koffi")
+}
+
+fn rewrite_package_dependency_to_local_fixture(
+    package_dir: &Utf8PathBuf,
+    dependency_name: &str,
+    dependency_dir: &Utf8PathBuf,
+) {
+    let package_json_path = package_dir.join("package.json");
+    let mut package_json: Value = serde_json::from_str(
+        &fs::read_to_string(package_json_path.as_std_path()).unwrap_or_else(|error| {
+            panic!("failed to read generated package manifest {package_json_path}: {error}")
+        }),
+    )
+    .unwrap_or_else(|error| {
+        panic!("failed to parse generated package manifest {package_json_path}: {error}")
+    });
+
+    let dependencies = package_json
+        .get_mut("dependencies")
+        .and_then(Value::as_object_mut)
+        .unwrap_or_else(|| panic!("generated package manifest is missing dependencies"));
+    dependencies.insert(
+        dependency_name.to_string(),
+        Value::String(format!("file:{}", dependency_dir)),
+    );
+
+    fs::write(
+        package_json_path.as_std_path(),
+        serde_json::to_vec_pretty(&package_json).expect("package.json should serialize"),
+    )
+    .unwrap_or_else(|error| {
+        panic!("failed to write generated package manifest {package_json_path}: {error}")
+    });
 }
 
 fn run_cargo_command(

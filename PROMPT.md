@@ -143,7 +143,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Create a local fixture crate for synchronous callback interfaces.
 - [x] Add Rust tests that snapshot generated JS and `.d.ts` output for the fixtures.
 - [x] Add Rust tests for config parsing and output path resolution.
-- [ ] Add Rust tests for unsupported-feature diagnostics.
+- [x] Add Rust tests for unsupported-feature diagnostics.
 - [ ] Add Rust tests for generated checksum and contract-version initialization code.
 - [ ] Build a fixture cdylib during tests.
 - [ ] Generate a Node package into a temp directory.

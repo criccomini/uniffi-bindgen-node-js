@@ -100,6 +100,16 @@ class ByteWriter {
     this.offset += 4;
   }
 
+  writeUInt32(value) {
+    this.view.setUint32(this.offset, value);
+    this.offset += 4;
+  }
+
+  writeUInt64(value) {
+    this.view.setBigUint64(this.offset, normalizeBigInt(value));
+    this.offset += 8;
+  }
+
   writeBytes(value) {
     const bytes = toUint8Array(value);
     this.bytes.set(bytes, this.offset);
@@ -134,6 +144,18 @@ class ByteReader {
     return value;
   }
 
+  readUInt32() {
+    const value = this.view.getUint32(this.offset);
+    this.offset += 4;
+    return value;
+  }
+
+  readUInt64() {
+    const value = this.view.getBigUint64(this.offset);
+    this.offset += 8;
+    return value;
+  }
+
   readBytes(length) {
     const end = this.offset + length;
     const slice = this.bytes.slice(this.offset, end);
@@ -152,6 +174,10 @@ function encodeString(value) {
 
 function decodeString(reader) {
   return TEXT_DECODER.decode(reader.readBytes(reader.readInt32()));
+}
+
+function decodeSerializedString(buffer) {
+  return decodeString(new ByteReader(buffer));
 }
 
 function allocationSizeForBytes(value) {
@@ -272,6 +298,140 @@ function encodeFixtureErrorInvalidState(message) {
   writer.writeInt32(2);
   writer.writeBytes(encodedMessage);
   return writer.finish();
+}
+
+function optionalStringAllocationSize(value) {
+  return value == null ? 1 : 1 + encodeString(value).byteLength;
+}
+
+function writeOptionalString(writer, value) {
+  if (value == null) {
+    writer.writeInt8(0);
+    return;
+  }
+  writer.writeInt8(1);
+  writer.writeBytes(encodeString(value));
+}
+
+function writeOptionalUInt32(writer, value) {
+  if (value == null) {
+    writer.writeInt8(0);
+    return;
+  }
+  writer.writeInt8(1);
+  writer.writeUInt32(value);
+}
+
+function decodeOptionalHandle(bytes) {
+  const reader = new ByteReader(bytes);
+  const tag = reader.readInt8();
+  if (tag === 0) {
+    return undefined;
+  }
+  if (tag === 1) {
+    return reader.readUInt64();
+  }
+  throw new Error(`unexpected optional handle tag ${tag}`);
+}
+
+function writeLogLevel(writer, level) {
+  switch (level) {
+    case "Off":
+      writer.writeInt32(1);
+      return;
+    case "Error":
+      writer.writeInt32(2);
+      return;
+    case "Warn":
+      writer.writeInt32(3);
+      return;
+    case "Info":
+      writer.writeInt32(4);
+      return;
+    case "Debug":
+      writer.writeInt32(5);
+      return;
+    case "Trace":
+      writer.writeInt32(6);
+      return;
+    default:
+      throw new Error(`unexpected LogLevel ${String(level)}`);
+  }
+}
+
+function decodeLogLevel(bytes) {
+  const reader = new ByteReader(bytes);
+  const tag = reader.readInt32();
+  switch (tag) {
+    case 1:
+      return "Off";
+    case 2:
+      return "Error";
+    case 3:
+      return "Warn";
+    case 4:
+      return "Info";
+    case 5:
+      return "Debug";
+    case 6:
+      return "Trace";
+    default:
+      throw new Error(`unexpected LogLevel tag ${tag}`);
+  }
+}
+
+function logRecordAllocationSize(record) {
+  return (
+    4 +
+    encodeString(record.target).byteLength +
+    encodeString(record.message).byteLength +
+    optionalStringAllocationSize(record.module_path) +
+    optionalStringAllocationSize(record.file) +
+    (record.line == null ? 1 : 5)
+  );
+}
+
+function encodeLogRecord(record) {
+  const writer = new ByteWriter(logRecordAllocationSize(record));
+  writeLogLevel(writer, record.level);
+  writer.writeBytes(encodeString(record.target));
+  writer.writeBytes(encodeString(record.message));
+  writeOptionalString(writer, record.module_path);
+  writeOptionalString(writer, record.file);
+  writeOptionalUInt32(writer, record.line);
+  return writer.finish();
+}
+
+function applyDottedJsonPath(root, key, value) {
+  if (key.length === 0) {
+    throw new Error("key cannot be empty");
+  }
+
+  let current = root;
+  const parts = key.split(".");
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part.length === 0) {
+      throw new Error("key has an empty path segment");
+    }
+
+    const isLast = index === parts.length - 1;
+    if (isLast) {
+      current[part] = value;
+      return;
+    }
+
+    const next = current[part];
+    if (next == null) {
+      current[part] = {};
+      current = current[part];
+      continue;
+    }
+    if (typeof next !== "object" || Array.isArray(next)) {
+      throw new Error(`segment '${part}' is not an object`);
+    }
+    current = next;
+  }
 }
 
 function cloneBlobRecord(record) {
@@ -519,10 +679,238 @@ function createBasicFixtureRuntime(libraryPath) {
   return handlers;
 }
 
+function createSlateDbRuntime(libraryPath) {
+  const metadata = parseFfiMetadata(libraryPath);
+  const settings = new Map();
+  const writeBatches = new Map();
+  let nextSettingsHandle = 1n;
+  let nextWriteBatchHandle = 1000n;
+  let logCallbackVtable = null;
+  let mergeOperatorVtable = null;
+
+  function getSettings(handle) {
+    const normalizedHandle = normalizeBigInt(handle);
+    const value = settings.get(normalizedHandle);
+    if (value == null) {
+      throw new Error(`unknown Settings handle ${normalizedHandle}`);
+    }
+    return value;
+  }
+
+  function getWriteBatch(handle) {
+    const normalizedHandle = normalizeBigInt(handle);
+    const value = writeBatches.get(normalizedHandle);
+    if (value == null) {
+      throw new Error(`unknown WriteBatch handle ${normalizedHandle}`);
+    }
+    return value;
+  }
+
+  const handlers = new Map([
+    [
+      metadata.contractVersionFunction,
+      () => metadata.contractVersion,
+    ],
+    [
+      "ffi_slatedb_uniffi_rustbuffer_alloc",
+      (size, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(new Uint8Array(Number(size)));
+      },
+    ],
+    [
+      "ffi_slatedb_uniffi_rustbuffer_from_bytes",
+      (foreignBytes, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(foreignBytesToUint8Array(foreignBytes));
+      },
+    ],
+    [
+      "ffi_slatedb_uniffi_rustbuffer_free",
+      (_buffer, status) => {
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "ffi_slatedb_uniffi_rustbuffer_reserve",
+      (buffer, additional, status) => {
+        const current = rustBufferToUint8Array(buffer);
+        const reserved = new Uint8Array(current.byteLength + Number(additional));
+        reserved.set(current);
+        setCallSuccess(status);
+        return rustBufferFromBytes(reserved);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_init_callback_vtable_logcallback",
+      (vtable) => {
+        logCallbackVtable = vtable;
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_init_callback_vtable_mergeoperator",
+      (vtable) => {
+        mergeOperatorVtable = vtable;
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_constructor_settings_default",
+      (status) => {
+        const handle = nextSettingsHandle;
+        nextSettingsHandle += 1n;
+        settings.set(handle, {
+          flush_interval: "100ms",
+        });
+        setCallSuccess(status);
+        return handle;
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_clone_settings",
+      (handle, status) => {
+        getSettings(handle);
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_free_settings",
+      (handle, status) => {
+        settings.delete(normalizeBigInt(handle));
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_method_settings_set",
+      (handle, keyBuffer, valueJsonBuffer, status) => {
+        const settingsValue = getSettings(handle);
+        const key = decodeSerializedString(rustBufferToUint8Array(keyBuffer));
+        const value = JSON.parse(
+          decodeSerializedString(rustBufferToUint8Array(valueJsonBuffer)),
+        );
+        applyDottedJsonPath(settingsValue, key, value);
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_method_settings_to_json_string",
+      (handle, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(
+          encodeString(JSON.stringify(getSettings(handle))),
+        );
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_constructor_writebatch_new",
+      (status) => {
+        const handle = nextWriteBatchHandle;
+        nextWriteBatchHandle += 1n;
+        writeBatches.set(handle, []);
+        setCallSuccess(status);
+        return handle;
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_clone_writebatch",
+      (handle, status) => {
+        getWriteBatch(handle);
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_free_writebatch",
+      (handle, status) => {
+        writeBatches.delete(normalizeBigInt(handle));
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_method_writebatch_put",
+      (handle, keyBuffer, valueBuffer, status) => {
+        const batch = getWriteBatch(handle);
+        batch.push({
+          kind: "put",
+          key: decodeSerializedBytes(rustBufferToUint8Array(keyBuffer)),
+          value: decodeSerializedBytes(rustBufferToUint8Array(valueBuffer)),
+        });
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_method_writebatch_delete",
+      (handle, keyBuffer, status) => {
+        const batch = getWriteBatch(handle);
+        batch.push({
+          kind: "delete",
+          key: decodeSerializedBytes(rustBufferToUint8Array(keyBuffer)),
+        });
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_slatedb_uniffi_fn_func_init_logging",
+      (levelBuffer, callbackBuffer, status) => {
+        const level = decodeLogLevel(rustBufferToUint8Array(levelBuffer));
+        const callbackHandle = decodeOptionalHandle(
+          rustBufferToUint8Array(callbackBuffer),
+        );
+
+        if (callbackHandle != null) {
+          if (logCallbackVtable?.log == null) {
+            throw new Error("LogCallback vtable was not registered before init_logging");
+          }
+
+          const callbackStatus = {
+            code: CALL_SUCCESS,
+            error_buf: emptyRustBuffer(),
+          };
+          logCallbackVtable.log(
+            callbackHandle,
+            rustBufferFromBytes(
+              encodeLogRecord({
+                level,
+                target: "slatedb",
+                message: "logging initialized",
+                module_path: "slatedb::logging",
+                file: undefined,
+                line: undefined,
+              }),
+            ),
+            undefined,
+            callbackStatus,
+          );
+
+          if (callbackStatus.code !== CALL_SUCCESS) {
+            setCallError(status, callbackStatus.error_buf ?? emptyRustBuffer());
+            return;
+          }
+        }
+
+        if (mergeOperatorVtable?.merge == null && mergeOperatorVtable != null) {
+          throw new Error("MergeOperator vtable was registered without a merge callback");
+        }
+
+        setCallSuccess(status);
+      },
+    ],
+  ]);
+
+  for (const [checksumFunctionName, checksum] of metadata.checksums.entries()) {
+    handlers.set(checksumFunctionName, () => checksum);
+  }
+
+  return handlers;
+}
+
 function createFixtureHandlers(libraryPath) {
   const libraryName = basename(libraryPath);
   if (libraryName.includes("fixture_basic")) {
     return createBasicFixtureRuntime(libraryPath);
+  }
+  if (libraryName.includes("slatedb_uniffi")) {
+    return createSlateDbRuntime(libraryPath);
   }
   return {
     get(name) {

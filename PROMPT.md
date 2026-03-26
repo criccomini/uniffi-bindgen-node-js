@@ -154,11 +154,11 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Build `/Users/chrisriccomini/Code/slatedb/bindings/uniffi` as a cdylib without modifying the SlateDB repo.
 - [x] Generate a Node package from the built SlateDB library into a temp directory.
 - [x] Install npm dependencies for the generated package.
-- [ ] Run a smoke script that imports the generated SlateDB package.
-- [ ] In the smoke script, call `Settings.default()`, `set()`, and `to_json_string()`.
-- [ ] In the smoke script, create a `WriteBatch`, call `put()` with `Buffer` keys and values, and call `delete()`.
-- [ ] In the smoke script, call `init_logging()` with a JS callback implementation and verify callback delivery.
-- [ ] Treat successful import plus these calls as the first end-to-end acceptance gate.
+- [x] Run a smoke script that imports the generated SlateDB package.
+- [x] In the smoke script, call `Settings.default()`, `set()`, and `to_json_string()`.
+- [x] In the smoke script, create a `WriteBatch`, call `put()` with `Buffer` keys and values, and call `delete()`.
+- [x] In the smoke script, call `init_logging()` with a JS callback implementation and verify callback delivery.
+- [x] Treat successful import plus these calls as the first end-to-end acceptance gate.
 - [ ] Add a README for this repo describing installation, CLI usage, supported UniFFI features, and current limitations.
 - [ ] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
 - [ ] Document that v1 targets UniFFI 0.29.x first.

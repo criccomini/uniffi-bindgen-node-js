@@ -1847,4 +1847,72 @@ mod tests {
             "unexpected error: {error}"
         );
     }
+
+    #[test]
+    fn new_config_parses_bindings_node_settings_and_defaults() {
+        let explicit = parse_node_config(
+            r#"
+            [bindings.node]
+            package_name = "fixture-package"
+            cdylib_name = "fixture_cdylib"
+            node_engine = ">=20"
+            lib_path_literal = "./native/libfixture.node"
+            manual_load = true
+            "#,
+        );
+
+        assert_eq!(explicit.package_name.as_deref(), Some("fixture-package"));
+        assert_eq!(explicit.cdylib_name.as_deref(), Some("fixture_cdylib"));
+        assert_eq!(explicit.node_engine, ">=20");
+        assert_eq!(
+            explicit.lib_path_literal.as_deref(),
+            Some("./native/libfixture.node")
+        );
+        assert!(explicit.manual_load);
+
+        let defaulted = parse_node_config(
+            r#"
+            [bindings.node]
+            "#,
+        );
+
+        assert_eq!(defaulted.package_name, None);
+        assert_eq!(defaulted.cdylib_name, None);
+        assert_eq!(defaulted.node_engine, ">=16");
+        assert_eq!(defaulted.lib_path_literal, None);
+        assert!(!defaulted.manual_load);
+    }
+
+    #[test]
+    fn generated_package_layout_resolves_output_paths_from_out_dir_and_namespace() {
+        let out_dir = temp_dir_path("layout-paths");
+        let settings = GenerationSettings {
+            out_dir: out_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+        let component = component_with_namespace("example");
+
+        let layout =
+            GeneratedPackageLayout::from_component(&settings, &component).expect("layout");
+
+        assert_eq!(layout.root_dir, out_dir);
+        assert_eq!(layout.package_json_path(), layout.root_dir.join("package.json"));
+        assert_eq!(layout.index_js_path(), layout.root_dir.join("index.js"));
+        assert_eq!(layout.index_dts_path(), layout.root_dir.join("index.d.ts"));
+        assert_eq!(layout.component_js_path(), layout.root_dir.join("example.js"));
+        assert_eq!(layout.component_dts_path(), layout.root_dir.join("example.d.ts"));
+        assert_eq!(
+            layout.component_ffi_js_path(),
+            layout.root_dir.join("example-ffi.js")
+        );
+        assert_eq!(
+            layout.component_ffi_dts_path(),
+            layout.root_dir.join("example-ffi.d.ts")
+        );
+        assert_eq!(
+            layout.runtime_path("errors.js"),
+            layout.root_dir.join("runtime/errors.js")
+        );
+    }
 }

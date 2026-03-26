@@ -209,6 +209,51 @@ pub fn run_node_script(package_dir: &Utf8PathBuf, script_name: &str, source: &st
     }
 }
 
+pub fn run_typescript_check(package_dir: &Utf8PathBuf, script_name: &str, source: &str) {
+    let script_path = package_dir.join(script_name);
+    fs::write(script_path.as_std_path(), source)
+        .unwrap_or_else(|error| panic!("failed to write TypeScript script {script_path}: {error}"));
+
+    let tsconfig_path = package_dir.join("tsconfig.json");
+    fs::write(
+        tsconfig_path.as_std_path(),
+        r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": false
+  },
+  "files": ["smoke.ts"]
+}
+"#,
+    )
+    .unwrap_or_else(|error| panic!("failed to write TypeScript config {tsconfig_path}: {error}"));
+
+    let tsc_path = find_typescript_cli().unwrap_or_else(|| {
+        panic!("failed to locate a local TypeScript compiler for generated package checks")
+    });
+    let output = Command::new(tsc_path.as_str())
+        .arg("--project")
+        .arg(tsconfig_path.as_str())
+        .current_dir(package_dir.as_std_path())
+        .output()
+        .unwrap_or_else(|error| {
+            panic!("failed to run TypeScript compiler in {package_dir}: {error}")
+        });
+
+    if !output.status.success() {
+        panic!(
+            "TypeScript check failed in {package_dir}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 pub fn remove_dir_all(path: &Utf8PathBuf) {
     if path.exists() {
         fs::remove_dir_all(path.as_std_path())
@@ -278,6 +323,27 @@ fn local_koffi_fixture_dir() -> Utf8PathBuf {
         .join("tests")
         .join("npm-fixtures")
         .join("koffi")
+}
+
+fn find_typescript_cli() -> Option<Utf8PathBuf> {
+    let output = Command::new("zsh")
+        .args([
+            "-lc",
+            "command -v tsc || ls -1d /opt/homebrew/Cellar/heroku/*/libexec/node_modules/typescript/bin/tsc 2>/dev/null | head -n 1 || ls -1d /opt/homebrew/Cellar/heroku/*/lib/client/*/node_modules/typescript/bin/tsc 2>/dev/null | head -n 1",
+        ])
+        .output()
+        .unwrap_or_else(|error| panic!("failed to search for a local TypeScript compiler: {error}"));
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let candidate = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if candidate.is_empty() {
+        None
+    } else {
+        Some(Utf8PathBuf::from(candidate))
+    }
 }
 
 fn rewrite_package_dependency_to_local_fixture(

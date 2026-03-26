@@ -149,7 +149,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate a Node package into a temp directory.
 - [x] Install npm dependencies in the temp directory.
 - [x] Run a plain JS smoke script that imports the generated package and exercises sync and async calls.
-- [ ] Run a TypeScript smoke script or `tsc --noEmit` check against the generated `.d.ts` output.
+- [x] Run a TypeScript smoke script or `tsc --noEmit` check against the generated `.d.ts` output.
 - [ ] Verify that passing Node `Buffer` values into `Uint8Array` byte parameters works correctly.
 - [ ] Build `/Users/chrisriccomini/Code/slatedb/bindings/uniffi` as a cdylib without modifying the SlateDB repo.
 - [ ] Generate a Node package from the built SlateDB library into a temp directory.

@@ -1,6 +1,31 @@
 import { ffiFunctions } from "./{{ namespace }}-ffi.js";
-import { FfiConverterString } from "./runtime/ffi-converters.js";
-import { createObjectFactory, UniffiObjectBase } from "./runtime/objects.js";
+import { createForeignBytes, RustBufferValue } from "./runtime/ffi-types.js";
+import {
+  FfiConverterArray,
+  FfiConverterBool,
+  FfiConverterBytes,
+  FfiConverterDuration,
+  FfiConverterFloat32,
+  FfiConverterFloat64,
+  FfiConverterInt8,
+  FfiConverterInt16,
+  FfiConverterInt32,
+  FfiConverterInt64,
+  FfiConverterMap,
+  FfiConverterOptional,
+  FfiConverterString,
+  FfiConverterTimestamp,
+  FfiConverterUInt8,
+  FfiConverterUInt16,
+  FfiConverterUInt32,
+  FfiConverterUInt64,
+} from "./runtime/ffi-converters.js";
+import { rustCallAsync } from "./runtime/async-rust-call.js";
+import {
+  createObjectConverter,
+  createObjectFactory,
+  UniffiObjectBase,
+} from "./runtime/objects.js";
 import { defaultRustCaller } from "./runtime/rust-call.js";
 
 export const componentMetadata = Object.freeze({

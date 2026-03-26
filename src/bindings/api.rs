@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
 use uniffi_bindgen::interface::{
-    AsType, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function, Method,
-    Object, Type, Variant,
+    AsType, Callable, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function,
+    Method, Object, Type, Variant,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +16,7 @@ pub(crate) struct ComponentModel {
     pub errors: Vec<ErrorModel>,
     pub callback_interfaces: Vec<CallbackInterfaceModel>,
     pub objects: Vec<ObjectModel>,
+    pub ffi_rustbuffer_from_bytes_identifier: String,
     pub ffi_rustbuffer_free_identifier: String,
 }
 
@@ -47,7 +48,7 @@ impl ComponentModel {
             functions: ci
                 .function_definitions()
                 .iter()
-                .map(FunctionModel::from_function)
+                .map(|function| FunctionModel::from_function(function, ci))
                 .collect(),
             records: ci
                 .record_definitions()
@@ -59,13 +60,18 @@ impl ComponentModel {
             callback_interfaces: ci
                 .callback_interface_definitions()
                 .iter()
-                .map(CallbackInterfaceModel::from_callback_interface)
+                .map(|callback_interface| {
+                    CallbackInterfaceModel::from_callback_interface(callback_interface, ci)
+                })
                 .collect(),
             objects: ci
                 .object_definitions()
                 .iter()
-                .map(ObjectModel::from_object)
+                .map(|object| ObjectModel::from_object(object, ci))
                 .collect(),
+            ffi_rustbuffer_from_bytes_identifier: ffi_symbol_identifier(
+                ci.ffi_rustbuffer_from_bytes().name(),
+            ),
             ffi_rustbuffer_free_identifier: ffi_symbol_identifier(ci.ffi_rustbuffer_free().name()),
         };
         model.validate_renderable_types()?;
@@ -83,8 +89,9 @@ impl ComponentModel {
             );
         }
 
-        if !self.objects.is_empty() {
-            js_sections.push(render_js_object_runtime_helpers(
+        if !self.objects.is_empty() || self.has_placeholder_converters() {
+            js_sections.push(render_js_runtime_helpers(
+                &self.ffi_rustbuffer_from_bytes_identifier,
                 &self.ffi_rustbuffer_free_identifier,
             ));
         }
@@ -160,6 +167,10 @@ impl ComponentModel {
             );
         }
 
+        if self.has_placeholder_converters() {
+            js_sections.push(self.render_js_placeholder_converters()?);
+        }
+
         if !self.functions.is_empty() {
             let functions_js = self
                 .functions
@@ -198,6 +209,49 @@ impl ComponentModel {
             js: js_sections.join("\n\n"),
             dts: dts_sections.join("\n\n"),
         })
+    }
+
+    fn has_placeholder_converters(&self) -> bool {
+        !self.records.is_empty()
+            || !self.flat_enums.is_empty()
+            || !self.tagged_enums.is_empty()
+            || !self.errors.is_empty()
+            || !self.callback_interfaces.is_empty()
+    }
+
+    fn render_js_placeholder_converters(&self) -> Result<String> {
+        let mut lines = Vec::new();
+
+        for record in &self.records {
+            lines.push(format!(
+                "const {} = uniffiNotImplementedConverter({});",
+                type_converter_name(&record.name),
+                json_string_literal(&record.name)?
+            ));
+        }
+        for enum_def in self.flat_enums.iter().chain(&self.tagged_enums) {
+            lines.push(format!(
+                "const {} = uniffiNotImplementedConverter({});",
+                type_converter_name(&enum_def.name),
+                json_string_literal(&enum_def.name)?
+            ));
+        }
+        for error in &self.errors {
+            lines.push(format!(
+                "const {} = uniffiNotImplementedConverter({});",
+                type_converter_name(&error.name),
+                json_string_literal(&error.name)?
+            ));
+        }
+        for callback_interface in &self.callback_interfaces {
+            lines.push(format!(
+                "const {} = uniffiNotImplementedConverter({});",
+                type_converter_name(&callback_interface.name),
+                json_string_literal(&callback_interface.name)?
+            ));
+        }
+
+        Ok(lines.join("\n"))
     }
 
     fn validate_renderable_types(&self) -> Result<()> {
@@ -359,10 +413,12 @@ pub(crate) struct FunctionModel {
     pub arguments: Vec<ArgumentModel>,
     pub return_type: Option<Type>,
     pub throws_type: Option<Type>,
+    pub ffi_func_identifier: String,
+    pub async_ffi: Option<AsyncScaffoldingModel>,
 }
 
 impl FunctionModel {
-    fn from_function(function: &Function) -> Self {
+    fn from_function(function: &Function, ci: &ComponentInterface) -> Self {
         Self {
             name: function.name().to_string(),
             is_async: function.is_async(),
@@ -373,6 +429,8 @@ impl FunctionModel {
                 .collect(),
             return_type: function.return_type().cloned(),
             throws_type: function.throws_type().cloned(),
+            ffi_func_identifier: ffi_symbol_identifier(function.ffi_func().name()),
+            async_ffi: AsyncScaffoldingModel::from_callable(function, ci),
         }
     }
 }
@@ -439,13 +497,16 @@ pub(crate) struct CallbackInterfaceModel {
 }
 
 impl CallbackInterfaceModel {
-    fn from_callback_interface(callback_interface: &CallbackInterface) -> Self {
+    fn from_callback_interface(
+        callback_interface: &CallbackInterface,
+        ci: &ComponentInterface,
+    ) -> Self {
         Self {
             name: callback_interface.name().to_string(),
             methods: callback_interface
                 .methods()
                 .into_iter()
-                .map(MethodModel::from_method)
+                .map(|method| MethodModel::from_method(method, ci))
                 .collect(),
         }
     }
@@ -461,18 +522,18 @@ pub(crate) struct ObjectModel {
 }
 
 impl ObjectModel {
-    fn from_object(object: &Object) -> Self {
+    fn from_object(object: &Object, ci: &ComponentInterface) -> Self {
         Self {
             name: object.name().to_string(),
             constructors: object
                 .constructors()
                 .into_iter()
-                .map(ConstructorModel::from_constructor)
+                .map(|constructor| ConstructorModel::from_constructor(constructor, ci))
                 .collect(),
             methods: object
                 .methods()
                 .into_iter()
-                .map(MethodModel::from_method)
+                .map(|method| MethodModel::from_method(method, ci))
                 .collect(),
             ffi_object_clone_identifier: ffi_symbol_identifier(object.ffi_object_clone().name()),
             ffi_object_free_identifier: ffi_symbol_identifier(object.ffi_object_free().name()),
@@ -487,10 +548,12 @@ pub(crate) struct ConstructorModel {
     pub is_async: bool,
     pub arguments: Vec<ArgumentModel>,
     pub throws_type: Option<Type>,
+    pub ffi_func_identifier: String,
+    pub async_ffi: Option<AsyncScaffoldingModel>,
 }
 
 impl ConstructorModel {
-    fn from_constructor(constructor: &Constructor) -> Self {
+    fn from_constructor(constructor: &Constructor, ci: &ComponentInterface) -> Self {
         Self {
             name: constructor.name().to_string(),
             is_primary: constructor.is_primary_constructor(),
@@ -501,6 +564,8 @@ impl ConstructorModel {
                 .map(ArgumentModel::from_argument)
                 .collect(),
             throws_type: constructor.throws_type().cloned(),
+            ffi_func_identifier: ffi_symbol_identifier(constructor.ffi_func().name()),
+            async_ffi: AsyncScaffoldingModel::from_callable(constructor, ci),
         }
     }
 }
@@ -512,10 +577,12 @@ pub(crate) struct MethodModel {
     pub arguments: Vec<ArgumentModel>,
     pub return_type: Option<Type>,
     pub throws_type: Option<Type>,
+    pub ffi_func_identifier: String,
+    pub async_ffi: Option<AsyncScaffoldingModel>,
 }
 
 impl MethodModel {
-    fn from_method(method: &Method) -> Self {
+    fn from_method(method: &Method, ci: &ComponentInterface) -> Self {
         Self {
             name: method.name().to_string(),
             is_async: method.is_async(),
@@ -527,7 +594,28 @@ impl MethodModel {
                 .collect(),
             return_type: method.return_type().cloned(),
             throws_type: method.throws_type().cloned(),
+            ffi_func_identifier: ffi_symbol_identifier(method.ffi_func().name()),
+            async_ffi: AsyncScaffoldingModel::from_callable(method, ci),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AsyncScaffoldingModel {
+    pub poll_identifier: String,
+    pub cancel_identifier: String,
+    pub complete_identifier: String,
+    pub free_identifier: String,
+}
+
+impl AsyncScaffoldingModel {
+    fn from_callable<T: Callable>(callable: &T, ci: &ComponentInterface) -> Option<Self> {
+        callable.is_async().then(|| Self {
+            poll_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_poll(ci)),
+            cancel_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_cancel(ci)),
+            complete_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_complete(ci)),
+            free_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_free(ci)),
+        })
     }
 }
 
@@ -899,6 +987,7 @@ fn render_dts_error(error: &ErrorModel) -> Result<String> {
 
 fn render_js_object(object: &ObjectModel) -> Result<String> {
     let factory_name = object_factory_name(&object.name);
+    let converter_name = object_converter_name(&object.name);
     let mut lines = vec![format!(
         "export class {} extends UniffiObjectBase {{",
         object.name
@@ -914,14 +1003,19 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
             render_js_params(&primary_constructor.arguments)
         ));
         lines.push("    super();".to_string());
+        lines.extend(render_js_sync_constructor_body(
+            primary_constructor,
+            Some("this"),
+            &factory_name,
+        )?);
     } else {
         lines.push("  constructor() {".to_string());
         lines.push("    super();".to_string());
+        lines.push(format!(
+            "    return uniffiNotImplemented({});",
+            json_string_literal(&format!("{}.constructor", object.name))?
+        ));
     }
-    lines.push(format!(
-        "    return uniffiNotImplemented({});",
-        json_string_literal(&format!("{}.constructor", object.name))?
-    ));
     lines.push("  }".to_string());
 
     for constructor in &object.constructors {
@@ -935,10 +1029,11 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
             js_member_identifier(&constructor.name),
             render_js_params(&constructor.arguments)
         ));
-        lines.push(format!(
-            "    return uniffiNotImplemented({});",
-            json_string_literal(&format!("{}.{}", object.name, constructor.name))?
-        ));
+        lines.extend(render_js_constructor_body(
+            constructor,
+            &factory_name,
+            &object.name,
+        )?);
         lines.push("  }".to_string());
     }
 
@@ -987,6 +1082,10 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
     lines.push("    );".to_string());
     lines.push("  },".to_string());
     lines.push("});".to_string());
+    lines.push(format!(
+        "const {} = createObjectConverter({});",
+        converter_name, factory_name
+    ));
     Ok(lines.join("\n"))
 }
 
@@ -1042,10 +1141,191 @@ fn render_js_params(arguments: &[ArgumentModel]) -> String {
         .join(", ")
 }
 
-fn render_js_object_runtime_helpers(ffi_rustbuffer_free_identifier: &str) -> String {
+fn render_js_runtime_helpers(
+    ffi_rustbuffer_from_bytes_identifier: &str,
+    ffi_rustbuffer_free_identifier: &str,
+) -> String {
     format!(
-        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}"
+        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
     )
+}
+
+fn render_js_constructor_body(
+    constructor: &ConstructorModel,
+    factory_name: &str,
+    object_name: &str,
+) -> Result<Vec<String>> {
+    if constructor.is_async {
+        render_js_async_constructor_body(constructor, factory_name, object_name)
+    } else {
+        render_js_sync_constructor_body(constructor, None, factory_name)
+    }
+}
+
+fn render_js_sync_constructor_body(
+    constructor: &ConstructorModel,
+    attach_target: Option<&str>,
+    factory_name: &str,
+) -> Result<Vec<String>> {
+    let mut lines = render_js_argument_lowering(&constructor.arguments)?;
+    let call_args = render_js_ffi_call_args(&constructor.arguments, Some("status"));
+    lines.push("    const pointer = defaultRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "      (status) => ffiFunctions.{}({}),",
+        constructor.ffi_func_identifier, call_args
+    ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push(match attach_target {
+        Some(target) => format!("    return {}.attach({}, pointer);", factory_name, target),
+        None => format!("    return {}.create(pointer);", factory_name),
+    });
+    Ok(lines)
+}
+
+fn render_js_async_constructor_body(
+    constructor: &ConstructorModel,
+    factory_name: &str,
+    object_name: &str,
+) -> Result<Vec<String>> {
+    let async_ffi = constructor.async_ffi.as_ref().with_context(|| {
+        format!(
+            "async constructor {}.{} is missing future scaffolding identifiers",
+            object_name, constructor.name
+        )
+    })?;
+    let mut lines = render_js_argument_lowering(&constructor.arguments)?;
+    let start_args = render_js_ffi_call_args(&constructor.arguments, None);
+    lines.push("    return rustCallAsync({".to_string());
+    lines.push(format!(
+        "      rustFutureFunc: () => ffiFunctions.{}({}),",
+        constructor.ffi_func_identifier, start_args
+    ));
+    lines.push(format!(
+        "      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, continuationCallback, continuationHandle),",
+        async_ffi.poll_identifier
+    ));
+    lines.push(format!(
+        "      cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.cancel_identifier
+    ));
+    lines.push(format!(
+        "      completeFunc: (rustFuture, status) => ffiFunctions.{}(rustFuture, status),",
+        async_ffi.complete_identifier
+    ));
+    lines.push(format!(
+        "      freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.free_identifier
+    ));
+    lines.push(format!(
+        "      liftFunc: (pointer) => {}.create(pointer),",
+        factory_name
+    ));
+    lines.push("      ...uniffiRustCallOptions(),".to_string());
+    lines.push("    });".to_string());
+    Ok(lines)
+}
+
+fn render_js_argument_lowering(arguments: &[ArgumentModel]) -> Result<Vec<String>> {
+    arguments
+        .iter()
+        .map(|argument| {
+            Ok(format!(
+                "    const {} = {};",
+                lowered_argument_name(&argument.name),
+                render_js_lower_expression(&argument.type_, &js_identifier(&argument.name))?
+            ))
+        })
+        .collect()
+}
+
+fn render_js_ffi_call_args(arguments: &[ArgumentModel], trailing: Option<&str>) -> String {
+    let mut args = arguments
+        .iter()
+        .map(|argument| lowered_argument_name(&argument.name))
+        .collect::<Vec<_>>();
+    if let Some(trailing) = trailing {
+        args.push(trailing.to_string());
+    }
+    args.join(", ")
+}
+
+fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> {
+    match type_ {
+        Type::UInt8 => Ok(format!("FfiConverterUInt8.lower({value_expr})")),
+        Type::Int8 => Ok(format!("FfiConverterInt8.lower({value_expr})")),
+        Type::UInt16 => Ok(format!("FfiConverterUInt16.lower({value_expr})")),
+        Type::Int16 => Ok(format!("FfiConverterInt16.lower({value_expr})")),
+        Type::UInt32 => Ok(format!("FfiConverterUInt32.lower({value_expr})")),
+        Type::Int32 => Ok(format!("FfiConverterInt32.lower({value_expr})")),
+        Type::UInt64 => Ok(format!("FfiConverterUInt64.lower({value_expr})")),
+        Type::Int64 => Ok(format!("FfiConverterInt64.lower({value_expr})")),
+        Type::Float32 => Ok(format!("FfiConverterFloat32.lower({value_expr})")),
+        Type::Float64 => Ok(format!("FfiConverterFloat64.lower({value_expr})")),
+        Type::Boolean => Ok(format!("FfiConverterBool.lower({value_expr})")),
+        Type::String
+        | Type::Bytes
+        | Type::Record { .. }
+        | Type::Enum { .. }
+        | Type::Optional { .. }
+        | Type::Sequence { .. }
+        | Type::Map { .. }
+        | Type::Timestamp
+        | Type::Duration => Ok(format!(
+            "uniffiLowerIntoRustBuffer({}, {value_expr})",
+            render_js_type_converter_expression(type_)?
+        )),
+        Type::Object { name, .. } => Ok(format!(
+            "{}.cloneHandle({value_expr})",
+            object_factory_name(name)
+        )),
+        Type::CallbackInterface { .. } => Ok(format!(
+            "{}.lower({value_expr})",
+            render_js_type_converter_expression(type_)?
+        )),
+        Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+    }
+}
+
+fn render_js_type_converter_expression(type_: &Type) -> Result<String> {
+    match type_ {
+        Type::UInt8 => Ok("FfiConverterUInt8".to_string()),
+        Type::Int8 => Ok("FfiConverterInt8".to_string()),
+        Type::UInt16 => Ok("FfiConverterUInt16".to_string()),
+        Type::Int16 => Ok("FfiConverterInt16".to_string()),
+        Type::UInt32 => Ok("FfiConverterUInt32".to_string()),
+        Type::Int32 => Ok("FfiConverterInt32".to_string()),
+        Type::UInt64 => Ok("FfiConverterUInt64".to_string()),
+        Type::Int64 => Ok("FfiConverterInt64".to_string()),
+        Type::Float32 => Ok("FfiConverterFloat32".to_string()),
+        Type::Float64 => Ok("FfiConverterFloat64".to_string()),
+        Type::Boolean => Ok("FfiConverterBool".to_string()),
+        Type::String => Ok("FfiConverterString".to_string()),
+        Type::Bytes => Ok("FfiConverterBytes".to_string()),
+        Type::Optional { inner_type } => Ok(format!(
+            "new FfiConverterOptional({})",
+            render_js_type_converter_expression(inner_type)?
+        )),
+        Type::Sequence { inner_type } => Ok(format!(
+            "new FfiConverterArray({})",
+            render_js_type_converter_expression(inner_type)?
+        )),
+        Type::Map {
+            key_type,
+            value_type,
+        } => Ok(format!(
+            "new FfiConverterMap({}, {})",
+            render_js_type_converter_expression(key_type)?,
+            render_js_type_converter_expression(value_type)?
+        )),
+        Type::Object { name, .. }
+        | Type::Record { name, .. }
+        | Type::Enum { name, .. }
+        | Type::CallbackInterface { name, .. } => Ok(type_converter_name(name)),
+        Type::Timestamp => Ok("FfiConverterTimestamp".to_string()),
+        Type::Duration => Ok("FfiConverterDuration".to_string()),
+        Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+    }
 }
 
 fn render_dts_params(arguments: &[ArgumentModel]) -> Result<String> {
@@ -1110,6 +1390,18 @@ fn variant_type_name(type_name: &str, variant_name: &str) -> String {
 
 fn object_factory_name(type_name: &str) -> String {
     format!("uniffi{}ObjectFactory", type_name.to_upper_camel_case())
+}
+
+fn object_converter_name(type_name: &str) -> String {
+    type_converter_name(type_name)
+}
+
+fn type_converter_name(type_name: &str) -> String {
+    format!("FfiConverter{}", sanitize_identifier(type_name, false))
+}
+
+fn lowered_argument_name(argument_name: &str) -> String {
+    format!("lowered{}", argument_name.to_upper_camel_case())
 }
 
 fn quoted_property_name(name: &str) -> Result<String> {
@@ -1619,6 +1911,20 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered
+                .js
+                .contains("const pointer = defaultRustCaller.rustCall("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("return uniffiStoreObjectFactory.attach(this, pointer);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered.dts.contains(
                 "export interface Profile {\n  \"name\": string;\n  \"bytes\": Uint8Array;\n}"
             ),
@@ -1669,6 +1975,18 @@ mod tests {
 
         assert!(
             rendered.js.contains("static async new(path)"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("return rustCallAsync({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("liftFunc: (pointer) => uniffiAsyncStoreObjectFactory.create(pointer),"),
             "unexpected JS output: {}",
             rendered.js
         );

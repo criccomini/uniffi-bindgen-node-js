@@ -900,9 +900,11 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains(
-                "import { createObjectFactory, UniffiObjectBase } from \"./runtime/objects.js\""
-            ),
+            component_js.contains("createObjectConverter"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("createObjectFactory"),
             "unexpected component JS contents: {component_js}"
         );
 

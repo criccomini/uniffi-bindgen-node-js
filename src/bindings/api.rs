@@ -1419,7 +1419,7 @@ fn render_dts_tagged_enum(enum_def: &EnumModel) -> Result<String> {
 
 fn render_js_error(error: &ErrorModel) -> Result<String> {
     let mut lines = vec![
-        format!("export class {} extends Error {{", error.name),
+        format!("export class {} extends globalThis.Error {{", error.name),
         "  constructor(tag, message = tag) {".to_string(),
         "    super(message);".to_string(),
         format!("    this.name = {};", json_string_literal(&error.name)?),
@@ -1596,7 +1596,7 @@ fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
 
 fn render_dts_error(error: &ErrorModel) -> Result<String> {
     let mut lines = vec![
-        format!("export declare class {} extends Error {{", error.name),
+        format!("export declare class {} extends globalThis.Error {{", error.name),
         "  readonly tag: string;".to_string(),
         "  protected constructor(tag: string, message?: string);".to_string(),
         "}".to_string(),
@@ -3198,6 +3198,50 @@ mod tests {
             !rendered
                 .js
                 .contains("throws a typed error, but error lifting is still pending"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_uses_global_error_base_for_errors_named_error() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                [Throws=Error]
+                void fail();
+            };
+
+            [Error]
+            interface Error {
+                Invalid(string message);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .js
+                .contains("export class Error extends globalThis.Error {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export declare class Error extends globalThis.Error {"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered.js.contains("export class ErrorInvalid extends Error {"),
             "unexpected JS output: {}",
             rendered.js
         );

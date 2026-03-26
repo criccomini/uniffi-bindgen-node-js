@@ -159,6 +159,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] In the smoke script, create a `WriteBatch`, call `put()` with `Buffer` keys and values, and call `delete()`.
 - [x] In the smoke script, call `init_logging()` with a JS callback implementation and verify callback delivery.
 - [x] Treat successful import plus these calls as the first end-to-end acceptance gate.
+- [x] Fix generated JS and `.d.ts` error base classes so UniFFI errors named `Error` import cleanly.
 - [ ] Add a README for this repo describing installation, CLI usage, supported UniFFI features, and current limitations.
 - [ ] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
 - [ ] Document that v1 targets UniFFI 0.29.x first.

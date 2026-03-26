@@ -1181,7 +1181,7 @@ mod tests {
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
-            objects_js.contains("this._coerceHandle(normalizeUInt64(serialized))"),
+            objects_js.contains("this._coerceHandle(normalizedHandle)"),
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
@@ -1272,7 +1272,7 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "const loweredMergeOperator = FfiConverterMergeOperator.lower(mergeOperator);"
+                "const loweredMergeOperator = FfiConverterMergeOperator.lower(merge_operator);"
             ),
             "unexpected component JS contents: {component_js}"
         );
@@ -1511,7 +1511,8 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("const loweredBatch = uniffiWriteBatchObjectFactory.cloneHandle(batch);"),
+            component_js
+                .contains("const loweredBatch = uniffiWriteBatchObjectFactory.cloneHandle(batch);"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(

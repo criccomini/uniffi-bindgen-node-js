@@ -1,8 +1,9 @@
 mod support;
 
 use self::support::{
-    FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
-    install_fixture_package_dependencies, remove_dir_all, run_node_script,
+    FixturePackageOptions, current_bundled_prebuild_target, generate_fixture_package,
+    generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
+    run_node_script,
 };
 
 #[test]
@@ -120,6 +121,63 @@ assert.equal(isLoaded(), false);
             serde_json::to_string(expected_library_path.as_str())
                 .expect("sibling library path should serialize"),
             basic_fixture_api_smoke_body()
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
+fn bundled_mode_import_reports_missing_host_prebuild() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            bundled_prebuilds: true,
+            stage_root_sibling_library: false,
+            stage_host_prebuild: false,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let expected_library_filename = format!(
+        "{}{}.{}",
+        std::env::consts::DLL_PREFIX,
+        generated.built_fixture.crate_name,
+        std::env::consts::DLL_EXTENSION
+    );
+    let expected_target = current_bundled_prebuild_target();
+    let expected_relative_path = format!("prebuilds/{expected_target}/{expected_library_filename}");
+
+    assert!(
+        generated.sibling_library_path.is_none(),
+        "negative bundled fixture should not stage a root-level sibling library"
+    );
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "bundled-missing-prebuild.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+
+try {{
+  await import("./index.js");
+  assert.fail("expected bundled import to fail without a matching staged prebuild");
+}} catch (error) {{
+  const message = String(error);
+  assert.ok(
+    message.includes("No bundled UniFFI library was found for target"),
+    `unexpected error message: ${{message}}`,
+  );
+  assert.ok(message.includes({}), `missing target id in error: ${{message}}`);
+  assert.ok(message.includes({}), `missing package path in error: ${{message}}`);
+}}
+"#,
+            serde_json::to_string(&expected_target).expect("target id should serialize"),
+            serde_json::to_string(&expected_relative_path)
+                .expect("expected package-relative path should serialize"),
         ),
     );
 

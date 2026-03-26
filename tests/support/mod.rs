@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+mod fixtures;
+
 use std::{
     env, fs, process,
     process::Command,
@@ -13,6 +15,8 @@ use uniffi_bindgen::{Component, GenerationSettings, interface::ComponentInterfac
 use uniffi_bindgen_node_js::bindings::{
     NodeBindingCliOverrides, NodeBindingGenerator, NodeBindingGeneratorConfig,
 };
+
+use self::fixtures::fixture_spec;
 
 pub struct BuiltFixtureCdylib {
     pub workspace_dir: Utf8PathBuf,
@@ -317,28 +321,6 @@ pub fn temp_dir_path(name: &str) -> Utf8PathBuf {
         process::id()
     )))
     .expect("temp dir path should be utf-8")
-}
-
-struct FixtureSpec {
-    dir_name: &'static str,
-    namespace: &'static str,
-    crate_name: &'static str,
-}
-
-fn fixture_spec(name: &str) -> FixtureSpec {
-    match name {
-        "basic" => FixtureSpec {
-            dir_name: "basic-fixture",
-            namespace: "fixture",
-            crate_name: "fixture_basic",
-        },
-        "callbacks" => FixtureSpec {
-            dir_name: "callback-fixture",
-            namespace: "callbacks_fixture",
-            crate_name: "fixture_callbacks",
-        },
-        _ => panic!("unknown fixture '{name}'"),
-    }
 }
 
 fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) {

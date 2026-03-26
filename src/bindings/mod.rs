@@ -1062,8 +1062,20 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
+            component_ffi_js.contains("koffi.proto(\"RustFutureContinuationCallback\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
             component_ffi_js
                 .contains("defineCallbackVtable(\"VTableCallbackInterfaceLogCallback\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("defineStructType(\"ForeignFuture\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("koffi.proto(\"ForeignFutureCompleteVoid\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1072,6 +1084,14 @@ mod tests {
         );
         assert!(
             component_ffi_js.contains("init_callback_vtable_logcallback"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("ffi_fixture_crate_uniffi_contract_version"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("uniffi_fixture_crate_checksum_func_current_generation"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

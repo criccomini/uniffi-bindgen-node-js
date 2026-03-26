@@ -1893,15 +1893,23 @@ mod tests {
         };
         let component = component_with_namespace("example");
 
-        let layout =
-            GeneratedPackageLayout::from_component(&settings, &component).expect("layout");
+        let layout = GeneratedPackageLayout::from_component(&settings, &component).expect("layout");
 
         assert_eq!(layout.root_dir, out_dir);
-        assert_eq!(layout.package_json_path(), layout.root_dir.join("package.json"));
+        assert_eq!(
+            layout.package_json_path(),
+            layout.root_dir.join("package.json")
+        );
         assert_eq!(layout.index_js_path(), layout.root_dir.join("index.js"));
         assert_eq!(layout.index_dts_path(), layout.root_dir.join("index.d.ts"));
-        assert_eq!(layout.component_js_path(), layout.root_dir.join("example.js"));
-        assert_eq!(layout.component_dts_path(), layout.root_dir.join("example.d.ts"));
+        assert_eq!(
+            layout.component_js_path(),
+            layout.root_dir.join("example.js")
+        );
+        assert_eq!(
+            layout.component_dts_path(),
+            layout.root_dir.join("example.d.ts")
+        );
         assert_eq!(
             layout.component_ffi_js_path(),
             layout.root_dir.join("example-ffi.js")

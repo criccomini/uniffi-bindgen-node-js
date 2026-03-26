@@ -1,11 +1,12 @@
 use std::{
-    fs,
-    process,
+    fs, process,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use camino::Utf8PathBuf;
-use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings, interface::ComponentInterface};
+use uniffi_bindgen::{
+    BindingGenerator, Component, GenerationSettings, interface::ComponentInterface,
+};
 use uniffi_bindgen_node_js::bindings::{
     NodeBindingCliOverrides, NodeBindingGenerator, NodeBindingGeneratorConfig,
 };
@@ -98,7 +99,9 @@ fn snapshot_output_for_fixture(name: &str) -> String {
 
     generator
         .write_bindings(&settings, &[fixture_component(&spec)])
-        .unwrap_or_else(|error| panic!("failed to generate bindings for {}: {error}", spec.dir_name));
+        .unwrap_or_else(|error| {
+            panic!("failed to generate bindings for {}: {error}", spec.dir_name)
+        });
 
     let mut files = vec![
         "index.js".to_string(),
@@ -112,15 +115,14 @@ fn snapshot_output_for_fixture(name: &str) -> String {
 
     let mut snapshot = String::new();
     for relative_path in files {
-        let contents = fs::read_to_string(out_dir.join(&relative_path).as_std_path()).unwrap_or_else(
-            |error| {
+        let contents = fs::read_to_string(out_dir.join(&relative_path).as_std_path())
+            .unwrap_or_else(|error| {
                 panic!(
                     "failed to read generated file {} for fixture {}: {error}",
                     out_dir.join(&relative_path),
                     spec.dir_name
                 )
-            },
-        );
+            });
         snapshot.push_str(&format!("=== {relative_path} ===\n{contents}\n"));
     }
 
@@ -132,7 +134,10 @@ fn snapshot_output_for_fixture(name: &str) -> String {
 
 #[test]
 fn snapshots_basic_fixture_generated_output() {
-    insta::assert_snapshot!("basic_fixture_generated_output", snapshot_output_for_fixture("basic"));
+    insta::assert_snapshot!(
+        "basic_fixture_generated_output",
+        snapshot_output_for_fixture("basic")
+    );
 }
 
 #[test]

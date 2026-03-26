@@ -68,7 +68,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 ## TODO
 
 - [x] Add bundled_prebuilds: bool to NodeBindingGeneratorConfig and default it to false.
-- [ ] Add --bundled-prebuilds to GenerateArgs and pass it through NodeBindingCliOverrides::from_parts.
+- [x] Add --bundled-prebuilds to GenerateArgs and pass it through NodeBindingCliOverrides::from_parts.
 - [ ] Add BundledPrebuilds(bool) to NodeBindingConfigOverride and parse the bundled_prebuilds / bundled-prebuilds override keys.
 - [ ] Remove lib_path_modules from NodeBindingGeneratorConfig, its serde aliases, and its default initialization.
 - [ ] Remove NodeBindingConfigOverride::LibPathModules and delete all lib_path_module[s] and out_lib_path_module[s] override aliases.

@@ -28,6 +28,9 @@ pub struct GenerateArgs {
     pub lib_path_literal: Option<String>,
 
     #[arg(long)]
+    pub bundled_prebuilds: bool,
+
+    #[arg(long)]
     pub manual_load: bool,
 
     #[arg(long)]
@@ -47,6 +50,7 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
         args.cdylib_name.clone(),
         args.node_engine.clone(),
         args.lib_path_literal.clone(),
+        args.bundled_prebuilds,
         args.manual_load,
         args.config_override.clone(),
     )?;

@@ -31,6 +31,7 @@ pub struct NodeBindingCliOverrides {
     cdylib_name: Option<String>,
     node_engine: Option<String>,
     lib_path_literal: Option<String>,
+    bundled_prebuilds: bool,
     manual_load: bool,
     config_overrides: Vec<NodeBindingConfigOverride>,
 }
@@ -41,6 +42,7 @@ impl NodeBindingCliOverrides {
         cdylib_name: Option<String>,
         node_engine: Option<String>,
         lib_path_literal: Option<String>,
+        bundled_prebuilds: bool,
         manual_load: bool,
         config_overrides: Vec<String>,
     ) -> Result<Self> {
@@ -49,6 +51,7 @@ impl NodeBindingCliOverrides {
             cdylib_name: normalize_optional_value("--cdylib-name", cdylib_name)?,
             node_engine: normalize_optional_value("--node-engine", node_engine)?,
             lib_path_literal: normalize_optional_value("--lib-path-literal", lib_path_literal)?,
+            bundled_prebuilds,
             manual_load,
             config_overrides: config_overrides
                 .into_iter()
@@ -73,6 +76,9 @@ impl NodeBindingCliOverrides {
         }
         if let Some(lib_path_literal) = &self.lib_path_literal {
             config.lib_path_literal = Some(lib_path_literal.clone());
+        }
+        if self.bundled_prebuilds {
+            config.bundled_prebuilds = true;
         }
         if self.manual_load {
             config.manual_load = true;
@@ -1785,6 +1791,7 @@ mod tests {
             None,
             None,
             false,
+            false,
             vec!["commonjs=true".to_string()],
         )
         .expect("override should parse");
@@ -1831,6 +1838,7 @@ mod tests {
             None,
             None,
             None,
+            false,
             false,
             vec!["out_lib_path_module=@scope/example-darwin".to_string()],
         )

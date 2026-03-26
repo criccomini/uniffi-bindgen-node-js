@@ -197,16 +197,6 @@ pub struct NodeBindingGeneratorConfig {
     #[serde(alias = "module-format")]
     pub module_format: Option<String>,
     pub commonjs: Option<bool>,
-    #[serde(
-        alias = "lib-path-module",
-        alias = "lib_path_module",
-        alias = "lib-path-modules",
-        alias = "out-lib-path-module",
-        alias = "out_lib_path_module",
-        alias = "out-lib-path-modules",
-        alias = "out_lib_path_modules"
-    )]
-    pub lib_path_modules: Option<toml::Value>,
 }
 
 impl Default for NodeBindingGeneratorConfig {
@@ -220,7 +210,6 @@ impl Default for NodeBindingGeneratorConfig {
             manual_load: false,
             module_format: None,
             commonjs: None,
-            lib_path_modules: None,
         }
     }
 }
@@ -269,11 +258,6 @@ impl NodeBindingGeneratorConfig {
         }
         if self.commonjs == Some(true) {
             bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
-        }
-        if self.lib_path_modules.is_some() {
-            bail!(
-                "node bindings v1 do not support multi-package platform-switch packaging; use lib_path_literal or the default sibling-library lookup"
-            );
         }
         Ok(())
     }
@@ -1799,22 +1783,21 @@ mod tests {
     }
 
     #[test]
-    fn config_validation_rejects_platform_switch_packaging() {
-        let config = parse_node_config(
-            r#"
+    fn new_config_rejects_legacy_platform_switch_packaging_keys() {
+        let root = r#"
             [bindings.node]
             out_lib_path_module = ["@scope/example-darwin", "@scope/example-linux"]
-            "#,
-        );
-
-        let error = config
-            .validate()
-            .expect_err("platform-switch packaging should be rejected");
+            "#
+        .parse::<toml::Value>()
+        .expect("test TOML should deserialize");
+        let error = NodeBindingGenerator::new(NodeBindingCliOverrides::default())
+            .new_config(&root)
+            .expect_err("legacy platform-switch packaging keys should be unknown");
 
         assert!(
             error
                 .to_string()
-                .contains("multi-package platform-switch packaging"),
+                .contains("unknown field `out_lib_path_module`"),
             "unexpected error: {error}"
         );
     }

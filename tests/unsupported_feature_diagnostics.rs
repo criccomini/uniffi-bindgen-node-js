@@ -61,23 +61,3 @@ fn update_component_configs_rejects_commonjs_output_with_generator_error() {
         @"node bindings v1 are ESM-only; CommonJS output is not supported"
     );
 }
-
-#[test]
-fn update_component_configs_rejects_platform_switch_packaging_with_generator_error() {
-    let generator = generator();
-    let settings = generation_settings("unsupported-platform-switch");
-    let mut components = vec![component_with_namespace("example")];
-    components[0].config.lib_path_modules = Some(toml::Value::Array(vec![
-        toml::Value::String("@scope/example-darwin".to_string()),
-        toml::Value::String("@scope/example-linux".to_string()),
-    ]));
-
-    let error = generator
-        .update_component_configs(&settings, &mut components)
-        .expect_err("platform-switch packaging should be rejected");
-
-    assert_snapshot!(
-        error.to_string(),
-        @"node bindings v1 do not support multi-package platform-switch packaging; use lib_path_literal or the default sibling-library lookup"
-    );
-}

@@ -1721,6 +1721,10 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
         "  createInstance: () => Object.create({}.prototype),",
         object.name
     ));
+    lines.push(format!(
+        "  handleType: () => getFfiBindings().ffiTypes.{},",
+        ffi_opaque_identifier(&object.name)
+    ));
     lines.push("  cloneHandle(handle) {".to_string());
     lines.push("    return defaultRustCaller.rustCall(".to_string());
     lines.push(format!(
@@ -2820,10 +2824,7 @@ mod tests {
             render_public_type(&Type::UInt64).unwrap(),
             "bigint | number"
         );
-        assert_eq!(
-            render_public_type(&Type::Int64).unwrap(),
-            "bigint | number"
-        );
+        assert_eq!(render_public_type(&Type::Int64).unwrap(), "bigint | number");
         assert_eq!(
             render_public_type(&Type::Optional {
                 inner_type: Box::new(Type::Bytes),
@@ -3461,6 +3462,49 @@ mod tests {
             rendered
                 .dts
                 .contains("export declare function round_trip_bytes(value: Uint8Array | undefined): Uint8Array | undefined;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_optional_object_converters() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            interface Store {
+                constructor();
+                Store? maybe_clone(Store? value);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains(
+                "const loweredValue = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterStore), value);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterStore), uniffiResult);"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("maybe_clone(value: Store | undefined): Store | undefined;"),
             "unexpected DTS output: {}",
             rendered.dts
         );

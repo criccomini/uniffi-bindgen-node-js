@@ -1133,6 +1133,66 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_emits_typed_object_handle_round_trip_support() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("object-handle-round-trip");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+        let component = component_from_webidl(
+            r#"
+            namespace example {};
+
+            interface Store {
+                constructor();
+                Store? maybe_clone(Store? value);
+            };
+            "#,
+        );
+
+        generator
+            .write_bindings(&settings, &[component])
+            .expect("write_bindings should succeed");
+
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
+        let objects_js = fs::read_to_string(output_dir.join("runtime/objects.js").as_std_path())
+            .expect("runtime objects JS should be readable");
+        let ffi_types_js =
+            fs::read_to_string(output_dir.join("runtime/ffi-types.js").as_std_path())
+                .expect("runtime FFI types JS should be readable");
+
+        assert!(
+            component_js.contains("getFfiBindings"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("handleType: () => getFfiBindings().ffiTypes.RustArcPtrStore,"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            objects_js.contains("import koffi from \"koffi\";"),
+            "unexpected runtime objects JS contents: {objects_js}"
+        );
+        assert!(
+            objects_js.contains("return koffi.as(normalizedHandle, handleType);"),
+            "unexpected runtime objects JS contents: {objects_js}"
+        );
+        assert!(
+            objects_js.contains("this._coerceHandle(normalizeUInt64(serialized))"),
+            "unexpected runtime objects JS contents: {objects_js}"
+        );
+        assert!(
+            ffi_types_js.contains("return normalizeUInt64(pointer);"),
+            "unexpected runtime FFI types JS contents: {ffi_types_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_makes_ffi_load_idempotent() {
         let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-idempotent-load");

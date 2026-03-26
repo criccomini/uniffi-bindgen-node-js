@@ -1,3 +1,4 @@
+import koffi from "koffi";
 import { UnexpectedNullPointer } from "./errors.js";
 import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
 
@@ -44,6 +45,12 @@ function objectFactory(value) {
   return factory;
 }
 
+function resolveHandleType(handleType) {
+  return typeof handleType === "function"
+    ? handleType()
+    : handleType;
+}
+
 export class UniffiObjectBase {
   get uniffiTypeName() {
     return this[uniffiTypeNameSymbol] ?? this.constructor?.name ?? "UniFFI object";
@@ -76,6 +83,7 @@ export class UniffiObjectFactory {
     createInstance = () => Object.create(UniffiObjectBase.prototype),
     cloneHandle = undefined,
     freeHandle = undefined,
+    handleType = undefined,
     serializeHandle = undefined,
     deserializeHandle = undefined,
   } = {}) {
@@ -83,6 +91,7 @@ export class UniffiObjectFactory {
     this._createInstance = createInstance;
     this._cloneHandle = cloneHandle;
     this._freeHandle = freeHandle;
+    this._handleType = handleType;
     this._serializeHandle = serializeHandle;
     this._deserializeHandle = deserializeHandle;
     this._registry =
@@ -122,8 +131,24 @@ export class UniffiObjectFactory {
     instance[uniffiFinalizerTokenSymbol] = null;
   }
 
+  _coerceHandle(handle) {
+    if (handle == null || (typeof handle !== "bigint" && typeof handle !== "number")) {
+      return handle;
+    }
+
+    const normalizedHandle = normalizeUInt64(handle);
+    const handleType = resolveHandleType(this._handleType);
+    if (handleType == null) {
+      return normalizedHandle;
+    }
+    return koffi.as(normalizedHandle, handleType);
+  }
+
   attach(instance, handle) {
-    const normalizedHandle = requireHandle(handle, `${this.typeName} handle`);
+    const normalizedHandle = requireHandle(
+      this._coerceHandle(handle),
+      `${this.typeName} handle`,
+    );
     const target = requireObjectInstance(instance, this.typeName);
 
     if (storedHandle(target) != null && target[uniffiObjectDestroyedSymbol] !== true) {
@@ -173,7 +198,10 @@ export class UniffiObjectFactory {
     if (!this.isInstance(value)) {
       throw new TypeError(`${this.typeName} expected an instance created by this factory.`);
     }
-    return requireHandle(storedHandle(value), `${this.typeName} handle`);
+    return requireHandle(
+      this._coerceHandle(storedHandle(value)),
+      `${this.typeName} handle`,
+    );
   }
 
   peekHandle(value) {
@@ -224,13 +252,15 @@ export class UniffiObjectFactory {
   }
 
   deserializeHandle(serialized) {
-    if (typeof this._deserializeHandle !== "function") {
-      throw new TypeError(
-        `${this.typeName} does not support deserializing serialized object handles yet.`,
+    const normalizedHandle = normalizeUInt64(serialized);
+    if (typeof this._deserializeHandle === "function") {
+      return requireHandle(
+        this._deserializeHandle(normalizedHandle),
+        `${this.typeName} handle`,
       );
     }
     return requireHandle(
-      this._deserializeHandle(normalizeUInt64(serialized)),
+      this._coerceHandle(normalizedHandle),
       `${this.typeName} handle`,
     );
   }

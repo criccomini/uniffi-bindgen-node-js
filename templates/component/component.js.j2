@@ -2,6 +2,7 @@ import koffi from "koffi";
 import {
   configureRuntimeHooks,
   ffiFunctions,
+  getFfiBindings,
   load as loadFfi,
 } from "./{{ namespace }}-ffi.js";
 import { createForeignBytes, RustBufferValue } from "./runtime/ffi-types.js";

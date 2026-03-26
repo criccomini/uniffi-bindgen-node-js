@@ -127,6 +127,9 @@ export function pointerAddress(pointer) {
   if (pointer == null) {
     return 0n;
   }
+  if (typeof pointer === "bigint" || typeof pointer === "number") {
+    return normalizeUInt64(pointer);
+  }
   return koffi.address(pointer);
 }
 

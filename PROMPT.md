@@ -121,7 +121,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate low-level wrappers for checksum functions and the UniFFI contract-version function.
 - [x] Run contract-version validation at initialization time.
 - [x] Run checksum validation at initialization time.
-- [ ] Generate public object classes for UniFFI objects.
+- [x] Generate public object classes for UniFFI objects.
 - [ ] Generate constructor wrappers that lift returned handles into JS objects.
 - [ ] Generate sync method wrappers that lower arguments, call FFI, check `RustCallStatus`, and lift results.
 - [ ] Generate async method wrappers that create, poll, complete, and free Rust futures.

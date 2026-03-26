@@ -899,6 +899,12 @@ mod tests {
             component_js.contains("componentMetadata"),
             "unexpected component JS contents: {component_js}"
         );
+        assert!(
+            component_js.contains(
+                "import { createObjectFactory, UniffiObjectBase } from \"./runtime/objects.js\""
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");

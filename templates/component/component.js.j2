@@ -1,3 +1,8 @@
+import { ffiFunctions } from "./{{ namespace }}-ffi.js";
+import { FfiConverterString } from "./runtime/ffi-converters.js";
+import { createObjectFactory, UniffiObjectBase } from "./runtime/objects.js";
+import { defaultRustCaller } from "./runtime/rust-call.js";
+
 export const componentMetadata = Object.freeze({
   namespace: {{ namespace_json }},
   packageName: {{ package_name_json }},

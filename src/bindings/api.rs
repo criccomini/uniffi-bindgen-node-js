@@ -16,6 +16,7 @@ pub(crate) struct ComponentModel {
     pub errors: Vec<ErrorModel>,
     pub callback_interfaces: Vec<CallbackInterfaceModel>,
     pub objects: Vec<ObjectModel>,
+    pub ffi_rustbuffer_free_identifier: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +66,7 @@ impl ComponentModel {
                 .iter()
                 .map(ObjectModel::from_object)
                 .collect(),
+            ffi_rustbuffer_free_identifier: ffi_symbol_identifier(ci.ffi_rustbuffer_free().name()),
         };
         model.validate_renderable_types()?;
         Ok(model)
@@ -79,6 +81,12 @@ impl ComponentModel {
                 "function uniffiNotImplemented(member) {\n  throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);\n}"
                     .to_string(),
             );
+        }
+
+        if !self.objects.is_empty() {
+            js_sections.push(render_js_object_runtime_helpers(
+                &self.ffi_rustbuffer_free_identifier,
+            ));
         }
 
         if !self.records.is_empty() {
@@ -448,6 +456,8 @@ pub(crate) struct ObjectModel {
     pub name: String,
     pub constructors: Vec<ConstructorModel>,
     pub methods: Vec<MethodModel>,
+    pub ffi_object_clone_identifier: String,
+    pub ffi_object_free_identifier: String,
 }
 
 impl ObjectModel {
@@ -464,6 +474,8 @@ impl ObjectModel {
                 .into_iter()
                 .map(MethodModel::from_method)
                 .collect(),
+            ffi_object_clone_identifier: ffi_symbol_identifier(object.ffi_object_clone().name()),
+            ffi_object_free_identifier: ffi_symbol_identifier(object.ffi_object_free().name()),
         }
     }
 }
@@ -886,7 +898,11 @@ fn render_dts_error(error: &ErrorModel) -> Result<String> {
 }
 
 fn render_js_object(object: &ObjectModel) -> Result<String> {
-    let mut lines = vec![format!("export class {} {{", object.name)];
+    let factory_name = object_factory_name(&object.name);
+    let mut lines = vec![format!(
+        "export class {} extends UniffiObjectBase {{",
+        object.name
+    )];
 
     if let Some(primary_constructor) = object
         .constructors
@@ -897,8 +913,10 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
             "  constructor({}) {{",
             render_js_params(&primary_constructor.arguments)
         ));
+        lines.push("    super();".to_string());
     } else {
         lines.push("  constructor() {".to_string());
+        lines.push("    super();".to_string());
     }
     lines.push(format!(
         "    return uniffiNotImplemented({});",
@@ -940,11 +958,43 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
     }
 
     lines.push("}".to_string());
+    lines.push(String::new());
+    lines.push(format!("const {} = createObjectFactory({{", factory_name));
+    lines.push(format!(
+        "  typeName: {},",
+        json_string_literal(&object.name)?
+    ));
+    lines.push(format!(
+        "  createInstance: () => Object.create({}.prototype),",
+        object.name
+    ));
+    lines.push("  cloneHandle(handle) {".to_string());
+    lines.push("    return defaultRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "      (status) => ffiFunctions.{}(handle, status),",
+        object.ffi_object_clone_identifier
+    ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
+    lines.push("  freeHandle(handle) {".to_string());
+    lines.push("    defaultRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "      (status) => ffiFunctions.{}(handle, status),",
+        object.ffi_object_free_identifier
+    ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
+    lines.push("});".to_string());
     Ok(lines.join("\n"))
 }
 
 fn render_dts_object(object: &ObjectModel) -> Result<String> {
-    let mut lines = vec![format!("export declare class {} {{", object.name)];
+    let mut lines = vec![format!(
+        "export declare class {} extends UniffiObjectBase {{",
+        object.name
+    )];
 
     if let Some(primary_constructor) = object
         .constructors
@@ -990,6 +1040,12 @@ fn render_js_params(arguments: &[ArgumentModel]) -> String {
         .map(|argument| js_identifier(&argument.name))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn render_js_object_runtime_helpers(ffi_rustbuffer_free_identifier: &str) -> String {
+    format!(
+        "function uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: FfiConverterString.lift }},\n  );\n}}\n\nfunction uniffiRustCallOptions() {{\n  return {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: FfiConverterString.lift,\n  }};\n}}"
+    )
 }
 
 fn render_dts_params(arguments: &[ArgumentModel]) -> Result<String> {
@@ -1052,6 +1108,10 @@ fn variant_type_name(type_name: &str, variant_name: &str) -> String {
     format!("{type_name}{}", variant_name.to_upper_camel_case())
 }
 
+fn object_factory_name(type_name: &str) -> String {
+    format!("uniffi{}ObjectFactory", type_name.to_upper_camel_case())
+}
+
 fn quoted_property_name(name: &str) -> Result<String> {
     json_string_literal(name)
 }
@@ -1066,6 +1126,30 @@ fn js_identifier(name: &str) -> String {
 
 fn js_member_identifier(name: &str) -> String {
     sanitize_identifier(name, true)
+}
+
+fn ffi_symbol_identifier(name: &str) -> String {
+    let mut identifier = String::new();
+    for (index, character) in name.chars().enumerate() {
+        let valid = if index == 0 {
+            is_identifier_start(character)
+        } else {
+            is_identifier_continue(character)
+        };
+        if valid {
+            identifier.push(character);
+        } else {
+            identifier.push('_');
+        }
+    }
+
+    if identifier.is_empty() {
+        "_".to_string()
+    } else if !identifier.chars().next().is_some_and(is_identifier_start) {
+        format!("_{identifier}")
+    } else {
+        identifier
+    }
 }
 
 fn sanitize_identifier(name: &str, allow_reserved: bool) -> String {
@@ -1516,7 +1600,21 @@ mod tests {
             rendered.js
         );
         assert!(
-            rendered.js.contains("export class Store {"),
+            rendered
+                .js
+                .contains("export class Store extends UniffiObjectBase {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("extends UniffiObjectBase"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const uniffiStoreObjectFactory = createObjectFactory({"),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -1524,6 +1622,13 @@ mod tests {
             rendered.dts.contains(
                 "export interface Profile {\n  \"name\": string;\n  \"bytes\": Uint8Array;\n}"
             ),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export declare class Store extends UniffiObjectBase {"),
             "unexpected DTS output: {}",
             rendered.dts
         );

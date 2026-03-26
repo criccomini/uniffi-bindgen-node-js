@@ -1,5 +1,5 @@
 import { UnexpectedNullPointer } from "./errors.js";
-import { normalizeHandle } from "./ffi-types.js";
+import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
 
 const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
 
@@ -17,15 +17,18 @@ function requireObjectInstance(value, label = "UniFFI object") {
 }
 
 function requireHandle(handle, label = "UniFFI handle") {
-  const normalized = normalizeHandle(handle);
-  if (normalized == null || normalized === 0n) {
+  if (handle == null || isNullPointer(handle)) {
     throw new UnexpectedNullPointer(`${label} is null or has already been destroyed.`);
   }
-  return normalized;
+  return handle;
 }
 
 function storedHandle(value) {
-  return normalizeHandle(value?.[uniffiObjectHandleSymbol]);
+  const handle = value?.[uniffiObjectHandleSymbol];
+  if (handle == null || isNullPointer(handle)) {
+    return undefined;
+  }
+  return handle;
 }
 
 function objectFactory(value) {
@@ -73,11 +76,15 @@ export class UniffiObjectFactory {
     createInstance = () => Object.create(UniffiObjectBase.prototype),
     cloneHandle = undefined,
     freeHandle = undefined,
+    serializeHandle = undefined,
+    deserializeHandle = undefined,
   } = {}) {
     this.typeName = typeName;
     this._createInstance = createInstance;
     this._cloneHandle = cloneHandle;
     this._freeHandle = freeHandle;
+    this._serializeHandle = serializeHandle;
+    this._deserializeHandle = deserializeHandle;
     this._registry =
       typeof FinalizationRegistry === "undefined" || typeof freeHandle !== "function"
         ? null
@@ -110,7 +117,7 @@ export class UniffiObjectFactory {
   }
 
   _markDestroyed(instance) {
-    instance[uniffiObjectHandleSymbol] = 0n;
+    instance[uniffiObjectHandleSymbol] = null;
     instance[uniffiObjectDestroyedSymbol] = true;
     instance[uniffiFinalizerTokenSymbol] = null;
   }
@@ -181,10 +188,7 @@ export class UniffiObjectFactory {
     if (typeof this._cloneHandle !== "function") {
       return handle;
     }
-    return requireHandle(
-      this._cloneHandle(handle, value),
-      `${this.typeName} cloned handle`,
-    );
+    return requireHandle(this._cloneHandle(handle, value), `${this.typeName} cloned handle`);
   }
 
   destroy(value) {
@@ -210,6 +214,26 @@ export class UniffiObjectFactory {
     return this.isInstance(value)
       && (value[uniffiObjectDestroyedSymbol] === true || storedHandle(value) == null);
   }
+
+  serializeHandle(value) {
+    const handle = this.handle(value);
+    if (typeof this._serializeHandle === "function") {
+      return normalizeUInt64(this._serializeHandle(handle, value));
+    }
+    return pointerAddress(handle);
+  }
+
+  deserializeHandle(serialized) {
+    if (typeof this._deserializeHandle !== "function") {
+      throw new TypeError(
+        `${this.typeName} does not support deserializing serialized object handles yet.`,
+      );
+    }
+    return requireHandle(
+      this._deserializeHandle(normalizeUInt64(serialized)),
+      `${this.typeName} handle`,
+    );
+  }
 }
 
 export class FfiConverterObject {
@@ -226,11 +250,11 @@ export class FfiConverterObject {
   }
 
   write(value, writer) {
-    writer.writeUInt64(this.lower(value));
+    writer.writeUInt64(this.factory.serializeHandle(value));
   }
 
   read(reader) {
-    return this.lift(reader.readUInt64());
+    return this.lift(this.factory.deserializeHandle(reader.readUInt64()));
   }
 
   allocationSize() {

@@ -163,7 +163,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Refresh codegen snapshots for the `globalThis.Error` error-base rendering change.
 - [x] Fix the local `koffi` test shim so self-encoding `RustCallStatus` preserves callback success state.
 - [x] Make test temp output paths collision-resistant across concurrent Rust test threads.
-- [ ] Add a README for this repo describing installation, CLI usage, supported UniFFI features, and current limitations.
+- [x] Add a README for this repo describing installation, CLI usage, supported UniFFI features, and current limitations.
 - [ ] Document that v1 is ESM-only and emits ready-to-consume `.js` + `.d.ts`.
 - [ ] Document that v1 targets UniFFI 0.29.x first.
 - [ ] Run Rust tests last.

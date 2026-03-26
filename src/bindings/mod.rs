@@ -922,6 +922,16 @@ mod tests {
         let ffi_types_js =
             fs::read_to_string(output_dir.join("runtime/ffi-types.js").as_std_path())
                 .expect("runtime FFI types JS should be readable");
+        let errors_js = fs::read_to_string(output_dir.join("runtime/errors.js").as_std_path())
+            .expect("runtime errors JS should be readable");
+        assert!(
+            errors_js.contains("export class UniffiError"),
+            "unexpected runtime errors JS contents: {errors_js}"
+        );
+        assert!(
+            errors_js.contains("export const UniffiInternalError"),
+            "unexpected runtime errors JS contents: {errors_js}"
+        );
         assert!(
             ffi_types_js.contains("export const RustBuffer"),
             "unexpected runtime FFI types JS contents: {ffi_types_js}"

@@ -16,12 +16,21 @@ import {
   normalizeRustCallStatus,
   normalizeUInt64,
 } from "./runtime/ffi-types.js";
+import {
+  ContractVersionMismatchError,
+  LibraryNotLoadedError,
+} from "./runtime/errors.js";
 
 export const ffiMetadata = Object.freeze({
   namespace: {{ context.namespace_json }},
   cdylibName: {{ context.cdylib_name_json }},
   libPathLiteral: {{ context.lib_path_literal_json }},
   manualLoad: {{ context.manual_load }},
+});
+
+export const ffiIntegrity = Object.freeze({
+  contractVersionFunction: {{ context.contract_version.name_json }},
+  expectedContractVersion: {{ context.contract_version.expected }},
 });
 
 let loadedBindings = null;
@@ -129,7 +138,19 @@ export function load(libraryPath = undefined) {
     );
   }
 
-  loadedBindings = createBindings(resolvedLibraryPath);
+  const bindings = createBindings(resolvedLibraryPath);
+  try {
+    validateContractVersion(bindings);
+  } catch (error) {
+    try {
+      bindings.library.unload();
+    } catch {
+      // Preserve the original initialization failure.
+    }
+    throw error;
+  }
+
+  loadedBindings = bindings;
   return loadedBindings;
 }
 
@@ -153,10 +174,25 @@ if (!ffiMetadata.manualLoad) {
 
 export function getFfiBindings() {
   if (loadedBindings === null) {
-    throw new Error("The native library is not loaded. Call load(libraryPath) first.");
+    throw new LibraryNotLoadedError(
+      "The native library is not loaded. Call load(libraryPath) first.",
+    );
   }
 
   return loadedBindings;
+}
+
+export function getContractVersion(bindings = getFfiBindings()) {
+  return bindings.ffiFunctions.{{ context.contract_version.identifier }}();
+}
+
+export function validateContractVersion(bindings = getFfiBindings()) {
+  const actual = getContractVersion(bindings);
+  const expected = ffiIntegrity.expectedContractVersion;
+  if (actual !== expected) {
+    throw new ContractVersionMismatchError(expected, actual);
+  }
+  return actual;
 }
 
 export const ffiFunctions = Object.freeze({

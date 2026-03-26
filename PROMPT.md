@@ -119,7 +119,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate Koffi struct definitions for every UniFFI FFI struct used by the component.
 - [x] Generate callback declarations for callback-interface methods and Rust future continuation callbacks.
 - [x] Generate low-level wrappers for checksum functions and the UniFFI contract-version function.
-- [ ] Run contract-version validation at initialization time.
+- [x] Run contract-version validation at initialization time.
 - [ ] Run checksum validation at initialization time.
 - [ ] Generate public object classes for UniFFI objects.
 - [ ] Generate constructor wrappers that lift returned handles into JS objects.

@@ -26,6 +26,7 @@ pub(crate) fn render_component_ffi(
         cdylib_name_json: json_string(cdylib_name)?,
         lib_path_literal_json: json_optional_string(lib_path_literal)?,
         manual_load,
+        contract_version: model.contract_version,
         opaque_types: model.opaque_types,
         pre_struct_callbacks: model.pre_struct_callbacks,
         post_struct_callbacks: model.post_struct_callbacks,
@@ -47,6 +48,7 @@ pub(crate) fn render_component_ffi(
 
 #[derive(Debug, Clone)]
 struct ComponentFfiModel {
+    contract_version: ContractVersionModel,
     opaque_types: Vec<OpaqueTypeModel>,
     pre_struct_callbacks: Vec<CallbackFunctionModel>,
     post_struct_callbacks: Vec<CallbackFunctionModel>,
@@ -56,6 +58,7 @@ struct ComponentFfiModel {
 
 impl ComponentFfiModel {
     fn from_ci(ci: &ComponentInterface) -> Self {
+        let contract_version_symbol = ci.ffi_uniffi_contract_version().name().to_string();
         let mut opaque_names = BTreeSet::new();
         let mut pre_struct_callbacks = Vec::new();
         let mut post_struct_callbacks = Vec::new();
@@ -93,6 +96,12 @@ impl ComponentFfiModel {
             .collect();
 
         Self {
+            contract_version: ContractVersionModel {
+                identifier: js_identifier(&contract_version_symbol),
+                name_json: json_string(&contract_version_symbol)
+                    .expect("FFI contract version symbol names should serialize"),
+                expected: ci.uniffi_contract_version(),
+            },
             opaque_types,
             pre_struct_callbacks,
             post_struct_callbacks,
@@ -108,11 +117,19 @@ struct ComponentFfiTemplateContext {
     cdylib_name_json: String,
     lib_path_literal_json: String,
     manual_load: bool,
+    contract_version: ContractVersionModel,
     opaque_types: Vec<OpaqueTypeModel>,
     pre_struct_callbacks: Vec<CallbackFunctionModel>,
     post_struct_callbacks: Vec<CallbackFunctionModel>,
     structs: Vec<StructModel>,
     functions: Vec<FunctionModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ContractVersionModel {
+    identifier: String,
+    name_json: String,
+    expected: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]

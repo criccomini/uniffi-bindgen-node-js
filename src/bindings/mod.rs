@@ -1135,6 +1135,50 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_validates_contract_version_during_load() {
+        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
+        let output_dir = temp_dir_path("ffi-contract-version");
+        let settings = GenerationSettings {
+            out_dir: output_dir.clone(),
+            try_format_code: false,
+            cdylib: Some("fixture".to_string()),
+        };
+
+        generator
+            .write_bindings(&settings, &[component_with_namespace("example")])
+            .expect("write_bindings should succeed");
+
+        let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
+        assert!(
+            component_ffi_js.contains("expectedContractVersion: 29"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("validateContractVersion(bindings);"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("throw new ContractVersionMismatchError(expected, actual);"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("bindings.library.unload();"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+
+        let component_ffi_dts =
+            fs::read_to_string(output_dir.join("example-ffi.d.ts").as_std_path())
+                .expect("component FFI DTS should be readable");
+        assert!(
+            component_ffi_dts.contains("export declare function validateContractVersion"),
+            "unexpected component FFI DTS contents: {component_ffi_dts}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_resolves_sibling_and_literal_library_paths() {
         let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-library-paths");

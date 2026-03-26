@@ -14,11 +14,19 @@ export interface FfiBindings {
   ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
 }
 
+export interface FfiIntegrity {
+  contractVersionFunction: string;
+  expectedContractVersion: number;
+}
+
 export declare const ffiMetadata: Readonly<FfiMetadata>;
+export declare const ffiIntegrity: Readonly<FfiIntegrity>;
 export declare function load(libraryPath?: string | null): Readonly<FfiBindings>;
 export declare function unload(): boolean;
 export declare function isLoaded(): boolean;
 export declare function getFfiBindings(): Readonly<FfiBindings>;
+export declare function getContractVersion(bindings?: Readonly<FfiBindings>): number;
+export declare function validateContractVersion(bindings?: Readonly<FfiBindings>): number;
 export declare const ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
 
 {% for function in context.functions %}

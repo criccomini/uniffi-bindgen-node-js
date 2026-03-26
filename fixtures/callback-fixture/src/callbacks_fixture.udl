@@ -1,0 +1,9 @@
+namespace callbacks_fixture {
+    void emit(LogSink sink, string message);
+    string? last_message(LogSink? sink);
+};
+
+callback interface LogSink {
+    void write(string message);
+    string? latest();
+};

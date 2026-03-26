@@ -1,0 +1,12 @@
+[package]
+name = "uniffi-bindgen-node-js-fixture-callbacks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "fixture_callbacks"
+crate-type = ["cdylib"]
+
+[dependencies]
+uniffi = "=0.29.5"

@@ -141,7 +141,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Ensure async methods work for DB, reader, iterator, snapshot, transaction, and WAL APIs.
 - [x] Create a minimal local UniFFI fixture crate for objects, records, enums, errors, async methods, and bytes.
 - [x] Create a local fixture crate for synchronous callback interfaces.
-- [ ] Add Rust tests that snapshot generated JS and `.d.ts` output for the fixtures.
+- [x] Add Rust tests that snapshot generated JS and `.d.ts` output for the fixtures.
 - [ ] Add Rust tests for config parsing and output path resolution.
 - [ ] Add Rust tests for unsupported-feature diagnostics.
 - [ ] Add Rust tests for generated checksum and contract-version initialization code.

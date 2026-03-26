@@ -24,3 +24,6 @@ textwrap = "0.16"
 toml = "0.5"
 uniffi = "=0.29.5"
 uniffi_bindgen = "=0.29.5"
+
+[dev-dependencies]
+insta = "1"

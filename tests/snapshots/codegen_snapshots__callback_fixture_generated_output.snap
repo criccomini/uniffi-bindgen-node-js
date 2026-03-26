@@ -1,0 +1,4881 @@
+---
+source: tests/codegen_snapshots.rs
+expression: "snapshot_output_for_fixture(\"callbacks\")"
+---
+=== index.js ===
+export * from "./callbacks_fixture.js";
+=== index.d.ts ===
+export * from "./callbacks_fixture.js";
+=== callbacks_fixture.js ===
+import koffi from "koffi";
+import {
+  configureRuntimeHooks,
+  ffiFunctions,
+  getFfiBindings,
+  load as loadFfi,
+} from "./callbacks_fixture-ffi.js";
+import { createForeignBytes, RustBufferValue } from "./runtime/ffi-types.js";
+import {
+  AbstractFfiConverterByteArray,
+  FfiConverterArray,
+  FfiConverterBool,
+  FfiConverterBytes,
+  FfiConverterDuration,
+  FfiConverterFloat32,
+  FfiConverterFloat64,
+  FfiConverterInt8,
+  FfiConverterInt16,
+  FfiConverterInt32,
+  FfiConverterInt64,
+  FfiConverterMap,
+  FfiConverterOptional,
+  FfiConverterString,
+  FfiConverterTimestamp,
+  FfiConverterUInt8,
+  FfiConverterUInt16,
+  FfiConverterUInt32,
+  FfiConverterUInt64,
+} from "./runtime/ffi-converters.js";
+import { UnexpectedEnumCase } from "./runtime/errors.js";
+import { rustCallAsync } from "./runtime/async-rust-call.js";
+import {
+  createCallbackRegistry,
+  invokeCallbackMethod,
+} from "./runtime/callbacks.js";
+import {
+  createObjectConverter,
+  createObjectFactory,
+  UniffiObjectBase,
+  UNIFFI_OBJECT_HANDLE_SIZE,
+} from "./runtime/objects.js";
+import {
+  CALL_SUCCESS,
+  createRustCallStatus,
+  defaultRustCaller,
+} from "./runtime/rust-call.js";
+
+export const componentMetadata = Object.freeze({
+  namespace: "callbacks_fixture",
+  packageName: "callbacks_fixture-package",
+  cdylibName: "fixture_callbacks",
+  nodeEngine: ">=16",
+  libPathLiteral: null,
+  manualLoad: false,
+});
+
+export { ffiMetadata } from "./callbacks_fixture-ffi.js";
+
+
+function uniffiNotImplemented(member) {
+  throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);
+}
+
+function uniffiFreeRustBuffer(buffer) {
+  return defaultRustCaller.rustCall(
+    (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_free(buffer, status),
+    { liftString: FfiConverterString.lift },
+  );
+}
+
+function uniffiRustCallOptions(errorConverter = undefined) {
+  const options = {
+    freeRustBuffer: uniffiFreeRustBuffer,
+    liftString: FfiConverterString.lift,
+  };
+  if (errorConverter != null) {
+    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);
+  }
+  return options;
+}
+
+function uniffiLowerIntoRustBuffer(converter, value) {
+  return defaultRustCaller.rustCall(
+    (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_from_bytes(createForeignBytes(converter.lower(value)), status),
+    uniffiRustCallOptions(),
+  );
+}
+
+function uniffiLiftFromRustBuffer(converter, value) {
+  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));
+}
+
+function uniffiRequireRecordObject(typeName, value) {
+  if (typeof value !== "object" || value == null) {
+    throw new TypeError(`${typeName} values must be non-null objects.`);
+  }
+  return value;
+}
+
+function uniffiRequireFlatEnumValue(enumValues, typeName, value) {
+  for (const enumValue of Object.values(enumValues)) {
+    if (enumValue === value) {
+      return enumValue;
+    }
+  }
+  throw new TypeError(`${typeName} values must be one of ${Object.values(enumValues).map((item) => JSON.stringify(item)).join(", ")}.`);
+}
+
+function uniffiRequireTaggedEnumValue(typeName, value) {
+  const enumValue = uniffiRequireRecordObject(typeName, value);
+  if (typeof enumValue.tag !== "string") {
+    throw new TypeError(`${typeName} values must be tagged objects with a string tag field.`);
+  }
+  return enumValue;
+}
+
+function uniffiNotImplementedConverter(typeName) {
+  const fail = (member) => {
+    throw new Error(`${typeName} converter ${member} is not implemented yet.`);
+  };
+  return Object.freeze({
+    lower() {
+      return fail("lower");
+    },
+    lift() {
+      return fail("lift");
+    },
+    write() {
+      return fail("write");
+    },
+    read() {
+      return fail("read");
+    },
+    allocationSize() {
+      return fail("allocationSize");
+    },
+  });
+}
+
+class UniffiLogSinkProxy extends UniffiObjectBase {
+
+  write(message) {
+    const loweredSelf = uniffiLogSinkFactory.cloneHandle(this);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    defaultRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_logsink_write(loweredSelf, loweredMessage, status),
+      uniffiRustCallOptions(),
+    );
+  }
+
+  latest() {
+    const loweredSelf = uniffiLogSinkFactory.cloneHandle(this);
+    const uniffiResult = defaultRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_logsink_latest(loweredSelf, status),
+      uniffiRustCallOptions(),
+    );
+    return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterString), uniffiResult);
+  }
+}
+
+const uniffiLogSinkFactory = createObjectFactory({
+  typeName: "LogSink",
+  createInstance: () => Object.create(UniffiLogSinkProxy.prototype),
+  cloneHandle(handle) {
+    return defaultRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_logsink(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    defaultRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_logsink(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+
+function uniffiValidateLogSinkImplementation(implementation) {
+  if ((typeof implementation !== "object" && typeof implementation !== "function") || implementation == null) {
+    throw new TypeError(`${"LogSink"} implementations must be objects with callable methods.`);
+  }
+  if (typeof implementation.write !== "function") {
+    throw new TypeError(`${"LogSink"} is missing required method write().`);
+  }
+  if (typeof implementation.latest !== "function") {
+    throw new TypeError(`${"LogSink"} is missing required method latest().`);
+  }
+  return implementation;
+}
+
+const uniffiLogSinkRegistry = createCallbackRegistry({
+  interfaceName: "LogSink",
+  validate: uniffiValidateLogSinkImplementation,
+});
+
+function uniffiRegisterLogSinkVtable(bindings, registrations) {
+  const writeCallback = koffi.register(
+    (uniffiHandle, message, uniffiOutReturn, callStatus) => {
+      const uniffiStatus = callStatus == null
+        ? createRustCallStatus()
+        : koffi.decode(callStatus, bindings.ffiTypes.RustCallStatus);
+      const uniffiResult = invokeCallbackMethod({
+        registry: uniffiLogSinkRegistry,
+        handle: uniffiHandle,
+        methodName: "write",
+        args: [
+          uniffiLiftFromRustBuffer(FfiConverterString, message),
+        ],
+        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        status: uniffiStatus,
+      });
+      if (callStatus != null) {
+        koffi.encode(callStatus, bindings.ffiTypes.RustCallStatus, uniffiStatus);
+      }
+      if (uniffiStatus.code !== CALL_SUCCESS) {
+        return;
+      }
+    },
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceLogSinkMethod0),
+  );
+  registrations.push(writeCallback);
+  const latestCallback = koffi.register(
+    (uniffiHandle, uniffiOutReturn, callStatus) => {
+      const uniffiStatus = callStatus == null
+        ? createRustCallStatus()
+        : koffi.decode(callStatus, bindings.ffiTypes.RustCallStatus);
+      const uniffiResult = invokeCallbackMethod({
+        registry: uniffiLogSinkRegistry,
+        handle: uniffiHandle,
+        methodName: "latest",
+        args: [
+        ],
+        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        status: uniffiStatus,
+      });
+      if (callStatus != null) {
+        koffi.encode(callStatus, bindings.ffiTypes.RustCallStatus, uniffiStatus);
+      }
+      if (uniffiStatus.code !== CALL_SUCCESS) {
+        return;
+      }
+      const loweredReturn = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterString), uniffiResult);
+      koffi.encode(uniffiOutReturn, bindings.ffiTypes.RustBuffer, loweredReturn);
+    },
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceLogSinkMethod1),
+  );
+  registrations.push(latestCallback);
+  const uniffiFree = koffi.register(
+    (uniffiHandle) => uniffiLogSinkRegistry.remove(uniffiHandle),
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
+  );
+  registrations.push(uniffiFree);
+  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logsink({
+    "write": writeCallback,
+    "latest": latestCallback,
+    uniffi_free: uniffiFree,
+  });
+}
+
+const FfiConverterLogSink = Object.freeze({
+  lower(value) {
+    if (uniffiLogSinkFactory.isInstance(value)) {
+      return uniffiLogSinkFactory.cloneHandle(value);
+    }
+    return uniffiLogSinkRegistry.register(value);
+  },
+  lift(handle) {
+    return uniffiLogSinkFactory.create(handle);
+  },
+  write(value, writer) {
+    writer.writeUInt64(this.lower(value));
+  },
+  read(reader) {
+    return this.lift(reader.readUInt64());
+  },
+  allocationSize() {
+    return UNIFFI_OBJECT_HANDLE_SIZE;
+  },
+});
+const uniffiRegisteredCallbackPointers = [];
+
+function uniffiRegisterCallbackVtables(bindings) {
+  uniffiRegisterLogSinkVtable(bindings, uniffiRegisteredCallbackPointers);
+}
+
+function uniffiUnregisterCallbackVtables() {
+  uniffiLogSinkRegistry.clear();
+  while (uniffiRegisteredCallbackPointers.length > 0) {
+    koffi.unregister(uniffiRegisteredCallbackPointers.pop());
+  }
+}
+
+configureRuntimeHooks({
+  onLoad(bindings) {
+    uniffiRegisterCallbackVtables(bindings);
+  },
+  onUnload() {
+    uniffiUnregisterCallbackVtables();
+  },
+});
+
+export function emit(sink, message) {
+    const loweredSink = FfiConverterLogSink.lower(sink);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+  defaultRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(loweredSink, loweredMessage, status),
+    uniffiRustCallOptions(),
+  );
+}
+
+export function last_message(sink) {
+    const loweredSink = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogSink), sink);
+  const uniffiResult = defaultRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_last_message(loweredSink, status),
+    uniffiRustCallOptions(),
+  );
+  return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterString), uniffiResult);
+}
+
+if (!componentMetadata.manualLoad) {
+  loadFfi();
+}
+=== callbacks_fixture.d.ts ===
+import { UniffiObjectBase } from "./runtime/objects.js";
+
+export interface ComponentMetadata {
+  namespace: string;
+  packageName: string;
+  cdylibName: string;
+  nodeEngine: string;
+  libPathLiteral: string | null;
+  manualLoad: boolean;
+}
+
+export declare const componentMetadata: Readonly<ComponentMetadata>;
+
+export { ffiMetadata } from "./callbacks_fixture-ffi.js";
+
+
+export interface LogSink {
+  write(message: string): void;
+  latest(): string | undefined;
+}
+
+export declare function emit(sink: LogSink, message: string): void;
+
+export declare function last_message(sink: LogSink | undefined): string | undefined;
+=== callbacks_fixture-ffi.js ===
+import { dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import koffi from "koffi";
+import {
+  ForeignBytes,
+  RustBuffer,
+  RustCallStatus,
+  UniffiHandle,
+  VoidPointer,
+  defineCallbackVtable,
+  defineOpaquePointer,
+  defineStructType,
+  normalizeHandle,
+  normalizeInt64,
+  normalizeRustBuffer,
+  normalizeRustCallStatus,
+  normalizeUInt64,
+} from "./runtime/ffi-types.js";
+import {
+  ChecksumMismatchError,
+  ContractVersionMismatchError,
+  LibraryNotLoadedError,
+} from "./runtime/errors.js";
+
+export const ffiMetadata = Object.freeze({
+  namespace: "callbacks_fixture",
+  cdylibName: "fixture_callbacks",
+  libPathLiteral: null,
+  manualLoad: false,
+});
+
+export const ffiIntegrity = Object.freeze({
+  contractVersionFunction: "ffi_fixture_callbacks_uniffi_contract_version",
+  expectedContractVersion: 29,
+  checksums: Object.freeze({
+
+    "uniffi_fixture_callbacks_checksum_func_emit": 8597,
+
+    "uniffi_fixture_callbacks_checksum_func_last_message": 57276,
+
+    "uniffi_fixture_callbacks_checksum_method_logsink_write": 56905,
+
+    "uniffi_fixture_callbacks_checksum_method_logsink_latest": 27974,
+
+  }),
+});
+
+let loadedBindings = null;
+let runtimeHooks = Object.freeze({});
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirectory = dirname(moduleFilename);
+
+function defaultSiblingLibraryFilename() {
+  const extensionByPlatform = {
+    darwin: ".dylib",
+    linux: ".so",
+    win32: ".dll",
+  };
+  const extension = extensionByPlatform[process.platform] ?? ".so";
+
+  if (process.platform === "win32") {
+    return ffiMetadata.cdylibName.endsWith(extension)
+      ? ffiMetadata.cdylibName
+      : `${ffiMetadata.cdylibName}${extension}`;
+  }
+
+  const libraryBaseName = ffiMetadata.cdylibName.startsWith("lib")
+    ? ffiMetadata.cdylibName
+    : `lib${ffiMetadata.cdylibName}`;
+  return libraryBaseName.endsWith(extension)
+    ? libraryBaseName
+    : `${libraryBaseName}${extension}`;
+}
+
+function defaultSiblingLibraryPath() {
+  return join(moduleDirectory, defaultSiblingLibraryFilename());
+}
+
+function resolveLibraryPath(libraryPath = undefined) {
+  const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+  if (rawLibraryPath == null) {
+    return defaultSiblingLibraryPath();
+  }
+
+  return isAbsolute(rawLibraryPath)
+    ? rawLibraryPath
+    : join(moduleDirectory, rawLibraryPath);
+}
+
+function createBindings(libraryPath) {
+  const library = koffi.load(libraryPath);
+
+  const RustArcPtr = defineOpaquePointer("RustArcPtr");
+
+
+  const ffiTypes = Object.freeze({
+    UniffiHandle,
+    VoidPointer,
+    RustBuffer,
+    ForeignBytes,
+    RustCallStatus,
+
+    RustArcPtr,
+
+  });
+  const ffiCallbacks = {};
+
+  ffiCallbacks.RustFutureContinuationCallback = koffi.proto("RustFutureContinuationCallback", "void", ["uint64_t", "int8_t"]);
+
+  ffiCallbacks.ForeignFutureFree = koffi.proto("ForeignFutureFree", "void", ["uint64_t"]);
+
+  ffiCallbacks.CallbackInterfaceFree = koffi.proto("CallbackInterfaceFree", "void", ["uint64_t"]);
+
+  ffiCallbacks.CallbackInterfaceLogSinkMethod0 = koffi.proto("CallbackInterfaceLogSinkMethod0", "void", ["uint64_t", ffiTypes.RustBuffer, ffiTypes.VoidPointer, koffi.pointer(ffiTypes.RustCallStatus)]);
+
+  ffiCallbacks.CallbackInterfaceLogSinkMethod1 = koffi.proto("CallbackInterfaceLogSinkMethod1", "void", ["uint64_t", koffi.pointer(ffiTypes.RustBuffer), koffi.pointer(ffiTypes.RustCallStatus)]);
+
+  const ffiStructs = Object.freeze((() => {
+    const ffiStructs = {};
+
+    ffiStructs.ForeignFuture = defineStructType("ForeignFuture", {
+
+      "handle": "uint64_t",
+
+      "free": koffi.pointer(ffiCallbacks.ForeignFutureFree),
+
+    });
+
+    ffiStructs.ForeignFutureStructU8 = defineStructType("ForeignFutureStructU8", {
+
+      "return_value": "uint8_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructI8 = defineStructType("ForeignFutureStructI8", {
+
+      "return_value": "int8_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructU16 = defineStructType("ForeignFutureStructU16", {
+
+      "return_value": "uint16_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructI16 = defineStructType("ForeignFutureStructI16", {
+
+      "return_value": "int16_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructU32 = defineStructType("ForeignFutureStructU32", {
+
+      "return_value": "uint32_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructI32 = defineStructType("ForeignFutureStructI32", {
+
+      "return_value": "int32_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructU64 = defineStructType("ForeignFutureStructU64", {
+
+      "return_value": "uint64_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructI64 = defineStructType("ForeignFutureStructI64", {
+
+      "return_value": "int64_t",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructF32 = defineStructType("ForeignFutureStructF32", {
+
+      "return_value": "float",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructF64 = defineStructType("ForeignFutureStructF64", {
+
+      "return_value": "double",
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructPointer = defineStructType("ForeignFutureStructPointer", {
+
+      "return_value": ffiTypes.RustArcPtr,
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructRustBuffer = defineStructType("ForeignFutureStructRustBuffer", {
+
+      "return_value": ffiTypes.RustBuffer,
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.ForeignFutureStructVoid = defineStructType("ForeignFutureStructVoid", {
+
+      "call_status": ffiTypes.RustCallStatus,
+
+    });
+
+    ffiStructs.VTableCallbackInterfaceLogSink = defineCallbackVtable("VTableCallbackInterfaceLogSink", {
+
+      "write": koffi.pointer(ffiCallbacks.CallbackInterfaceLogSinkMethod0),
+
+      "latest": koffi.pointer(ffiCallbacks.CallbackInterfaceLogSinkMethod1),
+
+      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
+
+    });
+
+    return ffiStructs;
+  })());
+
+  ffiCallbacks.ForeignFutureCompleteU8 = koffi.proto("ForeignFutureCompleteU8", "void", ["uint64_t", ffiStructs.ForeignFutureStructU8]);
+
+  ffiCallbacks.ForeignFutureCompleteI8 = koffi.proto("ForeignFutureCompleteI8", "void", ["uint64_t", ffiStructs.ForeignFutureStructI8]);
+
+  ffiCallbacks.ForeignFutureCompleteU16 = koffi.proto("ForeignFutureCompleteU16", "void", ["uint64_t", ffiStructs.ForeignFutureStructU16]);
+
+  ffiCallbacks.ForeignFutureCompleteI16 = koffi.proto("ForeignFutureCompleteI16", "void", ["uint64_t", ffiStructs.ForeignFutureStructI16]);
+
+  ffiCallbacks.ForeignFutureCompleteU32 = koffi.proto("ForeignFutureCompleteU32", "void", ["uint64_t", ffiStructs.ForeignFutureStructU32]);
+
+  ffiCallbacks.ForeignFutureCompleteI32 = koffi.proto("ForeignFutureCompleteI32", "void", ["uint64_t", ffiStructs.ForeignFutureStructI32]);
+
+  ffiCallbacks.ForeignFutureCompleteU64 = koffi.proto("ForeignFutureCompleteU64", "void", ["uint64_t", ffiStructs.ForeignFutureStructU64]);
+
+  ffiCallbacks.ForeignFutureCompleteI64 = koffi.proto("ForeignFutureCompleteI64", "void", ["uint64_t", ffiStructs.ForeignFutureStructI64]);
+
+  ffiCallbacks.ForeignFutureCompleteF32 = koffi.proto("ForeignFutureCompleteF32", "void", ["uint64_t", ffiStructs.ForeignFutureStructF32]);
+
+  ffiCallbacks.ForeignFutureCompleteF64 = koffi.proto("ForeignFutureCompleteF64", "void", ["uint64_t", ffiStructs.ForeignFutureStructF64]);
+
+  ffiCallbacks.ForeignFutureCompletePointer = koffi.proto("ForeignFutureCompletePointer", "void", ["uint64_t", ffiStructs.ForeignFutureStructPointer]);
+
+  ffiCallbacks.ForeignFutureCompleteRustBuffer = koffi.proto("ForeignFutureCompleteRustBuffer", "void", ["uint64_t", ffiStructs.ForeignFutureStructRustBuffer]);
+
+  ffiCallbacks.ForeignFutureCompleteVoid = koffi.proto("ForeignFutureCompleteVoid", "void", ["uint64_t", ffiStructs.ForeignFutureStructVoid]);
+
+  Object.freeze(ffiCallbacks);
+  const ffiFunctions = Object.freeze({
+
+    uniffi_fixture_callbacks_fn_init_callback_vtable_logsink: library.func("uniffi_fixture_callbacks_fn_init_callback_vtable_logsink", "void", [koffi.pointer(ffiStructs.VTableCallbackInterfaceLogSink)]),
+
+    uniffi_fixture_callbacks_fn_func_emit: library.func("uniffi_fixture_callbacks_fn_func_emit", "void", ["uint64_t", ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_callbacks_fn_func_last_message: library.func("uniffi_fixture_callbacks_fn_func_last_message", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rustbuffer_alloc: library.func("ffi_fixture_callbacks_rustbuffer_alloc", ffiTypes.RustBuffer, ["uint64_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rustbuffer_from_bytes: library.func("ffi_fixture_callbacks_rustbuffer_from_bytes", ffiTypes.RustBuffer, [ffiTypes.ForeignBytes, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rustbuffer_free: library.func("ffi_fixture_callbacks_rustbuffer_free", "void", [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rustbuffer_reserve: library.func("ffi_fixture_callbacks_rustbuffer_reserve", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, "uint64_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_u8: library.func("ffi_fixture_callbacks_rust_future_poll_u8", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_u8: library.func("ffi_fixture_callbacks_rust_future_cancel_u8", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_u8: library.func("ffi_fixture_callbacks_rust_future_free_u8", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_u8: library.func("ffi_fixture_callbacks_rust_future_complete_u8", "uint8_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_i8: library.func("ffi_fixture_callbacks_rust_future_poll_i8", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_i8: library.func("ffi_fixture_callbacks_rust_future_cancel_i8", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_i8: library.func("ffi_fixture_callbacks_rust_future_free_i8", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_i8: library.func("ffi_fixture_callbacks_rust_future_complete_i8", "int8_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_u16: library.func("ffi_fixture_callbacks_rust_future_poll_u16", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_u16: library.func("ffi_fixture_callbacks_rust_future_cancel_u16", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_u16: library.func("ffi_fixture_callbacks_rust_future_free_u16", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_u16: library.func("ffi_fixture_callbacks_rust_future_complete_u16", "uint16_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_i16: library.func("ffi_fixture_callbacks_rust_future_poll_i16", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_i16: library.func("ffi_fixture_callbacks_rust_future_cancel_i16", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_i16: library.func("ffi_fixture_callbacks_rust_future_free_i16", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_i16: library.func("ffi_fixture_callbacks_rust_future_complete_i16", "int16_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_u32: library.func("ffi_fixture_callbacks_rust_future_poll_u32", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_u32: library.func("ffi_fixture_callbacks_rust_future_cancel_u32", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_u32: library.func("ffi_fixture_callbacks_rust_future_free_u32", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_u32: library.func("ffi_fixture_callbacks_rust_future_complete_u32", "uint32_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_i32: library.func("ffi_fixture_callbacks_rust_future_poll_i32", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_i32: library.func("ffi_fixture_callbacks_rust_future_cancel_i32", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_i32: library.func("ffi_fixture_callbacks_rust_future_free_i32", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_i32: library.func("ffi_fixture_callbacks_rust_future_complete_i32", "int32_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_u64: library.func("ffi_fixture_callbacks_rust_future_poll_u64", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_u64: library.func("ffi_fixture_callbacks_rust_future_cancel_u64", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_u64: library.func("ffi_fixture_callbacks_rust_future_free_u64", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_u64: library.func("ffi_fixture_callbacks_rust_future_complete_u64", "uint64_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_i64: library.func("ffi_fixture_callbacks_rust_future_poll_i64", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_i64: library.func("ffi_fixture_callbacks_rust_future_cancel_i64", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_i64: library.func("ffi_fixture_callbacks_rust_future_free_i64", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_i64: library.func("ffi_fixture_callbacks_rust_future_complete_i64", "int64_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_f32: library.func("ffi_fixture_callbacks_rust_future_poll_f32", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_f32: library.func("ffi_fixture_callbacks_rust_future_cancel_f32", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_f32: library.func("ffi_fixture_callbacks_rust_future_free_f32", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_f32: library.func("ffi_fixture_callbacks_rust_future_complete_f32", "float", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_f64: library.func("ffi_fixture_callbacks_rust_future_poll_f64", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_f64: library.func("ffi_fixture_callbacks_rust_future_cancel_f64", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_f64: library.func("ffi_fixture_callbacks_rust_future_free_f64", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_f64: library.func("ffi_fixture_callbacks_rust_future_complete_f64", "double", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_pointer: library.func("ffi_fixture_callbacks_rust_future_poll_pointer", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_pointer: library.func("ffi_fixture_callbacks_rust_future_cancel_pointer", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_pointer: library.func("ffi_fixture_callbacks_rust_future_free_pointer", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_pointer: library.func("ffi_fixture_callbacks_rust_future_complete_pointer", ffiTypes.RustArcPtr, [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_rust_buffer: library.func("ffi_fixture_callbacks_rust_future_poll_rust_buffer", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_rust_buffer: library.func("ffi_fixture_callbacks_rust_future_cancel_rust_buffer", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_rust_buffer: library.func("ffi_fixture_callbacks_rust_future_free_rust_buffer", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_rust_buffer: library.func("ffi_fixture_callbacks_rust_future_complete_rust_buffer", ffiTypes.RustBuffer, [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    ffi_fixture_callbacks_rust_future_poll_void: library.func("ffi_fixture_callbacks_rust_future_poll_void", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_cancel_void: library.func("ffi_fixture_callbacks_rust_future_cancel_void", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_free_void: library.func("ffi_fixture_callbacks_rust_future_free_void", "void", [ffiTypes.UniffiHandle]),
+
+    ffi_fixture_callbacks_rust_future_complete_void: library.func("ffi_fixture_callbacks_rust_future_complete_void", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_callbacks_checksum_func_emit: library.func("uniffi_fixture_callbacks_checksum_func_emit", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_func_last_message: library.func("uniffi_fixture_callbacks_checksum_func_last_message", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_method_logsink_write: library.func("uniffi_fixture_callbacks_checksum_method_logsink_write", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_method_logsink_latest: library.func("uniffi_fixture_callbacks_checksum_method_logsink_latest", "uint16_t", []),
+
+    ffi_fixture_callbacks_uniffi_contract_version: library.func("ffi_fixture_callbacks_uniffi_contract_version", "uint32_t", []),
+
+  });
+
+  return Object.freeze({
+    libraryPath,
+    library,
+    ffiTypes,
+    ffiCallbacks,
+    ffiStructs,
+    ffiFunctions,
+  });
+}
+
+export function load(libraryPath = undefined) {
+  const resolvedLibraryPath = resolveLibraryPath(libraryPath);
+
+  if (loadedBindings !== null) {
+    if (loadedBindings.libraryPath === resolvedLibraryPath) {
+      return loadedBindings;
+    }
+
+    throw new Error(
+      `The native library is already loaded from ${JSON.stringify(loadedBindings.libraryPath)}. Call unload() before loading a different library path.`,
+    );
+  }
+
+  const bindings = createBindings(resolvedLibraryPath);
+  try {
+    runtimeHooks.onLoad?.(bindings);
+    validateContractVersion(bindings);
+    validateChecksums(bindings);
+  } catch (error) {
+    try {
+      runtimeHooks.onUnload?.(bindings);
+    } catch {
+      // Preserve the original initialization failure.
+    }
+    try {
+      bindings.library.unload();
+    } catch {
+      // Preserve the original initialization failure.
+    }
+    throw error;
+  }
+
+  loadedBindings = bindings;
+  return loadedBindings;
+}
+
+export function unload() {
+  if (loadedBindings === null) {
+    return false;
+  }
+
+  let hookError = null;
+  try {
+    runtimeHooks.onUnload?.(loadedBindings);
+  } catch (error) {
+    hookError = error;
+  }
+  loadedBindings.library.unload();
+  loadedBindings = null;
+  if (hookError != null) {
+    throw hookError;
+  }
+  return true;
+}
+
+export function isLoaded() {
+  return loadedBindings !== null;
+}
+
+export function configureRuntimeHooks(hooks = undefined) {
+  runtimeHooks = Object.freeze(hooks ?? {});
+}
+
+
+
+export function getFfiBindings() {
+  if (loadedBindings === null) {
+    throw new LibraryNotLoadedError(
+      "The native library is not loaded. Call load(libraryPath) first.",
+    );
+  }
+
+  return loadedBindings;
+}
+
+export function getContractVersion(bindings = getFfiBindings()) {
+  return bindings.ffiFunctions.ffi_fixture_callbacks_uniffi_contract_version();
+}
+
+export function validateContractVersion(bindings = getFfiBindings()) {
+  const actual = getContractVersion(bindings);
+  const expected = ffiIntegrity.expectedContractVersion;
+  if (actual !== expected) {
+    throw new ContractVersionMismatchError(expected, actual);
+  }
+  return actual;
+}
+
+export function getChecksums(bindings = getFfiBindings()) {
+  return Object.freeze({
+
+    "uniffi_fixture_callbacks_checksum_func_emit": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit(),
+
+    "uniffi_fixture_callbacks_checksum_func_last_message": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_last_message(),
+
+    "uniffi_fixture_callbacks_checksum_method_logsink_write": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_write(),
+
+    "uniffi_fixture_callbacks_checksum_method_logsink_latest": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_latest(),
+
+  });
+}
+
+export function validateChecksums(bindings = getFfiBindings()) {
+  const actualChecksums = getChecksums(bindings);
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_last_message"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_last_message"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_last_message", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_logsink_write"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_logsink_write"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logsink_write", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_logsink_latest"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_logsink_latest"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logsink_latest", expected, actual);
+    }
+  }
+
+  return actualChecksums;
+}
+
+export const ffiFunctions = Object.freeze({
+
+  uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_fn_func_emit(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_fn_func_last_message(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_last_message(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  ffi_fixture_callbacks_rustbuffer_alloc(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rustbuffer_alloc(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  ffi_fixture_callbacks_rustbuffer_from_bytes(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rustbuffer_from_bytes(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  ffi_fixture_callbacks_rustbuffer_free(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rustbuffer_free(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rustbuffer_reserve(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rustbuffer_reserve(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_u8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_u8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_u8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_u8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_u8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_i8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_i8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_i8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_i8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_i8(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i8(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_u16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_u16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_u16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_u16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_u16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_i16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_i16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_i16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_i16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_i16(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i16(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_u32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_u32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_u32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_u32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_u32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_i32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_i32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_i32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_i32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_i32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_u64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_u64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_u64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_u64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_u64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u64(...args);
+
+    return normalizeUInt64(result);
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_i64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_i64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_i64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_i64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_i64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i64(...args);
+
+    return normalizeInt64(result);
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_f32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_f32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_f32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_f32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_f32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_f32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_f32(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_f32(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_f64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_f64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_f64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_f64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_f64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_f64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_f64(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_f64(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_pointer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_pointer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_pointer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_pointer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_pointer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_pointer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_pointer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_pointer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_rust_buffer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_rust_buffer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_rust_buffer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_rust_buffer(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  ffi_fixture_callbacks_rust_future_poll_void(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_cancel_void(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_free_void(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_rust_future_complete_void(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_func_emit(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_func_last_message(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_last_message(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_method_logsink_write(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_write(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_method_logsink_latest(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_latest(...args);
+
+    return result;
+
+  },
+
+  ffi_fixture_callbacks_uniffi_contract_version(...args) {
+    const result = getFfiBindings().ffiFunctions.ffi_fixture_callbacks_uniffi_contract_version(...args);
+
+    return result;
+
+  },
+
+});
+
+
+export function uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args);
+}
+
+
+export function uniffi_fixture_callbacks_fn_func_emit(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(...args);
+}
+
+
+export function uniffi_fixture_callbacks_fn_func_last_message(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_func_last_message(...args);
+}
+
+
+export function ffi_fixture_callbacks_rustbuffer_alloc(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rustbuffer_alloc(...args);
+}
+
+
+export function ffi_fixture_callbacks_rustbuffer_from_bytes(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rustbuffer_from_bytes(...args);
+}
+
+
+export function ffi_fixture_callbacks_rustbuffer_free(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rustbuffer_free(...args);
+}
+
+
+export function ffi_fixture_callbacks_rustbuffer_reserve(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rustbuffer_reserve(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_u8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_u8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_u8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_u8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_u8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_i8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_i8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_i8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_i8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_i8(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i8(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_u16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_u16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_u16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_u16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_u16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_i16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_i16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_i16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_i16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_i16(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i16(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_u32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_u32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_u32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_u32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_u32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_i32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_i32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_i32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_i32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_i32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_u64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_u64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_u64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_u64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_u64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_u64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_u64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_u64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_i64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_i64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_i64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_i64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_i64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_i64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_i64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_i64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_f32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_f32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_f32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_f32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_f32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_f32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_f32(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_f32(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_f64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_f64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_f64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_f64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_f64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_f64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_f64(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_f64(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_pointer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_pointer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_pointer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_pointer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_pointer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_pointer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_pointer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_pointer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_rust_buffer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_rust_buffer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_rust_buffer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_rust_buffer(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_poll_void(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_cancel_void(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_free_void(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(...args);
+}
+
+
+export function ffi_fixture_callbacks_rust_future_complete_void(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_func_emit(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_func_last_message(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_func_last_message(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_method_logsink_write(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_write(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_method_logsink_latest(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_latest(...args);
+}
+
+
+export function ffi_fixture_callbacks_uniffi_contract_version(...args) {
+  return ffiFunctions.ffi_fixture_callbacks_uniffi_contract_version(...args);
+}
+
+
+=== callbacks_fixture-ffi.d.ts ===
+export interface FfiMetadata {
+  namespace: string;
+  cdylibName: string;
+  libPathLiteral: string | null;
+  manualLoad: boolean;
+}
+
+export interface FfiBindings {
+  libraryPath: string;
+  library: unknown;
+  ffiTypes: Readonly<Record<string, unknown>>;
+  ffiCallbacks: Readonly<Record<string, unknown>>;
+  ffiStructs: Readonly<Record<string, unknown>>;
+  ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
+}
+
+export interface FfiIntegrity {
+  contractVersionFunction: string;
+  expectedContractVersion: number;
+  checksums: Readonly<Record<string, number>>;
+}
+
+export interface FfiRuntimeHooks {
+  onLoad?(bindings: Readonly<FfiBindings>): void;
+  onUnload?(bindings: Readonly<FfiBindings>): void;
+}
+
+export declare const ffiMetadata: Readonly<FfiMetadata>;
+export declare const ffiIntegrity: Readonly<FfiIntegrity>;
+export declare function configureRuntimeHooks(hooks?: FfiRuntimeHooks | null): void;
+export declare function load(libraryPath?: string | null): Readonly<FfiBindings>;
+export declare function unload(): boolean;
+export declare function isLoaded(): boolean;
+export declare function getFfiBindings(): Readonly<FfiBindings>;
+export declare function getContractVersion(bindings?: Readonly<FfiBindings>): number;
+export declare function validateContractVersion(bindings?: Readonly<FfiBindings>): number;
+export declare function getChecksums(
+  bindings?: Readonly<FfiBindings>,
+): Readonly<Record<string, number>>;
+export declare function validateChecksums(
+  bindings?: Readonly<FfiBindings>,
+): Readonly<Record<string, number>>;
+export declare const ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
+
+
+export declare function uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_fn_func_emit(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_fn_func_last_message(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rustbuffer_alloc(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rustbuffer_from_bytes(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rustbuffer_free(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rustbuffer_reserve(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_u8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_u8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_u8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_u8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_i8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_i8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_i8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_i8(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_u16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_u16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_u16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_u16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_i16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_i16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_i16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_i16(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_u32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_u32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_u32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_u32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_i32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_i32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_i32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_i32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_u64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_u64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_u64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_u64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_i64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_i64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_i64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_i64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_f32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_f32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_f32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_f32(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_f64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_f64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_f64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_f64(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_pointer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_pointer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_pointer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_pointer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_rust_buffer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_rust_buffer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_rust_buffer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_rust_buffer(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_poll_void(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_cancel_void(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_free_void(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_rust_future_complete_void(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_func_emit(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_func_last_message(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_method_logsink_write(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_method_logsink_latest(...args: any[]): any;
+
+export declare function ffi_fixture_callbacks_uniffi_contract_version(...args: any[]): any;
+
+=== runtime/errors.js ===
+function assignErrorMetadata(error, options = {}) {
+  if (options.cause !== undefined) {
+    error.cause = options.cause;
+  }
+  if (options.code !== undefined) {
+    error.code = options.code;
+  }
+  if (options.details !== undefined) {
+    error.details = options.details;
+  }
+  return error;
+}
+
+export class UniffiError extends Error {
+  constructor(message = "UniFFI error", options = {}) {
+    super(message);
+    this.name = new.target.name;
+    assignErrorMetadata(this, options);
+  }
+}
+
+export class UniffiGeneratedError extends UniffiError {}
+
+export class UniffiRuntimeError extends UniffiError {}
+
+export class RustPanic extends UniffiRuntimeError {
+  constructor(message = "Rust panic", options = {}) {
+    super(message, options);
+  }
+}
+
+export class AbortError extends UniffiRuntimeError {
+  constructor(message = "The Rust call was cancelled.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class LibraryNotLoadedError extends UniffiRuntimeError {
+  constructor(message = "The native library is not loaded.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class ContractVersionMismatchError extends UniffiRuntimeError {
+  constructor(expected, actual, options = {}) {
+    super(
+      `UniFFI contract version mismatch: expected ${String(expected)}, got ${String(actual)}.`,
+      {
+        ...options,
+        details: { expected, actual },
+      },
+    );
+  }
+}
+
+export class ChecksumMismatchError extends UniffiRuntimeError {
+  constructor(kind, expected, actual, options = {}) {
+    super(
+      `UniFFI checksum mismatch for ${kind}: expected ${String(expected)}, got ${String(actual)}.`,
+      {
+        ...options,
+        details: { kind, expected, actual },
+      },
+    );
+  }
+}
+
+export class UnexpectedRustCallError extends UniffiRuntimeError {
+  constructor(message = "Rust returned an expected error without a decoder.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class UnexpectedRustCallStatusCode extends UniffiRuntimeError {
+  constructor(code, options = {}) {
+    super(`Unexpected RustCallStatus code: ${String(code)}.`, {
+      ...options,
+      code,
+    });
+  }
+}
+
+export class UnexpectedEnumCase extends UniffiRuntimeError {
+  constructor(message = "Encountered an unknown enum case.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class UnexpectedNullPointer extends UniffiRuntimeError {
+  constructor(message = "Received a null pointer where a value was required.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class UnexpectedOptionTag extends UniffiRuntimeError {
+  constructor(tag, options = {}) {
+    super(`Unexpected option tag byte: ${String(tag)}.`, {
+      ...options,
+      code: tag,
+    });
+  }
+}
+
+export class ConverterRangeError extends UniffiRuntimeError {
+  constructor(message = "Value cannot be represented by the requested UniFFI type.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class BufferOverflowError extends UniffiRuntimeError {
+  constructor(message = "Buffer does not contain enough bytes.", options = {}) {
+    super(message, options);
+  }
+}
+
+export class BufferSizeMismatchError extends UniffiRuntimeError {
+  constructor(expected, actual, options = {}) {
+    super(
+      `Serialized buffer size mismatch: expected ${String(expected)} bytes, wrote ${String(actual)}.`,
+      {
+        ...options,
+        details: { expected, actual },
+      },
+    );
+  }
+}
+
+export class TrailingBytesError extends UniffiRuntimeError {
+  constructor(remaining, options = {}) {
+    super(`Serialized buffer has ${String(remaining)} unread trailing byte(s).`, {
+      ...options,
+      details: { remaining },
+    });
+  }
+}
+
+export class DuplicateHandleError extends UniffiRuntimeError {
+  constructor(handle, options = {}) {
+    super(`Handle ${String(handle)} is already registered.`, {
+      ...options,
+      details: { handle },
+    });
+  }
+}
+
+export class StaleHandleError extends UniffiRuntimeError {
+  constructor(handle, options = {}) {
+    super(`Handle ${String(handle)} is stale or unknown.`, {
+      ...options,
+      details: { handle },
+    });
+  }
+}
+
+export class UnsupportedConverterError extends UniffiRuntimeError {
+  constructor(message = "The requested UniFFI converter is not available.", options = {}) {
+    super(message, options);
+  }
+}
+
+export function attachCause(error, cause) {
+  if (cause !== undefined) {
+    error.cause = cause;
+  }
+  return error;
+}
+
+export function getErrorMessage(value, fallbackMessage = "Unknown error") {
+  if (value instanceof Error) {
+    return value.message || fallbackMessage;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value == null) {
+    return fallbackMessage;
+  }
+  if (typeof value === "object" && typeof value.message === "string") {
+    return value.message;
+  }
+  return String(value);
+}
+
+export function ensureError(value, fallbackMessage = "Unknown error") {
+  if (value instanceof Error) {
+    return value;
+  }
+  return new UniffiRuntimeError(getErrorMessage(value, fallbackMessage), {
+    cause: value,
+  });
+}
+
+export function createUniffiErrorClass(
+  name,
+  { baseClass = UniffiGeneratedError, defaultMessage = name } = {},
+) {
+  return class extends baseClass {
+    constructor(message = defaultMessage, options = {}) {
+      super(message, options);
+      this.name = name;
+    }
+  };
+}
+
+export const UniffiInternalError = Object.freeze({
+  AbortError,
+  BufferOverflowError,
+  BufferSizeMismatchError,
+  ChecksumMismatchError,
+  ContractVersionMismatchError,
+  ConverterRangeError,
+  DuplicateHandleError,
+  LibraryNotLoadedError,
+  RustPanic,
+  StaleHandleError,
+  TrailingBytesError,
+  UnexpectedEnumCase,
+  UnexpectedNullPointer,
+  UnexpectedOptionTag,
+  UnexpectedRustCallError,
+  UnexpectedRustCallStatusCode,
+  UnsupportedConverterError,
+});
+=== runtime/errors.d.ts ===
+export interface UniffiErrorOptions {
+  cause?: unknown;
+  code?: string | number;
+  details?: unknown;
+}
+
+export declare class UniffiError extends Error {
+  cause?: unknown;
+  code?: string | number;
+  details?: unknown;
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class UniffiGeneratedError extends UniffiError {}
+
+export declare class UniffiRuntimeError extends UniffiError {}
+
+export declare class RustPanic extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class AbortError extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class LibraryNotLoadedError extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class ContractVersionMismatchError extends UniffiRuntimeError {
+  constructor(expected: bigint | number, actual: bigint | number, options?: UniffiErrorOptions);
+}
+
+export declare class ChecksumMismatchError extends UniffiRuntimeError {
+  constructor(
+    kind: string,
+    expected: bigint | number | string,
+    actual: bigint | number | string,
+    options?: UniffiErrorOptions,
+  );
+}
+
+export declare class UnexpectedRustCallError extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class UnexpectedRustCallStatusCode extends UniffiRuntimeError {
+  constructor(code: bigint | number | string, options?: UniffiErrorOptions);
+}
+
+export declare class UnexpectedEnumCase extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class UnexpectedNullPointer extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class UnexpectedOptionTag extends UniffiRuntimeError {
+  constructor(tag: bigint | number | string, options?: UniffiErrorOptions);
+}
+
+export declare class ConverterRangeError extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class BufferOverflowError extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare class BufferSizeMismatchError extends UniffiRuntimeError {
+  constructor(expected: bigint | number, actual: bigint | number, options?: UniffiErrorOptions);
+}
+
+export declare class TrailingBytesError extends UniffiRuntimeError {
+  constructor(remaining: bigint | number, options?: UniffiErrorOptions);
+}
+
+export declare class DuplicateHandleError extends UniffiRuntimeError {
+  constructor(handle: bigint | number | string, options?: UniffiErrorOptions);
+}
+
+export declare class StaleHandleError extends UniffiRuntimeError {
+  constructor(handle: bigint | number | string, options?: UniffiErrorOptions);
+}
+
+export declare class UnsupportedConverterError extends UniffiRuntimeError {
+  constructor(message?: string, options?: UniffiErrorOptions);
+}
+
+export declare function attachCause<T extends Error>(error: T, cause: unknown): T;
+export declare function getErrorMessage(value: unknown, fallbackMessage?: string): string;
+export declare function ensureError(value: unknown, fallbackMessage?: string): Error;
+export declare function createUniffiErrorClass(
+  name: string,
+  options?: {
+    baseClass?: typeof UniffiGeneratedError;
+    defaultMessage?: string;
+  },
+): new (message?: string, options?: UniffiErrorOptions) => UniffiGeneratedError;
+
+export declare const UniffiInternalError: Readonly<{
+  AbortError: typeof AbortError;
+  BufferOverflowError: typeof BufferOverflowError;
+  BufferSizeMismatchError: typeof BufferSizeMismatchError;
+  ChecksumMismatchError: typeof ChecksumMismatchError;
+  ContractVersionMismatchError: typeof ContractVersionMismatchError;
+  ConverterRangeError: typeof ConverterRangeError;
+  DuplicateHandleError: typeof DuplicateHandleError;
+  LibraryNotLoadedError: typeof LibraryNotLoadedError;
+  RustPanic: typeof RustPanic;
+  StaleHandleError: typeof StaleHandleError;
+  TrailingBytesError: typeof TrailingBytesError;
+  UnexpectedEnumCase: typeof UnexpectedEnumCase;
+  UnexpectedNullPointer: typeof UnexpectedNullPointer;
+  UnexpectedOptionTag: typeof UnexpectedOptionTag;
+  UnexpectedRustCallError: typeof UnexpectedRustCallError;
+  UnexpectedRustCallStatusCode: typeof UnexpectedRustCallStatusCode;
+  UnsupportedConverterError: typeof UnsupportedConverterError;
+}>;
+=== runtime/ffi-types.js ===
+import koffi from "koffi";
+import {
+  BufferOverflowError,
+  ConverterRangeError,
+  UnexpectedNullPointer,
+} from "./errors.js";
+
+export const UniffiHandle = "uint64_t";
+export const VoidPointer = "void *";
+
+export const RustBuffer = koffi.struct("RustBuffer", {
+  capacity: "uint64_t",
+  len: "uint64_t",
+  data: VoidPointer,
+});
+
+export const ForeignBytes = koffi.struct("ForeignBytes", {
+  len: "int32_t",
+  data: VoidPointer,
+});
+
+export const RustCallStatus = koffi.struct("RustCallStatus", {
+  code: "int8_t",
+  error_buf: RustBuffer,
+});
+
+const MAX_SAFE_LENGTH = BigInt(Number.MAX_SAFE_INTEGER);
+const MAX_UINT64 = (1n << 64n) - 1n;
+const MAX_INT64 = (1n << 63n) - 1n;
+const MIN_INT64 = -(1n << 63n);
+const MAX_FOREIGN_BYTES_LEN = 0x7fffffff;
+
+export const RustCallStatusCodes = Object.freeze({
+  SUCCESS: 0,
+  ERROR: 1,
+  UNEXPECTED_ERROR: 2,
+  CANCELLED: 3,
+});
+
+export const EMPTY_RUST_BUFFER = Object.freeze({
+  capacity: 0n,
+  len: 0n,
+  data: null,
+});
+
+export const EMPTY_FOREIGN_BYTES = Object.freeze({
+  len: 0,
+  data: null,
+});
+
+export const EMPTY_RUST_CALL_STATUS = Object.freeze({
+  code: RustCallStatusCodes.SUCCESS,
+  error_buf: EMPTY_RUST_BUFFER,
+});
+
+function bigintFromNumber(value, label) {
+  if (!Number.isSafeInteger(value)) {
+    throw new ConverterRangeError(
+      `${label} must be a safe integer, got ${String(value)}.`,
+    );
+  }
+  return BigInt(value);
+}
+
+function isByteSource(value) {
+  return ArrayBuffer.isView(value) || value instanceof ArrayBuffer;
+}
+
+function normalizeByteSourceLength(value, label) {
+  if (ArrayBuffer.isView(value)) {
+    return value.byteLength;
+  }
+  if (value instanceof ArrayBuffer) {
+    return value.byteLength;
+  }
+  throw new ConverterRangeError(`${label} is not backed by byte-addressable memory.`);
+}
+
+export function normalizeInt64(value) {
+  if (value == null) {
+    return value;
+  }
+
+  const normalized =
+    typeof value === "bigint" ? value : bigintFromNumber(value, "int64");
+  if (normalized < MIN_INT64 || normalized > MAX_INT64) {
+    throw new ConverterRangeError(
+      `int64 value ${String(value)} is outside the supported range.`,
+    );
+  }
+  return normalized;
+}
+
+export function normalizeUInt64(value) {
+  if (value == null) {
+    return value;
+  }
+
+  const normalized =
+    typeof value === "bigint" ? value : bigintFromNumber(value, "uint64");
+  if (normalized < 0n || normalized > MAX_UINT64) {
+    throw new ConverterRangeError(
+      `uint64 value ${String(value)} is outside the supported range.`,
+    );
+  }
+  return normalized;
+}
+
+export function normalizeHandle(value) {
+  return normalizeUInt64(value);
+}
+
+function normalizeForeignBytesLength(value) {
+  const normalized =
+    typeof value === "bigint"
+      ? value
+      : bigintFromNumber(value, "ForeignBytes length");
+  if (normalized < 0n || normalized > BigInt(MAX_FOREIGN_BYTES_LEN)) {
+    throw new ConverterRangeError(
+      `ForeignBytes length ${String(value)} is outside the supported int32 range.`,
+    );
+  }
+  return Number(normalized);
+}
+
+export function pointerAddress(pointer) {
+  if (pointer == null) {
+    return 0n;
+  }
+  if (typeof pointer === "bigint" || typeof pointer === "number") {
+    return normalizeUInt64(pointer);
+  }
+  return koffi.address(pointer);
+}
+
+export function isNullPointer(pointer) {
+  if (pointer == null) {
+    return true;
+  }
+  if (isByteSource(pointer)) {
+    return normalizeByteSourceLength(pointer, "byte source") === 0;
+  }
+  return pointerAddress(pointer) === 0n;
+}
+
+export function assertSafeArrayLength(value, label = "length") {
+  const normalized = normalizeUInt64(value);
+  if (normalized > MAX_SAFE_LENGTH) {
+    throw new ConverterRangeError(
+      `${label} ${String(value)} exceeds Number.MAX_SAFE_INTEGER.`,
+    );
+  }
+  return Number(normalized);
+}
+
+export function normalizeRustBuffer(buffer) {
+  if (buffer == null) {
+    return buffer;
+  }
+
+  const capacity = normalizeUInt64(buffer.capacity ?? 0);
+  const len = normalizeUInt64(buffer.len ?? 0);
+  const data = buffer.data ?? null;
+
+  if (len > capacity) {
+    throw new BufferOverflowError(
+      `RustBuffer length ${String(len)} exceeds capacity ${String(capacity)}.`,
+    );
+  }
+  if (data == null && (len !== 0n || capacity !== 0n)) {
+    throw new UnexpectedNullPointer(
+      "RustBuffer data is null but the buffer is not empty.",
+    );
+  }
+
+  return {
+    capacity,
+    len,
+    data,
+  };
+}
+
+export function normalizeForeignBytes(bytes) {
+  if (bytes == null) {
+    return bytes;
+  }
+
+  const len = normalizeForeignBytesLength(bytes.len ?? 0);
+  const data = bytes.data ?? null;
+  if (data == null && len !== 0) {
+    throw new UnexpectedNullPointer(
+      "ForeignBytes data is null but the byte view is not empty.",
+    );
+  }
+
+  return {
+    len,
+    data,
+  };
+}
+
+export function normalizeRustCallStatus(status) {
+  if (status == null) {
+    return status;
+  }
+
+  return {
+    code: status.code,
+    error_buf: normalizeRustBuffer(status.error_buf) ?? EMPTY_RUST_BUFFER,
+  };
+}
+
+export function createEmptyRustBuffer() {
+  return EMPTY_RUST_BUFFER;
+}
+
+export function createRustBuffer(buffer = EMPTY_RUST_BUFFER) {
+  return Object.freeze(normalizeRustBuffer(buffer) ?? EMPTY_RUST_BUFFER);
+}
+
+export function createForeignBytes(value = EMPTY_FOREIGN_BYTES) {
+  if (value === EMPTY_FOREIGN_BYTES || value == null) {
+    return EMPTY_FOREIGN_BYTES;
+  }
+
+  if (typeof value === "object" && "len" in value && "data" in value) {
+    return Object.freeze(normalizeForeignBytes(value));
+  }
+
+  const bytes = coerceUint8Array(value);
+  return Object.freeze({
+    len: bytes.byteLength,
+    data: bytes.byteLength === 0 ? null : bytes,
+  });
+}
+
+export function createRustCallStatus(
+  code = RustCallStatusCodes.SUCCESS,
+  error_buf = EMPTY_RUST_BUFFER,
+) {
+  return Object.freeze({
+    code,
+    error_buf: normalizeRustBuffer(error_buf) ?? EMPTY_RUST_BUFFER,
+  });
+}
+
+export function rustBufferNeedsFree(buffer) {
+  const normalized = normalizeRustBuffer(buffer) ?? EMPTY_RUST_BUFFER;
+  if (normalized.data == null) {
+    return false;
+  }
+  if (isByteSource(normalized.data)) {
+    return false;
+  }
+  return true;
+}
+
+export function coerceUint8Array(value, label = "bytes") {
+  if (value == null) {
+    return new Uint8Array();
+  }
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+  if (Array.isArray(value)) {
+    return Uint8Array.from(value);
+  }
+  throw new TypeError(`${label} must be an ArrayBuffer, TypedArray, or array of bytes.`);
+}
+
+export function copyUint8Array(value, label = "bytes") {
+  return Uint8Array.from(coerceUint8Array(value, label));
+}
+
+export function viewPointerBytes(pointer, length, label = "pointer") {
+  const byteLength = assertSafeArrayLength(length, `${label} length`);
+  if (byteLength === 0) {
+    return new Uint8Array();
+  }
+
+  if (isByteSource(pointer)) {
+    const available = normalizeByteSourceLength(pointer, label);
+    if (available < byteLength) {
+      throw new BufferOverflowError(
+        `${label} only contains ${available} byte(s), expected ${byteLength}.`,
+      );
+    }
+    if (ArrayBuffer.isView(pointer)) {
+      return new Uint8Array(pointer.buffer, pointer.byteOffset, byteLength);
+    }
+    return new Uint8Array(pointer, 0, byteLength);
+  }
+
+  if (isNullPointer(pointer)) {
+    throw new UnexpectedNullPointer(`${label} is null.`);
+  }
+
+  return new Uint8Array(koffi.view(pointer, byteLength));
+}
+
+export function readPointerBytes(pointer, length, label = "pointer") {
+  return Uint8Array.from(viewPointerBytes(pointer, length, label));
+}
+
+export function readForeignBytes(bytes, label = "ForeignBytes") {
+  const normalized = normalizeForeignBytes(bytes) ?? EMPTY_FOREIGN_BYTES;
+  return readPointerBytes(normalized.data, normalized.len, label);
+}
+
+export function readRustBufferBytes(buffer, label = "RustBuffer") {
+  const normalized = normalizeRustBuffer(buffer) ?? EMPTY_RUST_BUFFER;
+  return readPointerBytes(normalized.data, normalized.len, label);
+}
+
+export function defineOpaquePointer(name) {
+  return koffi.pointer(name, koffi.opaque());
+}
+
+export function defineStructType(name, fields) {
+  return koffi.struct(name, fields);
+}
+
+export function defineCallbackVtable(name, fields) {
+  return koffi.struct(name, fields);
+}
+
+export class RustBufferValue {
+  constructor(buffer = EMPTY_RUST_BUFFER) {
+    this._buffer = normalizeRustBuffer(buffer) ?? EMPTY_RUST_BUFFER;
+    this._released = false;
+  }
+
+  static empty() {
+    return new RustBufferValue(EMPTY_RUST_BUFFER);
+  }
+
+  _requireBuffer() {
+    if (this._released) {
+      throw new UnexpectedNullPointer("RustBuffer has already been released.");
+    }
+    return this._buffer;
+  }
+
+  toStruct() {
+    return createRustBuffer(this._requireBuffer());
+  }
+
+  isEmpty() {
+    return this._requireBuffer().len === 0n;
+  }
+
+  byteLength() {
+    return assertSafeArrayLength(this._requireBuffer().len, "RustBuffer length");
+  }
+
+  toUint8Array() {
+    return readRustBufferBytes(this._requireBuffer());
+  }
+
+  free(freeRustBuffer) {
+    const buffer = this._requireBuffer();
+    if (rustBufferNeedsFree(buffer) && typeof freeRustBuffer !== "function") {
+      throw new TypeError("freeRustBuffer must be a function when releasing a RustBuffer.");
+    }
+
+    this._released = true;
+    this._buffer = EMPTY_RUST_BUFFER;
+
+    if (rustBufferNeedsFree(buffer)) {
+      freeRustBuffer(buffer);
+    }
+    return true;
+  }
+
+  consumeIntoUint8Array(freeRustBuffer) {
+    const bytes = this.toUint8Array();
+    this.free(freeRustBuffer);
+    return bytes;
+  }
+}
+
+export class ForeignBytesValue {
+  constructor(bytes = EMPTY_FOREIGN_BYTES) {
+    this._bytes = normalizeForeignBytes(bytes) ?? EMPTY_FOREIGN_BYTES;
+  }
+
+  static empty() {
+    return new ForeignBytesValue(EMPTY_FOREIGN_BYTES);
+  }
+
+  toStruct() {
+    return createForeignBytes(this._bytes);
+  }
+
+  isEmpty() {
+    return this._bytes.len === 0;
+  }
+
+  byteLength() {
+    return this._bytes.len;
+  }
+
+  toUint8Array() {
+    return readForeignBytes(this._bytes);
+  }
+}
+=== runtime/ffi-types.d.ts ===
+export declare const UniffiHandle: "uint64_t";
+export declare const VoidPointer: "void *";
+export declare const RustBuffer: unknown;
+export declare const ForeignBytes: unknown;
+export declare const RustCallStatus: unknown;
+
+export interface RustBufferStruct {
+  capacity: bigint;
+  len: bigint;
+  data: unknown | null;
+}
+
+export interface ForeignBytesStruct {
+  len: number;
+  data: unknown | null;
+}
+
+export interface RustCallStatusStruct {
+  code: number;
+  error_buf: RustBufferStruct;
+}
+
+export declare const RustCallStatusCodes: Readonly<{
+  SUCCESS: 0;
+  ERROR: 1;
+  UNEXPECTED_ERROR: 2;
+  CANCELLED: 3;
+}>;
+
+export declare const EMPTY_RUST_BUFFER: Readonly<RustBufferStruct>;
+export declare const EMPTY_FOREIGN_BYTES: Readonly<ForeignBytesStruct>;
+export declare const EMPTY_RUST_CALL_STATUS: Readonly<RustCallStatusStruct>;
+
+export declare function normalizeInt64(value: bigint | number | null | undefined): bigint | null | undefined;
+export declare function normalizeUInt64(value: bigint | number | null | undefined): bigint | null | undefined;
+export declare function normalizeHandle(value: bigint | number | null | undefined): bigint | null | undefined;
+export declare function pointerAddress(pointer: unknown | null | undefined): bigint;
+export declare function isNullPointer(pointer: unknown | null | undefined): boolean;
+export declare function assertSafeArrayLength(value: bigint | number, label?: string): number;
+export declare function normalizeRustBuffer(
+  buffer: RustBufferStruct | null | undefined,
+): RustBufferStruct | null | undefined;
+export declare function normalizeForeignBytes(
+  bytes: ForeignBytesStruct | null | undefined,
+): ForeignBytesStruct | null | undefined;
+export declare function normalizeRustCallStatus(
+  status: RustCallStatusStruct | null | undefined,
+): RustCallStatusStruct | null | undefined;
+export declare function createEmptyRustBuffer(): Readonly<RustBufferStruct>;
+export declare function createRustBuffer(
+  buffer?: RustBufferStruct | null,
+): Readonly<RustBufferStruct>;
+export declare function createForeignBytes(
+  value?: ForeignBytesStruct | ArrayBuffer | ArrayBufferView | number[] | null,
+): Readonly<ForeignBytesStruct>;
+export declare function createRustCallStatus(
+  code?: number,
+  error_buf?: RustBufferStruct | null,
+): Readonly<RustCallStatusStruct>;
+export declare function rustBufferNeedsFree(buffer: RustBufferStruct | null | undefined): boolean;
+export declare function coerceUint8Array(
+  value: ArrayBuffer | ArrayBufferView | number[] | null | undefined,
+  label?: string,
+): Uint8Array;
+export declare function copyUint8Array(
+  value: ArrayBuffer | ArrayBufferView | number[] | null | undefined,
+  label?: string,
+): Uint8Array;
+export declare function viewPointerBytes(
+  pointer: unknown | null | undefined,
+  length: bigint | number,
+  label?: string,
+): Uint8Array;
+export declare function readPointerBytes(
+  pointer: unknown | null | undefined,
+  length: bigint | number,
+  label?: string,
+): Uint8Array;
+export declare function readForeignBytes(
+  bytes: ForeignBytesStruct | null | undefined,
+  label?: string,
+): Uint8Array;
+export declare function readRustBufferBytes(
+  buffer: RustBufferStruct | null | undefined,
+  label?: string,
+): Uint8Array;
+export declare function defineOpaquePointer(name: string): unknown;
+export declare function defineStructType(
+  name: string,
+  fields: Readonly<Record<string, unknown>>,
+): unknown;
+export declare function defineCallbackVtable(
+  name: string,
+  fields: Readonly<Record<string, unknown>>,
+): unknown;
+
+export declare class RustBufferValue {
+  constructor(buffer?: RustBufferStruct | null);
+  static empty(): RustBufferValue;
+  toStruct(): Readonly<RustBufferStruct>;
+  isEmpty(): boolean;
+  byteLength(): number;
+  toUint8Array(): Uint8Array;
+  free(freeRustBuffer: (buffer: RustBufferStruct) => void): boolean;
+  consumeIntoUint8Array(freeRustBuffer: (buffer: RustBufferStruct) => void): Uint8Array;
+}
+
+export declare class ForeignBytesValue {
+  constructor(bytes?: ForeignBytesStruct | null);
+  static empty(): ForeignBytesValue;
+  toStruct(): Readonly<ForeignBytesStruct>;
+  isEmpty(): boolean;
+  byteLength(): number;
+  toUint8Array(): Uint8Array;
+}
+=== runtime/ffi-converters.js ===
+import {
+  BufferOverflowError,
+  BufferSizeMismatchError,
+  ConverterRangeError,
+  TrailingBytesError,
+  UnexpectedOptionTag,
+} from "./errors.js";
+import {
+  coerceUint8Array,
+  normalizeInt64,
+  normalizeUInt64,
+} from "./ffi-types.js";
+
+const MAX_COLLECTION_LEN = 0x7fffffff;
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const MAX_DATE_MILLISECONDS = 8640000000000000n;
+const UTF8_ENCODER = new TextEncoder();
+const UTF8_DECODER = new TextDecoder();
+
+function toSafeNumber(value, label) {
+  if (value < -MAX_SAFE_BIGINT || value > MAX_SAFE_BIGINT) {
+    throw new ConverterRangeError(
+      `${label} ${String(value)} exceeds Number.MAX_SAFE_INTEGER.`,
+    );
+  }
+  return Number(value);
+}
+
+function normalizeCollectionLength(value, label) {
+  if (!Number.isInteger(value) || value < 0 || value > MAX_COLLECTION_LEN) {
+    throw new ConverterRangeError(
+      `${label} must be an integer between 0 and ${MAX_COLLECTION_LEN}.`,
+    );
+  }
+  return value;
+}
+
+function normalizeSignedInteger(value, label, min, max) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new ConverterRangeError(
+      `${label} must be an integer between ${min} and ${max}.`,
+    );
+  }
+  return value;
+}
+
+function normalizeFloat(value, label) {
+  if (typeof value !== "number") {
+    throw new TypeError(`${label} must be a number.`);
+  }
+  return value;
+}
+
+function normalizeBoolean(value, label) {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`${label} must be a boolean.`);
+  }
+  return value;
+}
+
+function normalizeDate(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new TypeError("timestamp values must be valid Date instances.");
+  }
+  return value;
+}
+
+function normalizeDurationMilliseconds(value) {
+  if (typeof value === "bigint") {
+    if (value < 0n) {
+      throw new ConverterRangeError("duration values cannot be negative.");
+    }
+    return value;
+  }
+  if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+    throw new ConverterRangeError(
+      "duration values must be non-negative integer millisecond counts.",
+    );
+  }
+  return BigInt(value);
+}
+
+function encodeUtf8(value) {
+  if (typeof value !== "string") {
+    throw new TypeError("string values must be strings.");
+  }
+  return UTF8_ENCODER.encode(value);
+}
+
+function decodeUtf8(bytes) {
+  return UTF8_DECODER.decode(bytes);
+}
+
+export class ByteWriter {
+  constructor(length) {
+    const byteLength = normalizeCollectionLength(length, "serialized byte length");
+    this._bytes = new Uint8Array(byteLength);
+    this._view = new DataView(this._bytes.buffer);
+    this._offset = 0;
+  }
+
+  remaining() {
+    return this._bytes.byteLength - this._offset;
+  }
+
+  _ensureAvailable(byteLength) {
+    if (this.remaining() < byteLength) {
+      throw new BufferOverflowError(
+        `Tried to write ${byteLength} byte(s) with only ${this.remaining()} remaining.`,
+      );
+    }
+  }
+
+  writeInt8(value) {
+    this._ensureAvailable(1);
+    this._view.setInt8(this._offset, normalizeSignedInteger(value, "i8", -128, 127));
+    this._offset += 1;
+  }
+
+  writeUInt8(value) {
+    this._ensureAvailable(1);
+    this._view.setUint8(this._offset, normalizeSignedInteger(value, "u8", 0, 0xff));
+    this._offset += 1;
+  }
+
+  writeInt16(value) {
+    this._ensureAvailable(2);
+    this._view.setInt16(this._offset, normalizeSignedInteger(value, "i16", -0x8000, 0x7fff));
+    this._offset += 2;
+  }
+
+  writeUInt16(value) {
+    this._ensureAvailable(2);
+    this._view.setUint16(this._offset, normalizeSignedInteger(value, "u16", 0, 0xffff));
+    this._offset += 2;
+  }
+
+  writeInt32(value) {
+    this._ensureAvailable(4);
+    this._view.setInt32(
+      this._offset,
+      normalizeSignedInteger(value, "i32", -0x80000000, 0x7fffffff),
+    );
+    this._offset += 4;
+  }
+
+  writeUInt32(value) {
+    this._ensureAvailable(4);
+    this._view.setUint32(this._offset, normalizeSignedInteger(value, "u32", 0, 0xffffffff));
+    this._offset += 4;
+  }
+
+  writeInt64(value) {
+    this._ensureAvailable(8);
+    this._view.setBigInt64(this._offset, normalizeInt64(value));
+    this._offset += 8;
+  }
+
+  writeUInt64(value) {
+    this._ensureAvailable(8);
+    this._view.setBigUint64(this._offset, normalizeUInt64(value));
+    this._offset += 8;
+  }
+
+  writeFloat32(value) {
+    this._ensureAvailable(4);
+    this._view.setFloat32(this._offset, normalizeFloat(value, "f32"));
+    this._offset += 4;
+  }
+
+  writeFloat64(value) {
+    this._ensureAvailable(8);
+    this._view.setFloat64(this._offset, normalizeFloat(value, "f64"));
+    this._offset += 8;
+  }
+
+  writeBytes(value) {
+    const bytes = coerceUint8Array(value, "serialized bytes");
+    this._ensureAvailable(bytes.byteLength);
+    this._bytes.set(bytes, this._offset);
+    this._offset += bytes.byteLength;
+  }
+
+  finish() {
+    if (this._offset !== this._bytes.byteLength) {
+      throw new BufferSizeMismatchError(this._bytes.byteLength, this._offset);
+    }
+    return this._bytes;
+  }
+}
+
+export class ByteReader {
+  constructor(bytes) {
+    this._bytes = coerceUint8Array(bytes, "serialized bytes");
+    this._view = new DataView(
+      this._bytes.buffer,
+      this._bytes.byteOffset,
+      this._bytes.byteLength,
+    );
+    this._offset = 0;
+  }
+
+  remaining() {
+    return this._bytes.byteLength - this._offset;
+  }
+
+  _ensureAvailable(byteLength) {
+    if (this.remaining() < byteLength) {
+      throw new BufferOverflowError(
+        `Tried to read ${byteLength} byte(s) with only ${this.remaining()} remaining.`,
+      );
+    }
+  }
+
+  readInt8() {
+    this._ensureAvailable(1);
+    const value = this._view.getInt8(this._offset);
+    this._offset += 1;
+    return value;
+  }
+
+  readUInt8() {
+    this._ensureAvailable(1);
+    const value = this._view.getUint8(this._offset);
+    this._offset += 1;
+    return value;
+  }
+
+  readInt16() {
+    this._ensureAvailable(2);
+    const value = this._view.getInt16(this._offset);
+    this._offset += 2;
+    return value;
+  }
+
+  readUInt16() {
+    this._ensureAvailable(2);
+    const value = this._view.getUint16(this._offset);
+    this._offset += 2;
+    return value;
+  }
+
+  readInt32() {
+    this._ensureAvailable(4);
+    const value = this._view.getInt32(this._offset);
+    this._offset += 4;
+    return value;
+  }
+
+  readUInt32() {
+    this._ensureAvailable(4);
+    const value = this._view.getUint32(this._offset);
+    this._offset += 4;
+    return value;
+  }
+
+  readInt64() {
+    this._ensureAvailable(8);
+    const value = this._view.getBigInt64(this._offset);
+    this._offset += 8;
+    return value;
+  }
+
+  readUInt64() {
+    this._ensureAvailable(8);
+    const value = this._view.getBigUint64(this._offset);
+    this._offset += 8;
+    return value;
+  }
+
+  readFloat32() {
+    this._ensureAvailable(4);
+    const value = this._view.getFloat32(this._offset);
+    this._offset += 4;
+    return value;
+  }
+
+  readFloat64() {
+    this._ensureAvailable(8);
+    const value = this._view.getFloat64(this._offset);
+    this._offset += 8;
+    return value;
+  }
+
+  readBytes(length) {
+    const byteLength = normalizeCollectionLength(length, "byte length");
+    this._ensureAvailable(byteLength);
+    const start = this._offset;
+    const end = this._offset + byteLength;
+    this._offset = end;
+    return this._bytes.slice(start, end);
+  }
+
+  readCount(label) {
+    const count = this.readInt32();
+    if (count < 0) {
+      throw new ConverterRangeError(`${label} cannot be negative.`);
+    }
+    return count;
+  }
+
+  finish() {
+    if (this.remaining() !== 0) {
+      throw new TrailingBytesError(this.remaining());
+    }
+  }
+}
+
+export class AbstractFfiConverterByteArray {
+  lower(value) {
+    const writer = new ByteWriter(this.allocationSize(value));
+    this.write(value, writer);
+    return writer.finish();
+  }
+
+  lift(value) {
+    const reader = new ByteReader(value);
+    const result = this.read(reader);
+    reader.finish();
+    return result;
+  }
+}
+
+function createPrimitiveConverter({ lower, lift, write, read, size }) {
+  return Object.freeze({
+    lower,
+    lift,
+    write,
+    read,
+    allocationSize() {
+      return size;
+    },
+  });
+}
+
+export const FfiConverterInt8 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeSignedInteger(value, "i8", -128, 127);
+  },
+  lift(value) {
+    return normalizeSignedInteger(value, "i8", -128, 127);
+  },
+  write(value, writer) {
+    writer.writeInt8(value);
+  },
+  read(reader) {
+    return reader.readInt8();
+  },
+  size: 1,
+});
+
+export const FfiConverterUInt8 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeSignedInteger(value, "u8", 0, 0xff);
+  },
+  lift(value) {
+    return normalizeSignedInteger(value, "u8", 0, 0xff);
+  },
+  write(value, writer) {
+    writer.writeUInt8(value);
+  },
+  read(reader) {
+    return reader.readUInt8();
+  },
+  size: 1,
+});
+
+export const FfiConverterInt16 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeSignedInteger(value, "i16", -0x8000, 0x7fff);
+  },
+  lift(value) {
+    return normalizeSignedInteger(value, "i16", -0x8000, 0x7fff);
+  },
+  write(value, writer) {
+    writer.writeInt16(value);
+  },
+  read(reader) {
+    return reader.readInt16();
+  },
+  size: 2,
+});
+
+export const FfiConverterUInt16 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeSignedInteger(value, "u16", 0, 0xffff);
+  },
+  lift(value) {
+    return normalizeSignedInteger(value, "u16", 0, 0xffff);
+  },
+  write(value, writer) {
+    writer.writeUInt16(value);
+  },
+  read(reader) {
+    return reader.readUInt16();
+  },
+  size: 2,
+});
+
+export const FfiConverterInt32 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeSignedInteger(value, "i32", -0x80000000, 0x7fffffff);
+  },
+  lift(value) {
+    return normalizeSignedInteger(value, "i32", -0x80000000, 0x7fffffff);
+  },
+  write(value, writer) {
+    writer.writeInt32(value);
+  },
+  read(reader) {
+    return reader.readInt32();
+  },
+  size: 4,
+});
+
+export const FfiConverterUInt32 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeSignedInteger(value, "u32", 0, 0xffffffff);
+  },
+  lift(value) {
+    return normalizeSignedInteger(value, "u32", 0, 0xffffffff);
+  },
+  write(value, writer) {
+    writer.writeUInt32(value);
+  },
+  read(reader) {
+    return reader.readUInt32();
+  },
+  size: 4,
+});
+
+export const FfiConverterInt64 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeInt64(value);
+  },
+  lift(value) {
+    return normalizeInt64(value);
+  },
+  write(value, writer) {
+    writer.writeInt64(value);
+  },
+  read(reader) {
+    return reader.readInt64();
+  },
+  size: 8,
+});
+
+export const FfiConverterUInt64 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeUInt64(value);
+  },
+  lift(value) {
+    return normalizeUInt64(value);
+  },
+  write(value, writer) {
+    writer.writeUInt64(value);
+  },
+  read(reader) {
+    return reader.readUInt64();
+  },
+  size: 8,
+});
+
+export const FfiConverterFloat32 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeFloat(value, "f32");
+  },
+  lift(value) {
+    return normalizeFloat(value, "f32");
+  },
+  write(value, writer) {
+    writer.writeFloat32(value);
+  },
+  read(reader) {
+    return reader.readFloat32();
+  },
+  size: 4,
+});
+
+export const FfiConverterFloat64 = createPrimitiveConverter({
+  lower(value) {
+    return normalizeFloat(value, "f64");
+  },
+  lift(value) {
+    return normalizeFloat(value, "f64");
+  },
+  write(value, writer) {
+    writer.writeFloat64(value);
+  },
+  read(reader) {
+    return reader.readFloat64();
+  },
+  size: 8,
+});
+
+export const FfiConverterBool = createPrimitiveConverter({
+  lower(value) {
+    return normalizeBoolean(value, "bool") ? 1 : 0;
+  },
+  lift(value) {
+    switch (value) {
+      case 0:
+        return false;
+      case 1:
+        return true;
+      default:
+        throw new ConverterRangeError(
+          `bool values must be encoded as 0 or 1, got ${String(value)}.`,
+        );
+    }
+  },
+  write(value, writer) {
+    writer.writeInt8(normalizeBoolean(value, "bool") ? 1 : 0);
+  },
+  read(reader) {
+    return FfiConverterBool.lift(reader.readInt8());
+  },
+  size: 1,
+});
+
+export const FfiConverterString = new (class extends AbstractFfiConverterByteArray {
+  allocationSize(value) {
+    return 4 + encodeUtf8(value).byteLength;
+  }
+
+  write(value, writer) {
+    const bytes = encodeUtf8(value);
+    writer.writeInt32(normalizeCollectionLength(bytes.byteLength, "string byte length"));
+    writer.writeBytes(bytes);
+  }
+
+  read(reader) {
+    return decodeUtf8(reader.readBytes(reader.readCount("string byte length")));
+  }
+})();
+
+export const FfiConverterBytes = new (class extends AbstractFfiConverterByteArray {
+  allocationSize(value) {
+    return 4 + coerceUint8Array(value, "byte array").byteLength;
+  }
+
+  write(value, writer) {
+    const bytes = coerceUint8Array(value, "byte array");
+    writer.writeInt32(normalizeCollectionLength(bytes.byteLength, "byte array length"));
+    writer.writeBytes(bytes);
+  }
+
+  read(reader) {
+    return reader.readBytes(reader.readCount("byte array length"));
+  }
+})();
+
+export const FfiConverterByteArray = FfiConverterBytes;
+export const FfiConverterArrayBuffer = FfiConverterBytes;
+
+export const FfiConverterTimestamp = new (class extends AbstractFfiConverterByteArray {
+  allocationSize() {
+    return 12;
+  }
+
+  write(value, writer) {
+    const timestamp = normalizeDate(value);
+    const milliseconds = BigInt(timestamp.getTime());
+    const negative = milliseconds < 0n;
+    const magnitude = negative ? -milliseconds : milliseconds;
+    const seconds = magnitude / 1000n;
+    const nanos = Number((magnitude % 1000n) * 1000000n);
+
+    writer.writeInt64(negative ? -seconds : seconds);
+    writer.writeUInt32(nanos);
+  }
+
+  read(reader) {
+    const seconds = reader.readInt64();
+    const nanos = reader.readUInt32();
+    if (nanos > 999999999) {
+      throw new ConverterRangeError(
+        `timestamp nanosecond component ${String(nanos)} is out of range.`,
+      );
+    }
+
+    const magnitudeMs = (seconds < 0n ? -seconds : seconds) * 1000n + BigInt(nanos / 1000000);
+    if (magnitudeMs > MAX_DATE_MILLISECONDS) {
+      throw new ConverterRangeError(
+        `timestamp ${String(magnitudeMs)}ms exceeds the supported Date range.`,
+      );
+    }
+
+    return new Date(seconds < 0n ? -Number(magnitudeMs) : Number(magnitudeMs));
+  }
+})();
+
+export const FfiConverterDuration = new (class extends AbstractFfiConverterByteArray {
+  allocationSize() {
+    return 12;
+  }
+
+  write(value, writer) {
+    const milliseconds = normalizeDurationMilliseconds(value);
+    const seconds = milliseconds / 1000n;
+    const nanos = Number((milliseconds % 1000n) * 1000000n);
+
+    writer.writeUInt64(seconds);
+    writer.writeUInt32(nanos);
+  }
+
+  read(reader) {
+    const seconds = reader.readUInt64();
+    const nanos = reader.readUInt32();
+    if (nanos > 999999999) {
+      throw new ConverterRangeError(
+        `duration nanosecond component ${String(nanos)} is out of range.`,
+      );
+    }
+
+    return toSafeNumber(seconds * 1000n, "duration milliseconds") + nanos / 1000000;
+  }
+})();
+
+export class FfiConverterOptional extends AbstractFfiConverterByteArray {
+  constructor(innerConverter) {
+    super();
+    this.innerConverter = innerConverter;
+  }
+
+  allocationSize(value) {
+    if (value == null) {
+      return 1;
+    }
+    return 1 + this.innerConverter.allocationSize(value);
+  }
+
+  write(value, writer) {
+    if (value == null) {
+      writer.writeInt8(0);
+      return;
+    }
+    writer.writeInt8(1);
+    this.innerConverter.write(value, writer);
+  }
+
+  read(reader) {
+    const tag = reader.readInt8();
+    switch (tag) {
+      case 0:
+        return undefined;
+      case 1:
+        return this.innerConverter.read(reader);
+      default:
+        throw new UnexpectedOptionTag(tag);
+    }
+  }
+}
+
+function normalizeSequence(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value != null && typeof value !== "string" && typeof value[Symbol.iterator] === "function") {
+    return Array.from(value);
+  }
+  throw new TypeError("sequence values must be arrays or iterable collections.");
+}
+
+export class FfiConverterArray extends AbstractFfiConverterByteArray {
+  constructor(innerConverter) {
+    super();
+    this.innerConverter = innerConverter;
+  }
+
+  allocationSize(value) {
+    const items = normalizeSequence(value);
+    return (
+      4 +
+      items.reduce(
+        (total, item) => total + this.innerConverter.allocationSize(item),
+        0,
+      )
+    );
+  }
+
+  write(value, writer) {
+    const items = normalizeSequence(value);
+    writer.writeInt32(normalizeCollectionLength(items.length, "sequence length"));
+    for (const item of items) {
+      this.innerConverter.write(item, writer);
+    }
+  }
+
+  read(reader) {
+    const itemCount = reader.readCount("sequence length");
+    const items = new Array(itemCount);
+    for (let index = 0; index < itemCount; index += 1) {
+      items[index] = this.innerConverter.read(reader);
+    }
+    return items;
+  }
+}
+
+export const FfiConverterSequence = FfiConverterArray;
+
+function normalizeEntries(value) {
+  if (value instanceof Map) {
+    return Array.from(value.entries());
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value != null && typeof value[Symbol.iterator] === "function") {
+    return Array.from(value);
+  }
+  throw new TypeError("map values must be Maps or iterable entry collections.");
+}
+
+export class FfiConverterMap extends AbstractFfiConverterByteArray {
+  constructor(keyConverter, valueConverter) {
+    super();
+    this.keyConverter = keyConverter;
+    this.valueConverter = valueConverter;
+  }
+
+  allocationSize(value) {
+    const entries = normalizeEntries(value);
+    return entries.reduce((total, entry) => {
+      if (!Array.isArray(entry) || entry.length !== 2) {
+        throw new TypeError("map entries must be two-item [key, value] pairs.");
+      }
+      return (
+        total +
+        this.keyConverter.allocationSize(entry[0]) +
+        this.valueConverter.allocationSize(entry[1])
+      );
+    }, 4);
+  }
+
+  write(value, writer) {
+    const entries = normalizeEntries(value);
+    writer.writeInt32(normalizeCollectionLength(entries.length, "map length"));
+    for (const entry of entries) {
+      if (!Array.isArray(entry) || entry.length !== 2) {
+        throw new TypeError("map entries must be two-item [key, value] pairs.");
+      }
+      this.keyConverter.write(entry[0], writer);
+      this.valueConverter.write(entry[1], writer);
+    }
+  }
+
+  read(reader) {
+    const entryCount = reader.readCount("map length");
+    const map = new Map();
+    for (let index = 0; index < entryCount; index += 1) {
+      const key = this.keyConverter.read(reader);
+      const value = this.valueConverter.read(reader);
+      map.set(key, value);
+    }
+    return map;
+  }
+}
+=== runtime/ffi-converters.d.ts ===
+export type UniffiTimestamp = Date;
+export type UniffiDuration = number;
+
+export interface FfiConverter<T, FfiType = T> {
+  allocationSize(value: T): number;
+  lower(value: T): FfiType;
+  lift(value: FfiType): T;
+  write(value: T, writer: ByteWriter): void;
+  read(reader: ByteReader): T;
+}
+
+export declare class ByteWriter {
+  constructor(length: number);
+  remaining(): number;
+  writeInt8(value: number): void;
+  writeUInt8(value: number): void;
+  writeInt16(value: number): void;
+  writeUInt16(value: number): void;
+  writeInt32(value: number): void;
+  writeUInt32(value: number): void;
+  writeInt64(value: bigint | number): void;
+  writeUInt64(value: bigint | number): void;
+  writeFloat32(value: number): void;
+  writeFloat64(value: number): void;
+  writeBytes(value: ArrayBuffer | ArrayBufferView | number[]): void;
+  finish(): Uint8Array;
+}
+
+export declare class ByteReader {
+  constructor(bytes: ArrayBuffer | ArrayBufferView);
+  remaining(): number;
+  readInt8(): number;
+  readUInt8(): number;
+  readInt16(): number;
+  readUInt16(): number;
+  readInt32(): number;
+  readUInt32(): number;
+  readInt64(): bigint;
+  readUInt64(): bigint;
+  readFloat32(): number;
+  readFloat64(): number;
+  readBytes(length: number): Uint8Array;
+  readCount(label: string): number;
+  finish(): void;
+}
+
+export declare abstract class AbstractFfiConverterByteArray<T>
+  implements FfiConverter<T, Uint8Array>
+{
+  abstract allocationSize(value: T): number;
+  lower(value: T): Uint8Array;
+  lift(value: ArrayBuffer | ArrayBufferView): T;
+  abstract write(value: T, writer: ByteWriter): void;
+  abstract read(reader: ByteReader): T;
+}
+
+export declare const FfiConverterInt8: Readonly<FfiConverter<number>>;
+export declare const FfiConverterUInt8: Readonly<FfiConverter<number>>;
+export declare const FfiConverterInt16: Readonly<FfiConverter<number>>;
+export declare const FfiConverterUInt16: Readonly<FfiConverter<number>>;
+export declare const FfiConverterInt32: Readonly<FfiConverter<number>>;
+export declare const FfiConverterUInt32: Readonly<FfiConverter<number>>;
+export declare const FfiConverterInt64: Readonly<FfiConverter<bigint, bigint>>;
+export declare const FfiConverterUInt64: Readonly<FfiConverter<bigint, bigint>>;
+export declare const FfiConverterFloat32: Readonly<FfiConverter<number>>;
+export declare const FfiConverterFloat64: Readonly<FfiConverter<number>>;
+export declare const FfiConverterBool: Readonly<FfiConverter<boolean, number>>;
+export declare const FfiConverterString: Readonly<FfiConverter<string, Uint8Array>>;
+export declare const FfiConverterBytes: Readonly<FfiConverter<Uint8Array, Uint8Array>>;
+export declare const FfiConverterByteArray: typeof FfiConverterBytes;
+export declare const FfiConverterArrayBuffer: typeof FfiConverterBytes;
+export declare const FfiConverterTimestamp: Readonly<
+  FfiConverter<UniffiTimestamp, Uint8Array>
+>;
+export declare const FfiConverterDuration: Readonly<
+  FfiConverter<UniffiDuration, Uint8Array>
+>;
+
+export declare class FfiConverterOptional<T> extends AbstractFfiConverterByteArray<T | undefined> {
+  constructor(innerConverter: FfiConverter<T, any>);
+  allocationSize(value: T | null | undefined): number;
+  write(value: T | null | undefined, writer: ByteWriter): void;
+  read(reader: ByteReader): T | undefined;
+}
+
+export declare class FfiConverterArray<T> extends AbstractFfiConverterByteArray<T[]> {
+  constructor(innerConverter: FfiConverter<T, any>);
+  allocationSize(value: Iterable<T> | T[]): number;
+  write(value: Iterable<T> | T[], writer: ByteWriter): void;
+  read(reader: ByteReader): T[];
+}
+
+export declare const FfiConverterSequence: typeof FfiConverterArray;
+
+export declare class FfiConverterMap<K, V> extends AbstractFfiConverterByteArray<Map<K, V>> {
+  constructor(keyConverter: FfiConverter<K, any>, valueConverter: FfiConverter<V, any>);
+  allocationSize(value: Map<K, V> | Iterable<[K, V]>): number;
+  write(value: Map<K, V> | Iterable<[K, V]>, writer: ByteWriter): void;
+  read(reader: ByteReader): Map<K, V>;
+}
+=== runtime/rust-call.js ===
+import {
+  AbortError,
+  RustPanic,
+  UnexpectedRustCallError,
+  UnexpectedRustCallStatusCode,
+} from "./errors.js";
+import { FfiConverterString } from "./ffi-converters.js";
+import {
+  EMPTY_RUST_BUFFER,
+  RustBufferValue,
+  RustCallStatusCodes,
+  normalizeRustBuffer,
+  normalizeRustCallStatus,
+} from "./ffi-types.js";
+
+export const CALL_SUCCESS = RustCallStatusCodes.SUCCESS;
+export const CALL_ERROR = RustCallStatusCodes.ERROR;
+export const CALL_UNEXPECTED_ERROR = RustCallStatusCodes.UNEXPECTED_ERROR;
+export const CALL_CANCELLED = RustCallStatusCodes.CANCELLED;
+
+function defaultLiftString(bytes) {
+  return FfiConverterString.lift(bytes);
+}
+
+function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
+  return normalizeRustBuffer(buffer) ?? {
+    capacity: 0n,
+    len: 0n,
+    data: null,
+  };
+}
+
+function consumeRustBuffer(buffer, freeRustBuffer) {
+  const normalized = createMutableRustBuffer(buffer);
+  if (normalized.len === 0n) {
+    return new Uint8Array();
+  }
+
+  const rustBuffer = new RustBufferValue(normalized);
+  if (typeof freeRustBuffer === "function") {
+    return rustBuffer.consumeIntoUint8Array(freeRustBuffer);
+  }
+  return rustBuffer.toUint8Array();
+}
+
+export function createRustCallStatus(
+  code = CALL_SUCCESS,
+  error_buf = EMPTY_RUST_BUFFER,
+) {
+  return {
+    code,
+    error_buf: createMutableRustBuffer(error_buf),
+  };
+}
+
+export function createRustErrorStatus(
+  code = CALL_ERROR,
+  error_buf = EMPTY_RUST_BUFFER,
+) {
+  return createRustCallStatus(code, error_buf);
+}
+
+export function checkRustCallStatus(status, options = {}) {
+  const normalized = normalizeRustCallStatus(status) ?? createRustCallStatus();
+  const {
+    errorHandler,
+    freeRustBuffer,
+    liftString = defaultLiftString,
+  } = options;
+
+  switch (normalized.code) {
+    case CALL_SUCCESS:
+      return normalized;
+
+    case CALL_ERROR: {
+      const errorBytes = consumeRustBuffer(normalized.error_buf, freeRustBuffer);
+      if (typeof errorHandler === "function") {
+        throw errorHandler(errorBytes, normalized);
+      }
+      throw new UnexpectedRustCallError();
+    }
+
+    case CALL_UNEXPECTED_ERROR: {
+      const errorBytes = consumeRustBuffer(normalized.error_buf, freeRustBuffer);
+      const message =
+        errorBytes.byteLength === 0
+          ? "Rust panic"
+          : liftString(errorBytes);
+      throw new RustPanic(message);
+    }
+
+    case CALL_CANCELLED:
+      throw new AbortError();
+
+    default:
+      throw new UnexpectedRustCallStatusCode(normalized.code);
+  }
+}
+
+export function rustCall(caller, options = {}) {
+  const status = createRustCallStatus();
+  const result = caller(status);
+  checkRustCallStatus(status, options);
+  return result;
+}
+
+export function rustCallWithError(errorHandler, caller, options = {}) {
+  return rustCall(caller, {
+    ...options,
+    errorHandler,
+  });
+}
+
+export class UniffiRustCaller {
+  constructor({
+    createStatus = () => createRustCallStatus(),
+    freeRustBuffer = undefined,
+    liftString = defaultLiftString,
+  } = {}) {
+    this._createStatus = createStatus;
+    this._freeRustBuffer = freeRustBuffer;
+    this._liftString = liftString;
+  }
+
+  createCallStatus() {
+    return this._createStatus();
+  }
+
+  createErrorStatus(code = CALL_ERROR, error_buf = EMPTY_RUST_BUFFER) {
+    const status = this.createCallStatus();
+    status.code = code;
+    status.error_buf = createMutableRustBuffer(error_buf);
+    return status;
+  }
+
+  makeRustCall(caller, options = {}) {
+    const status = this.createCallStatus();
+    const result = caller(status);
+    checkRustCallStatus(status, {
+      ...options,
+      freeRustBuffer: options.freeRustBuffer ?? this._freeRustBuffer,
+      liftString: options.liftString ?? this._liftString,
+    });
+    return result;
+  }
+
+  rustCall(caller, options = {}) {
+    return this.makeRustCall(caller, options);
+  }
+
+  rustCallWithError(errorHandler, caller, options = {}) {
+    return this.makeRustCall(caller, {
+      ...options,
+      errorHandler,
+    });
+  }
+}
+
+export const defaultRustCaller = new UniffiRustCaller();
+=== runtime/rust-call.d.ts ===
+import type { RustBufferStruct, RustCallStatusStruct } from "./ffi-types.js";
+
+export declare const CALL_SUCCESS: 0;
+export declare const CALL_ERROR: 1;
+export declare const CALL_UNEXPECTED_ERROR: 2;
+export declare const CALL_CANCELLED: 3;
+
+export type RustStringLifter = (bytes: Uint8Array) => string;
+export type RustErrorHandler<E extends Error = Error> = (
+  bytes: Uint8Array,
+  status: RustCallStatusStruct,
+) => E;
+
+export interface RustCallOptions<E extends Error = Error> {
+  errorHandler?: RustErrorHandler<E>;
+  freeRustBuffer?: ((buffer: RustBufferStruct) => void) | null;
+  liftString?: RustStringLifter;
+}
+
+export declare function createRustCallStatus(
+  code?: number,
+  error_buf?: RustBufferStruct | null,
+): RustCallStatusStruct;
+export declare function createRustErrorStatus(
+  code?: number,
+  error_buf?: RustBufferStruct | null,
+): RustCallStatusStruct;
+export declare function checkRustCallStatus<E extends Error = Error>(
+  status: RustCallStatusStruct | null | undefined,
+  options?: RustCallOptions<E>,
+): RustCallStatusStruct;
+export declare function rustCall<T, E extends Error = Error>(
+  caller: (status: RustCallStatusStruct) => T,
+  options?: RustCallOptions<E>,
+): T;
+export declare function rustCallWithError<T, E extends Error = Error>(
+  errorHandler: RustErrorHandler<E>,
+  caller: (status: RustCallStatusStruct) => T,
+  options?: Omit<RustCallOptions<E>, "errorHandler">,
+): T;
+
+export declare class UniffiRustCaller<
+  Status extends RustCallStatusStruct = RustCallStatusStruct,
+> {
+  constructor(options?: {
+    createStatus?: () => Status;
+    freeRustBuffer?: ((buffer: RustBufferStruct) => void) | null;
+    liftString?: RustStringLifter;
+  });
+  createCallStatus(): Status;
+  createErrorStatus(code?: number, error_buf?: RustBufferStruct | null): Status;
+  makeRustCall<T, E extends Error = Error>(
+    caller: (status: Status) => T,
+    options?: RustCallOptions<E>,
+  ): T;
+  rustCall<T, E extends Error = Error>(
+    caller: (status: Status) => T,
+    options?: RustCallOptions<E>,
+  ): T;
+  rustCallWithError<T, E extends Error = Error>(
+    errorHandler: RustErrorHandler<E>,
+    caller: (status: Status) => T,
+    options?: Omit<RustCallOptions<E>, "errorHandler">,
+  ): T;
+}
+
+export declare const defaultRustCaller: UniffiRustCaller;
+=== runtime/async-rust-call.js ===
+import { AbortError, ConverterRangeError } from "./errors.js";
+import { UniffiHandleMap } from "./handle-map.js";
+import { defaultRustCaller } from "./rust-call.js";
+
+export const RUST_FUTURE_POLL_READY = 0;
+export const RUST_FUTURE_POLL_WAKE = 1;
+
+const MIN_I8 = -0x80;
+const MAX_I8 = 0x7f;
+const MAX_U8 = 0xff;
+const RUST_FUTURE_RESOLVER_MAP = new UniffiHandleMap();
+
+function identity(value) {
+  return value;
+}
+
+export function decodeRustFuturePoll(value) {
+  const numericValue =
+    typeof value === "bigint"
+      ? Number(value)
+      : value;
+  if (!Number.isInteger(numericValue) || numericValue < MIN_I8 || numericValue > MAX_U8) {
+    throw new ConverterRangeError(
+      `RustFuturePoll must be an integer between ${MIN_I8} and ${MAX_U8}.`,
+    );
+  }
+  return numericValue > MAX_I8
+    ? numericValue - 0x100
+    : numericValue;
+}
+
+export function createAsyncCallState() {
+  return {
+    resolverHandle: null,
+  };
+}
+
+export function cleanupAsyncCallState(state) {
+  if (!state || state.resolverHandle == null) {
+    return;
+  }
+
+  RUST_FUTURE_RESOLVER_MAP.remove(state.resolverHandle);
+  state.resolverHandle = null;
+}
+
+export const rustFutureContinuationCallback = (handle, pollResult) => {
+  const resolve = RUST_FUTURE_RESOLVER_MAP.remove(handle);
+  if (resolve === undefined) {
+    return false;
+  }
+
+  queueMicrotask(() => {
+    resolve(decodeRustFuturePoll(pollResult));
+  });
+  return true;
+};
+
+export function pollRustFuture(
+  rustFuture,
+  pollFunc,
+  {
+    continuationCallback = rustFutureContinuationCallback,
+    state = createAsyncCallState(),
+  } = {},
+) {
+  cleanupAsyncCallState(state);
+
+  return new Promise((resolve, reject) => {
+    const resolverHandle = RUST_FUTURE_RESOLVER_MAP.insert((pollCode) => {
+      state.resolverHandle = null;
+      resolve(pollCode);
+    });
+    state.resolverHandle = resolverHandle;
+
+    try {
+      pollFunc(rustFuture, continuationCallback, resolverHandle);
+    } catch (error) {
+      cleanupAsyncCallState(state);
+      reject(error);
+    }
+  });
+}
+
+export function completeRustFuture(
+  rustFuture,
+  completeFunc,
+  {
+    errorHandler,
+    freeRustBuffer,
+    liftString,
+    rustCaller = defaultRustCaller,
+  } = {},
+) {
+  return rustCaller.makeRustCall(
+    (status) => completeFunc(rustFuture, status),
+    {
+      errorHandler,
+      freeRustBuffer,
+      liftString,
+    },
+  );
+}
+
+export function cancelRustFuture(rustFuture, cancelFunc = undefined) {
+  if (typeof cancelFunc === "function") {
+    cancelFunc(rustFuture);
+  }
+}
+
+export function freeRustFuture(rustFuture, freeFunc = undefined) {
+  if (typeof freeFunc === "function") {
+    freeFunc(rustFuture);
+  }
+}
+
+export async function rustCallAsync({
+  cancelFunc,
+  completeFunc,
+  continuationCallback = rustFutureContinuationCallback,
+  errorHandler,
+  freeFunc,
+  freeRustBuffer,
+  liftFunc = identity,
+  liftString,
+  pollFunc,
+  rustCaller = defaultRustCaller,
+  rustFutureFunc,
+  signal = undefined,
+}) {
+  if (signal?.aborted) {
+    throw new AbortError();
+  }
+
+  const rustFuture = rustFutureFunc();
+  const state = createAsyncCallState();
+  const abortListener =
+    signal == null
+      ? null
+      : () => {
+          try {
+            cancelRustFuture(rustFuture, cancelFunc);
+          } catch {
+            // Preserve the original async failure path.
+          }
+        };
+
+  if (signal && abortListener) {
+    if (signal.aborted) {
+      abortListener();
+    } else {
+      signal.addEventListener("abort", abortListener, { once: true });
+    }
+  }
+
+  try {
+    while (true) {
+      const pollCode = await pollRustFuture(rustFuture, pollFunc, {
+        continuationCallback,
+        state,
+      });
+      if (pollCode === RUST_FUTURE_POLL_READY) {
+        break;
+      }
+      if (pollCode !== RUST_FUTURE_POLL_WAKE) {
+        throw new ConverterRangeError(
+          `Unexpected RustFuturePoll value ${String(pollCode)}.`,
+        );
+      }
+    }
+
+    const completed = completeRustFuture(rustFuture, completeFunc, {
+      errorHandler,
+      freeRustBuffer,
+      liftString,
+      rustCaller,
+    });
+    return liftFunc(completed);
+  } finally {
+    if (signal && abortListener) {
+      signal.removeEventListener("abort", abortListener);
+    }
+    try {
+      freeRustFuture(rustFuture, freeFunc);
+    } finally {
+      cleanupAsyncCallState(state);
+    }
+  }
+}
+
+export function rustFutureHandleCount() {
+  return RUST_FUTURE_RESOLVER_MAP.size;
+}
+=== runtime/async-rust-call.d.ts ===
+import type { RustCallStatusStruct } from "./ffi-types.js";
+import type { RustCallOptions, UniffiRustCaller } from "./rust-call.js";
+
+export declare const RUST_FUTURE_POLL_READY: 0;
+export declare const RUST_FUTURE_POLL_WAKE: 1;
+
+export interface AsyncCallState {
+  resolverHandle: bigint | null;
+}
+
+export type RustFutureContinuationCallback = (
+  handle: bigint | number,
+  pollResult: bigint | number,
+) => boolean;
+
+export interface PollRustFutureOptions {
+  continuationCallback?: RustFutureContinuationCallback;
+  state?: AsyncCallState;
+}
+
+export interface CompleteRustFutureOptions<
+  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  E extends Error = Error,
+> extends RustCallOptions<E> {
+  rustCaller?: UniffiRustCaller<Status>;
+}
+
+export interface RustCallAsyncOptions<
+  Lowered,
+  Result = Lowered,
+  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  E extends Error = Error,
+> extends CompleteRustFutureOptions<Status, E> {
+  cancelFunc?: ((rustFuture: bigint) => void) | null;
+  completeFunc: (rustFuture: bigint, status: Status) => Lowered;
+  continuationCallback?: RustFutureContinuationCallback;
+  freeFunc?: ((rustFuture: bigint) => void) | null;
+  liftFunc?: (value: Lowered) => Result;
+  pollFunc: (
+    rustFuture: bigint,
+    continuationCallback: RustFutureContinuationCallback,
+    continuationHandle: bigint,
+  ) => void;
+  rustFutureFunc: () => bigint;
+  signal?: AbortSignal | null;
+}
+
+export declare function decodeRustFuturePoll(value: bigint | number): number;
+export declare function createAsyncCallState(): AsyncCallState;
+export declare function cleanupAsyncCallState(state: AsyncCallState): void;
+export declare const rustFutureContinuationCallback: RustFutureContinuationCallback;
+export declare function pollRustFuture(
+  rustFuture: bigint,
+  pollFunc: (
+    rustFuture: bigint,
+    continuationCallback: RustFutureContinuationCallback,
+    continuationHandle: bigint,
+  ) => void,
+  options?: PollRustFutureOptions,
+): Promise<number>;
+export declare function completeRustFuture<
+  Lowered,
+  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  E extends Error = Error,
+>(
+  rustFuture: bigint,
+  completeFunc: (rustFuture: bigint, status: Status) => Lowered,
+  options?: CompleteRustFutureOptions<Status, E>,
+): Lowered;
+export declare function cancelRustFuture(
+  rustFuture: bigint,
+  cancelFunc?: ((rustFuture: bigint) => void) | null,
+): void;
+export declare function freeRustFuture(
+  rustFuture: bigint,
+  freeFunc?: ((rustFuture: bigint) => void) | null,
+): void;
+export declare function rustCallAsync<
+  Lowered,
+  Result = Lowered,
+  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  E extends Error = Error,
+>(
+  options: RustCallAsyncOptions<Lowered, Result, Status, E>,
+): Promise<Result>;
+export declare function rustFutureHandleCount(): number;
+=== runtime/handle-map.js ===
+import { DuplicateHandleError, StaleHandleError } from "./errors.js";
+import { normalizeHandle, normalizeUInt64 } from "./ffi-types.js";
+
+export const INVALID_HANDLE = 0n;
+export const defaultUniffiHandle = INVALID_HANDLE;
+export const FIRST_FOREIGN_HANDLE = 1n;
+export const FOREIGN_HANDLE_STEP = 2n;
+
+function requireHandle(handle, label = "handle") {
+  const normalized = normalizeHandle(handle);
+  if (normalized == null || normalized === INVALID_HANDLE) {
+    throw new TypeError(`${label} must be a non-zero UniFFI handle.`);
+  }
+  return normalized;
+}
+
+function normalizeHandleStep(step) {
+  const normalized = normalizeUInt64(step ?? FOREIGN_HANDLE_STEP);
+  if (normalized == null || normalized === 0n) {
+    throw new TypeError("handleStep must be a positive integer.");
+  }
+  return normalized;
+}
+
+export class UniffiHandleMap {
+  constructor({
+    firstHandle = FIRST_FOREIGN_HANDLE,
+    handleStep = FOREIGN_HANDLE_STEP,
+  } = {}) {
+    this._map = new Map();
+    this._nextHandle = requireHandle(firstHandle, "firstHandle");
+    this._handleStep = normalizeHandleStep(handleStep);
+  }
+
+  _allocateHandle() {
+    const handle = this._nextHandle;
+    this._nextHandle += this._handleStep;
+    return handle;
+  }
+
+  insert(value) {
+    let handle = this._allocateHandle();
+    while (this._map.has(handle)) {
+      handle = this._allocateHandle();
+    }
+    this._map.set(handle, value);
+    return handle;
+  }
+
+  register(handle, value) {
+    const normalized = requireHandle(handle);
+    if (this._map.has(normalized)) {
+      throw new DuplicateHandleError(normalized);
+    }
+    this._map.set(normalized, value);
+    return normalized;
+  }
+
+  get(handle) {
+    const normalized = requireHandle(handle);
+    if (!this._map.has(normalized)) {
+      throw new StaleHandleError(normalized);
+    }
+    return this._map.get(normalized);
+  }
+
+  peek(handle) {
+    const normalized = normalizeHandle(handle);
+    if (normalized == null || normalized === INVALID_HANDLE) {
+      return undefined;
+    }
+    return this._map.get(normalized);
+  }
+
+  clone(handle) {
+    return this.insert(this.get(handle));
+  }
+
+  remove(handle) {
+    const normalized = normalizeHandle(handle);
+    if (normalized == null || normalized === INVALID_HANDLE) {
+      return undefined;
+    }
+
+    const value = this._map.get(normalized);
+    if (this._map.has(normalized)) {
+      this._map.delete(normalized);
+      return value;
+    }
+    return undefined;
+  }
+
+  take(handle) {
+    const normalized = requireHandle(handle);
+    if (!this._map.has(normalized)) {
+      throw new StaleHandleError(normalized);
+    }
+    const value = this._map.get(normalized);
+    this._map.delete(normalized);
+    return value;
+  }
+
+  has(handle) {
+    const normalized = normalizeHandle(handle);
+    return normalized != null
+      && normalized !== INVALID_HANDLE
+      && this._map.has(normalized);
+  }
+
+  clear() {
+    this._map.clear();
+  }
+
+  keys() {
+    return this._map.keys();
+  }
+
+  values() {
+    return this._map.values();
+  }
+
+  entries() {
+    return this._map.entries();
+  }
+
+  [Symbol.iterator]() {
+    return this.entries();
+  }
+
+  get size() {
+    return this._map.size;
+  }
+}
+
+export function createHandleMap(options = undefined) {
+  return new UniffiHandleMap(options);
+}
+=== runtime/handle-map.d.ts ===
+export type UniffiHandle = bigint;
+
+export declare const INVALID_HANDLE: 0n;
+export declare const defaultUniffiHandle: 0n;
+export declare const FIRST_FOREIGN_HANDLE: 1n;
+export declare const FOREIGN_HANDLE_STEP: 2n;
+
+export interface HandleMapOptions {
+  firstHandle?: bigint | number;
+  handleStep?: bigint | number;
+}
+
+export declare class UniffiHandleMap<T>
+  implements Iterable<[UniffiHandle, T]>
+{
+  constructor(options?: HandleMapOptions);
+  insert(value: T): UniffiHandle;
+  register(handle: bigint | number, value: T): UniffiHandle;
+  get(handle: bigint | number): T;
+  peek(handle: bigint | number | null | undefined): T | undefined;
+  clone(handle: bigint | number): UniffiHandle;
+  remove(handle: bigint | number | null | undefined): T | undefined;
+  take(handle: bigint | number): T;
+  has(handle: bigint | number | null | undefined): boolean;
+  clear(): void;
+  keys(): IterableIterator<UniffiHandle>;
+  values(): IterableIterator<T>;
+  entries(): IterableIterator<[UniffiHandle, T]>;
+  [Symbol.iterator](): IterableIterator<[UniffiHandle, T]>;
+  readonly size: number;
+}
+
+export declare function createHandleMap<T>(
+  options?: HandleMapOptions,
+): UniffiHandleMap<T>;
+=== runtime/callbacks.js ===
+import { ensureError, getErrorMessage } from "./errors.js";
+import { UniffiHandleMap } from "./handle-map.js";
+import { EMPTY_RUST_BUFFER } from "./ffi-types.js";
+import {
+  CALL_ERROR,
+  CALL_SUCCESS,
+  CALL_UNEXPECTED_ERROR,
+  createRustCallStatus,
+} from "./rust-call.js";
+
+function requireCallbackImplementation(value, interfaceName = "callback interface") {
+  if ((typeof value !== "object" && typeof value !== "function") || value == null) {
+    throw new TypeError(`${interfaceName} implementations must be objects with callable methods.`);
+  }
+  return value;
+}
+
+function requireCallbackMethod(implementation, methodName, interfaceName = "callback interface") {
+  const method = implementation?.[methodName];
+  if (typeof method !== "function") {
+    throw new TypeError(
+      `${interfaceName} is missing required method ${String(methodName)}().`,
+    );
+  }
+  return method;
+}
+
+function lowerCallbackFailure(error, options = {}) {
+  const {
+    lowerError,
+    lowerString,
+    defaultMessage = "Callback invocation failed.",
+  } = options;
+  const normalizedError = ensureError(error, defaultMessage);
+
+  if (typeof lowerError === "function") {
+    const loweredError = lowerError(normalizedError);
+    if (loweredError != null) {
+      return {
+        code: CALL_ERROR,
+        error: normalizedError,
+        error_buf: loweredError,
+      };
+    }
+  }
+
+  if (typeof lowerString === "function") {
+    return {
+      code: CALL_UNEXPECTED_ERROR,
+      error: normalizedError,
+      error_buf: lowerString(getErrorMessage(normalizedError, defaultMessage)),
+    };
+  }
+
+  return {
+    code: CALL_UNEXPECTED_ERROR,
+    error: normalizedError,
+    error_buf: EMPTY_RUST_BUFFER,
+  };
+}
+
+export function resetCallbackCallStatus(status = undefined) {
+  const callbackStatus = status ?? createRustCallStatus();
+  callbackStatus.code = CALL_SUCCESS;
+  callbackStatus.error_buf = EMPTY_RUST_BUFFER;
+  return callbackStatus;
+}
+
+export function writeCallbackError(status, error, options = {}) {
+  const callbackStatus = status ?? createRustCallStatus();
+  const lowered = lowerCallbackFailure(error, options);
+  callbackStatus.code = lowered.code;
+  callbackStatus.error_buf = lowered.error_buf ?? EMPTY_RUST_BUFFER;
+  return lowered.error;
+}
+
+export function invokeCallbackMethod({
+  registry,
+  handle,
+  methodName,
+  args = [],
+  defaultReturnValue = undefined,
+  interfaceName = registry?.interfaceName ?? "callback interface",
+  lowerError,
+  lowerString,
+  status = undefined,
+}) {
+  try {
+    const implementation = registry.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, interfaceName);
+    const result = method.apply(implementation, Array.from(args));
+    if (status != null) {
+      resetCallbackCallStatus(status);
+    }
+    return result;
+  } catch (error) {
+    if (status == null) {
+      throw error;
+    }
+    writeCallbackError(status, error, {
+      lowerError,
+      lowerString,
+      defaultMessage: `${interfaceName}.${String(methodName)}() failed.`,
+    });
+    return defaultReturnValue;
+  }
+}
+
+export class UniffiCallbackRegistry {
+  constructor({
+    interfaceName = "callback interface",
+    firstHandle = undefined,
+    handleStep = undefined,
+    validate = undefined,
+  } = {}) {
+    this.interfaceName = interfaceName;
+    this._handleMap = new UniffiHandleMap({
+      firstHandle,
+      handleStep,
+    });
+    this._validate = validate;
+  }
+
+  _normalizeImplementation(value) {
+    const implementation = requireCallbackImplementation(value, this.interfaceName);
+    if (typeof this._validate === "function") {
+      this._validate(implementation);
+    }
+    return implementation;
+  }
+
+  register(value) {
+    return this._handleMap.insert(this._normalizeImplementation(value));
+  }
+
+  cloneHandle(handle) {
+    return this._handleMap.clone(handle);
+  }
+
+  get(handle) {
+    return this._handleMap.get(handle);
+  }
+
+  remove(handle) {
+    return this._handleMap.remove(handle);
+  }
+
+  take(handle) {
+    return this._handleMap.take(handle);
+  }
+
+  has(handle) {
+    return this._handleMap.has(handle);
+  }
+
+  clear() {
+    this._handleMap.clear();
+  }
+
+  invoke(handle, methodName, args = []) {
+    const implementation = this.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, this.interfaceName);
+    return method.apply(implementation, Array.from(args));
+  }
+
+  invokeWithRustCallStatus(handle, methodName, options = {}) {
+    return invokeCallbackMethod({
+      registry: this,
+      handle,
+      methodName,
+      ...options,
+    });
+  }
+
+  get size() {
+    return this._handleMap.size;
+  }
+}
+
+export function createCallbackRegistry(options = undefined) {
+  return new UniffiCallbackRegistry(options);
+}
+=== runtime/callbacks.d.ts ===
+import type { HandleMapOptions } from "./handle-map.js";
+import type { RustBufferStruct, RustCallStatusStruct } from "./ffi-types.js";
+
+export interface CallbackRegistryOptions<T extends object = Record<string, unknown>>
+  extends HandleMapOptions
+{
+  interfaceName?: string;
+  validate?: ((value: T) => void) | null;
+}
+
+export interface CallbackErrorOptions<E extends Error = Error> {
+  lowerError?: ((error: E) => RustBufferStruct | null | undefined) | null;
+  lowerString?: ((message: string) => RustBufferStruct) | null;
+  defaultMessage?: string;
+}
+
+export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Error>
+  extends CallbackErrorOptions<E>
+{
+  args?: readonly unknown[];
+  defaultReturnValue?: T;
+  interfaceName?: string;
+  status?: RustCallStatusStruct | null;
+}
+
+export declare function resetCallbackCallStatus(
+  status?: RustCallStatusStruct | null,
+): RustCallStatusStruct;
+export declare function writeCallbackError<E extends Error = Error>(
+  status: RustCallStatusStruct | null | undefined,
+  error: unknown,
+  options?: CallbackErrorOptions<E>,
+): E;
+export declare function invokeCallbackMethod<T = unknown, E extends Error = Error>(params: {
+  registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
+  handle: bigint | number;
+  methodName: string;
+} & InvokeCallbackMethodOptions<T, E>): T;
+
+export declare class UniffiCallbackRegistry<T extends object = Record<string, unknown>> {
+  readonly interfaceName: string;
+  constructor(options?: CallbackRegistryOptions<T>);
+  register(value: T): bigint;
+  cloneHandle(handle: bigint | number): bigint;
+  get(handle: bigint | number): T;
+  remove(handle: bigint | number | null | undefined): T | undefined;
+  take(handle: bigint | number): T;
+  has(handle: bigint | number | null | undefined): boolean;
+  clear(): void;
+  invoke<R>(handle: bigint | number, methodName: string, args?: readonly unknown[]): R;
+  invokeWithRustCallStatus<R, E extends Error = Error>(
+    handle: bigint | number,
+    methodName: string,
+    options?: InvokeCallbackMethodOptions<R, E>,
+  ): R;
+  readonly size: number;
+}
+
+export declare function createCallbackRegistry<T extends object = Record<string, unknown>>(
+  options?: CallbackRegistryOptions<T>,
+): UniffiCallbackRegistry<T>;
+=== runtime/objects.js ===
+import koffi from "koffi";
+import { UnexpectedNullPointer } from "./errors.js";
+import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
+
+const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
+
+export const uniffiTypeNameSymbol = Symbol("uniffi.typeName");
+export const uniffiObjectFactorySymbol = Symbol("uniffi.objectFactory");
+export const uniffiObjectHandleSymbol = Symbol("uniffi.objectHandle");
+export const uniffiObjectDestroyedSymbol = Symbol("uniffi.objectDestroyed");
+export const UNIFFI_OBJECT_HANDLE_SIZE = 8;
+
+function requireObjectInstance(value, label = "UniFFI object") {
+  if (typeof value !== "object" || value == null) {
+    throw new TypeError(`${label} instances must be non-null objects.`);
+  }
+  return value;
+}
+
+function requireHandle(handle, label = "UniFFI handle") {
+  if (handle == null || isNullPointer(handle)) {
+    throw new UnexpectedNullPointer(`${label} is null or has already been destroyed.`);
+  }
+  return handle;
+}
+
+function storedHandle(value) {
+  const handle = value?.[uniffiObjectHandleSymbol];
+  if (handle == null || isNullPointer(handle)) {
+    return undefined;
+  }
+  return handle;
+}
+
+function objectFactory(value) {
+  const factory = value?.[uniffiObjectFactorySymbol];
+  if (
+    factory == null
+    || typeof factory.create !== "function"
+    || typeof factory.destroy !== "function"
+    || typeof factory.handle !== "function"
+  ) {
+    return undefined;
+  }
+  return factory;
+}
+
+function resolveHandleType(handleType) {
+  return typeof handleType === "function"
+    ? handleType()
+    : handleType;
+}
+
+export class UniffiObjectBase {
+  get uniffiTypeName() {
+    return this[uniffiTypeNameSymbol] ?? this.constructor?.name ?? "UniFFI object";
+  }
+
+  get uniffiHandle() {
+    const factory = objectFactory(this);
+    if (factory == null) {
+      throw new TypeError(`${this.uniffiTypeName} is not attached to a UniFFI object factory.`);
+    }
+    return factory.handle(this);
+  }
+
+  uniffiDestroy() {
+    const factory = objectFactory(this);
+    if (factory == null) {
+      return false;
+    }
+    return factory.destroy(this);
+  }
+
+  dispose() {
+    return this.uniffiDestroy();
+  }
+}
+
+export class UniffiObjectFactory {
+  constructor({
+    typeName = "UniFFI object",
+    createInstance = () => Object.create(UniffiObjectBase.prototype),
+    cloneHandle = undefined,
+    freeHandle = undefined,
+    handleType = undefined,
+    serializeHandle = undefined,
+    deserializeHandle = undefined,
+  } = {}) {
+    this.typeName = typeName;
+    this._createInstance = createInstance;
+    this._cloneHandle = cloneHandle;
+    this._freeHandle = freeHandle;
+    this._handleType = handleType;
+    this._serializeHandle = serializeHandle;
+    this._deserializeHandle = deserializeHandle;
+    this._registry =
+      typeof FinalizationRegistry === "undefined" || typeof freeHandle !== "function"
+        ? null
+        : new FinalizationRegistry((handle) => {
+            try {
+              this._freeHandle(handle);
+            } catch {
+              // Finalizers must not surface user-visible errors.
+            }
+          });
+  }
+
+  _unregisterFinalizer(instance) {
+    const token = instance[uniffiFinalizerTokenSymbol];
+    if (this._registry != null && token != null) {
+      this._registry.unregister(token);
+    }
+    instance[uniffiFinalizerTokenSymbol] = null;
+  }
+
+  _registerFinalizer(instance, handle) {
+    if (this._registry == null) {
+      instance[uniffiFinalizerTokenSymbol] = null;
+      return;
+    }
+
+    const token = {};
+    instance[uniffiFinalizerTokenSymbol] = token;
+    this._registry.register(instance, handle, token);
+  }
+
+  _markDestroyed(instance) {
+    instance[uniffiObjectHandleSymbol] = null;
+    instance[uniffiObjectDestroyedSymbol] = true;
+    instance[uniffiFinalizerTokenSymbol] = null;
+  }
+
+  _coerceHandle(handle) {
+    if (handle == null || (typeof handle !== "bigint" && typeof handle !== "number")) {
+      return handle;
+    }
+
+    const normalizedHandle = normalizeUInt64(handle);
+    const handleType = resolveHandleType(this._handleType);
+    if (handleType == null) {
+      return normalizedHandle;
+    }
+    return koffi.as(normalizedHandle, handleType);
+  }
+
+  attach(instance, handle) {
+    const normalizedHandle = requireHandle(
+      this._coerceHandle(handle),
+      `${this.typeName} handle`,
+    );
+    const target = requireObjectInstance(instance, this.typeName);
+
+    if (storedHandle(target) != null && target[uniffiObjectDestroyedSymbol] !== true) {
+      throw new TypeError(`${this.typeName} is already bound to a live UniFFI handle.`);
+    }
+
+    Object.defineProperties(target, {
+      [uniffiTypeNameSymbol]: {
+        configurable: true,
+        value: this.typeName,
+        writable: true,
+      },
+      [uniffiObjectFactorySymbol]: {
+        configurable: true,
+        value: this,
+      },
+      [uniffiObjectHandleSymbol]: {
+        configurable: true,
+        value: normalizedHandle,
+        writable: true,
+      },
+      [uniffiObjectDestroyedSymbol]: {
+        configurable: true,
+        value: false,
+        writable: true,
+      },
+      [uniffiFinalizerTokenSymbol]: {
+        configurable: true,
+        value: null,
+        writable: true,
+      },
+    });
+
+    this._registerFinalizer(target, normalizedHandle);
+    return target;
+  }
+
+  bless(instance, handle) {
+    return this.attach(instance, handle);
+  }
+
+  create(handle) {
+    return this.attach(this._createInstance(), handle);
+  }
+
+  handle(value) {
+    if (!this.isInstance(value)) {
+      throw new TypeError(`${this.typeName} expected an instance created by this factory.`);
+    }
+    return requireHandle(
+      this._coerceHandle(storedHandle(value)),
+      `${this.typeName} handle`,
+    );
+  }
+
+  peekHandle(value) {
+    if (!this.isInstance(value) || this.isDestroyed(value)) {
+      return undefined;
+    }
+    return storedHandle(value);
+  }
+
+  cloneHandle(value) {
+    const handle = this.handle(value);
+    if (typeof this._cloneHandle !== "function") {
+      return handle;
+    }
+    return requireHandle(this._cloneHandle(handle, value), `${this.typeName} cloned handle`);
+  }
+
+  destroy(value) {
+    if (!this.isInstance(value) || this.isDestroyed(value)) {
+      return false;
+    }
+
+    const handle = this.handle(value);
+    this._unregisterFinalizer(value);
+    this._markDestroyed(value);
+
+    if (typeof this._freeHandle === "function") {
+      this._freeHandle(handle, value);
+    }
+    return true;
+  }
+
+  isInstance(value) {
+    return objectFactory(value) === this;
+  }
+
+  isDestroyed(value) {
+    return this.isInstance(value)
+      && (value[uniffiObjectDestroyedSymbol] === true || storedHandle(value) == null);
+  }
+
+  serializeHandle(value) {
+    const handle = this.handle(value);
+    if (typeof this._serializeHandle === "function") {
+      return normalizeUInt64(this._serializeHandle(handle, value));
+    }
+    return pointerAddress(handle);
+  }
+
+  deserializeHandle(serialized) {
+    const normalizedHandle = normalizeUInt64(serialized);
+    if (typeof this._deserializeHandle === "function") {
+      return requireHandle(
+        this._deserializeHandle(normalizedHandle),
+        `${this.typeName} handle`,
+      );
+    }
+    return requireHandle(
+      this._coerceHandle(normalizedHandle),
+      `${this.typeName} handle`,
+    );
+  }
+}
+
+export class FfiConverterObject {
+  constructor(factory) {
+    this.factory = factory;
+  }
+
+  lower(value) {
+    return this.factory.cloneHandle(value);
+  }
+
+  lift(handle) {
+    return this.factory.create(handle);
+  }
+
+  write(value, writer) {
+    writer.writeUInt64(this.factory.serializeHandle(value));
+  }
+
+  read(reader) {
+    return this.lift(this.factory.deserializeHandle(reader.readUInt64()));
+  }
+
+  allocationSize() {
+    return UNIFFI_OBJECT_HANDLE_SIZE;
+  }
+}
+
+export function createObjectFactory(options = undefined) {
+  return new UniffiObjectFactory(options);
+}
+
+export function createObjectConverter(factory) {
+  return new FfiConverterObject(factory);
+}
+=== runtime/objects.d.ts ===
+import type { ByteReader, ByteWriter } from "./ffi-converters.js";
+
+export declare const uniffiTypeNameSymbol: unique symbol;
+export declare const uniffiObjectFactorySymbol: unique symbol;
+export declare const uniffiObjectHandleSymbol: unique symbol;
+export declare const uniffiObjectDestroyedSymbol: unique symbol;
+export declare const UNIFFI_OBJECT_HANDLE_SIZE: 8;
+
+export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase> {
+  typeName?: string;
+  createInstance?: () => T;
+  cloneHandle?: ((handle: unknown, value: T) => unknown) | null;
+  freeHandle?: ((handle: unknown, value?: T) => void) | null;
+  handleType?: unknown | (() => unknown) | null;
+  serializeHandle?: ((handle: unknown, value: T) => bigint | number) | null;
+  deserializeHandle?: ((handle: bigint | number) => unknown) | null;
+}
+
+export declare class UniffiObjectBase {
+  readonly [uniffiTypeNameSymbol]?: string;
+  readonly [uniffiObjectHandleSymbol]?: unknown;
+  readonly [uniffiObjectDestroyedSymbol]?: boolean;
+  get uniffiTypeName(): string;
+  get uniffiHandle(): unknown;
+  uniffiDestroy(): boolean;
+  dispose(): boolean;
+}
+
+export declare class UniffiObjectFactory<T extends object = UniffiObjectBase> {
+  readonly typeName: string;
+  constructor(options?: UniffiObjectFactoryOptions<T>);
+  attach(instance: T, handle: unknown): T;
+  bless(instance: T, handle: unknown): T;
+  create(handle: unknown): T;
+  handle(value: T): unknown;
+  peekHandle(value: unknown): unknown;
+  cloneHandle(value: T): unknown;
+  destroy(value: unknown): boolean;
+  isInstance(value: unknown): value is T;
+  isDestroyed(value: unknown): boolean;
+  serializeHandle(value: T): bigint;
+  deserializeHandle(serialized: bigint | number): unknown;
+}
+
+export declare class FfiConverterObject<T extends object = UniffiObjectBase> {
+  readonly factory: UniffiObjectFactory<T>;
+  constructor(factory: UniffiObjectFactory<T>);
+  lower(value: T): bigint;
+  lift(handle: bigint | number): T;
+  write(value: T, writer: ByteWriter): void;
+  read(reader: ByteReader): T;
+  allocationSize(value?: T): 8;
+}
+
+export declare function createObjectFactory<T extends object = UniffiObjectBase>(
+  options?: UniffiObjectFactoryOptions<T>,
+): UniffiObjectFactory<T>;
+export declare function createObjectConverter<T extends object = UniffiObjectBase>(
+  factory: UniffiObjectFactory<T>,
+): FfiConverterObject<T>;

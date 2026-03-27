@@ -28,11 +28,28 @@ pub enum FixtureError {
     Missing,
     #[error("invalid state: {message}")]
     InvalidState { message: String },
+    #[error("parse error: {message}")]
+    Parse { message: String },
 }
 
 #[derive(Debug, uniffi::Object)]
 pub struct Store {
     state: Mutex<BlobRecord>,
+}
+
+#[derive(Debug, uniffi::Object)]
+pub struct Config {
+    value: String,
+}
+
+#[derive(Debug, uniffi::Object)]
+pub struct Reader {
+    label: String,
+}
+
+#[derive(Debug, uniffi::Object)]
+pub struct ReaderBuilder {
+    valid: bool,
 }
 
 #[uniffi::export]
@@ -99,6 +116,51 @@ impl Store {
         } else {
             Err(FixtureError::InvalidState {
                 message: "fetch failed".to_string(),
+            })
+        }
+    }
+}
+
+#[uniffi::export]
+impl Config {
+    #[uniffi::constructor(name = "from_json")]
+    pub fn from_json(json: String) -> Result<Arc<Self>, FixtureError> {
+        if json != "ok" {
+            Err(FixtureError::Parse {
+                message: "invalid json".to_string(),
+            })
+        } else {
+            Ok(Arc::new(Self { value: json }))
+        }
+    }
+
+    pub fn value(&self) -> String {
+        self.value.clone()
+    }
+}
+
+#[uniffi::export]
+impl Reader {
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl ReaderBuilder {
+    #[uniffi::constructor]
+    pub fn new(valid: bool) -> Arc<Self> {
+        Arc::new(Self { valid })
+    }
+
+    pub async fn build(&self) -> Result<Arc<Reader>, FixtureError> {
+        if self.valid {
+            Ok(Arc::new(Reader {
+                label: "ready".to_string(),
+            }))
+        } else {
+            Err(FixtureError::InvalidState {
+                message: "builder rejected".to_string(),
             })
         }
     }

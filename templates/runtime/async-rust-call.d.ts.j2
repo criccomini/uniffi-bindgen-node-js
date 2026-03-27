@@ -19,7 +19,7 @@ export interface PollRustFutureOptions {
 }
 
 export interface CompleteRustFutureOptions<
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 > extends RustCallOptions<E> {
   rustCaller?: UniffiRustCaller<Status>;
@@ -28,7 +28,7 @@ export interface CompleteRustFutureOptions<
 export interface RustCallAsyncOptions<
   Lowered,
   Result = Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 > extends CompleteRustFutureOptions<Status, E> {
   cancelFunc?: ((rustFuture: bigint) => void) | null;
@@ -60,7 +60,7 @@ export declare function pollRustFuture(
 ): Promise<number>;
 export declare function completeRustFuture<
   Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 >(
   rustFuture: bigint,
@@ -78,7 +78,7 @@ export declare function freeRustFuture(
 export declare function rustCallAsync<
   Lowered,
   Result = Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 >(
   options: RustCallAsyncOptions<Lowered, Result, Status, E>,

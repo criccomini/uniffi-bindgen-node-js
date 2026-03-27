@@ -10,6 +10,13 @@ export type RustErrorHandler<E extends Error = Error> = (
   bytes: Uint8Array,
   status: RustCallStatusStruct,
 ) => E;
+export type RustCallStatusReader<Status = RustCallStatusStruct> = (
+  status: Status,
+) => RustCallStatusStruct | null | undefined;
+export type RustCallStatusWriter<Status = RustCallStatusStruct> = (
+  status: Status,
+  value: RustCallStatusStruct,
+) => Status;
 
 export interface RustCallOptions<E extends Error = Error> {
   errorHandler?: RustErrorHandler<E>;
@@ -40,12 +47,14 @@ export declare function rustCallWithError<T, E extends Error = Error>(
 ): T;
 
 export declare class UniffiRustCaller<
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
 > {
   constructor(options?: {
     createStatus?: () => Status;
     freeRustBuffer?: ((buffer: RustBufferStruct) => void) | null;
     liftString?: RustStringLifter;
+    readStatus?: RustCallStatusReader<Status>;
+    writeStatus?: RustCallStatusWriter<Status>;
   });
   createCallStatus(): Status;
   createErrorStatus(code?: number, error_buf?: RustBufferStruct | null): Status;

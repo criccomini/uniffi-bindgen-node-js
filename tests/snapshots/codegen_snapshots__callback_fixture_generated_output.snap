@@ -58,8 +58,8 @@ import {
 } from "./runtime/objects.js";
 import {
   CALL_SUCCESS,
+  UniffiRustCaller,
   createRustCallStatus,
-  defaultRustCaller,
 } from "./runtime/rust-call.js";
 
 export const componentMetadata = Object.freeze({
@@ -83,8 +83,28 @@ function uniffiLiftString(bytes) {
   return FfiConverterString.lift(bytes);
 }
 
+function uniffiDecodeRustCallStatus(status) {
+  return status == null
+    ? createRustCallStatus()
+    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);
+}
+
+function uniffiWriteRustCallStatus(status, value) {
+  if (status != null) {
+    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);
+  }
+  return status;
+}
+
+const uniffiRustCaller = new UniffiRustCaller({
+  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),
+  readStatus: uniffiDecodeRustCallStatus,
+  writeStatus: uniffiWriteRustCallStatus,
+  liftString: uniffiLiftString,
+});
+
 function uniffiFreeRustBuffer(buffer) {
-  return defaultRustCaller.rustCall(
+  return uniffiRustCaller.rustCall(
     (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_free(buffer, status),
     { liftString: uniffiLiftString },
   );
@@ -94,6 +114,7 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   const options = {
     freeRustBuffer: uniffiFreeRustBuffer,
     liftString: uniffiLiftString,
+    rustCaller: uniffiRustCaller,
   };
   if (errorConverter != null) {
     options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);
@@ -102,7 +123,7 @@ function uniffiRustCallOptions(errorConverter = undefined) {
 }
 
 function uniffiLowerIntoRustBuffer(converter, value) {
-  return defaultRustCaller.rustCall(
+  return uniffiRustCaller.rustCall(
     (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_from_bytes(createForeignBytes(converter.lower(value)), status),
     uniffiRustCallOptions(),
   );
@@ -338,13 +359,13 @@ const uniffiAsyncLogSinkFactory = createObjectFactory({
   typeName: "AsyncLogSink",
   createInstance: () => Object.create(UniffiAsyncLogSinkProxy.prototype),
   cloneHandle(handle) {
-    return defaultRustCaller.rustCall(
+    return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_asynclogsink(handle, status),
       uniffiRustCallOptions(),
     );
   },
   freeHandle(handle) {
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_asynclogsink(handle, status),
       uniffiRustCallOptions(),
     );
@@ -499,7 +520,7 @@ class UniffiLogCollectorProxy extends UniffiObjectBase {
   log(record) {
     const loweredSelf = uniffiLogCollectorFactory.cloneHandle(this);
     const loweredRecord = uniffiLowerIntoRustBuffer(FfiConverterLogRecord, record);
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_logcollector_log(loweredSelf, loweredRecord, status),
       uniffiRustCallOptions(),
     );
@@ -510,13 +531,13 @@ const uniffiLogCollectorFactory = createObjectFactory({
   typeName: "LogCollector",
   createInstance: () => Object.create(UniffiLogCollectorProxy.prototype),
   cloneHandle(handle) {
-    return defaultRustCaller.rustCall(
+    return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_logcollector(handle, status),
       uniffiRustCallOptions(),
     );
   },
   freeHandle(handle) {
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_logcollector(handle, status),
       uniffiRustCallOptions(),
     );
@@ -600,7 +621,7 @@ class UniffiLogSinkProxy extends UniffiObjectBase {
   write(message) {
     const loweredSelf = uniffiLogSinkFactory.cloneHandle(this);
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_logsink_write(loweredSelf, loweredMessage, status),
       uniffiRustCallOptions(),
     );
@@ -608,7 +629,7 @@ class UniffiLogSinkProxy extends UniffiObjectBase {
 
   latest() {
     const loweredSelf = uniffiLogSinkFactory.cloneHandle(this);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_logsink_latest(loweredSelf, status),
       uniffiRustCallOptions(),
     );
@@ -620,13 +641,13 @@ const uniffiLogSinkFactory = createObjectFactory({
   typeName: "LogSink",
   createInstance: () => Object.create(UniffiLogSinkProxy.prototype),
   cloneHandle(handle) {
-    return defaultRustCaller.rustCall(
+    return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_logsink(handle, status),
       uniffiRustCallOptions(),
     );
   },
   freeHandle(handle) {
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_logsink(handle, status),
       uniffiRustCallOptions(),
     );
@@ -765,7 +786,7 @@ configureRuntimeHooks({
 export function cancel_emit_async(sink, message) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
-  defaultRustCaller.rustCall(
+  uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_cancel_emit_async(loweredSink, loweredMessage, status),
     uniffiRustCallOptions(),
   );
@@ -774,7 +795,7 @@ export function cancel_emit_async(sink, message) {
 export function emit(sink, message) {
     const loweredSink = FfiConverterLogSink.lower(sink);
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
-  defaultRustCaller.rustCall(
+  uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(loweredSink, loweredMessage, status),
     uniffiRustCallOptions(),
   );
@@ -824,7 +845,7 @@ export async function flush_async(sink) {
 export function init_logging(level, collector) {
     const loweredLevel = uniffiLowerIntoRustBuffer(FfiConverterLogLevel, level);
     const loweredCollector = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogCollector), collector);
-  defaultRustCaller.rustCall(
+  uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_init_logging(loweredLevel, loweredCollector, status),
     uniffiRustCallOptions(),
   );
@@ -832,7 +853,7 @@ export function init_logging(level, collector) {
 
 export function last_message(sink) {
     const loweredSink = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogSink), sink);
-  const uniffiResult = defaultRustCaller.rustCall(
+  const uniffiResult = uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_last_message(loweredSink, status),
     uniffiRustCallOptions(),
   );
@@ -846,7 +867,7 @@ export class Settings extends UniffiObjectBase {
   }
 
   static default() {
-    const pointer = defaultRustCaller.rustCall(
+    const pointer = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_constructor_settings_default(status),
       uniffiRustCallOptions(),
     );
@@ -857,7 +878,7 @@ export class Settings extends UniffiObjectBase {
     const loweredSelf = uniffiSettingsObjectFactory.cloneHandle(this);
     const loweredKey = uniffiLowerIntoRustBuffer(FfiConverterString, key);
     const loweredValueJson = uniffiLowerIntoRustBuffer(FfiConverterString, value_json);
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_settings_set(loweredSelf, loweredKey, loweredValueJson, status),
       uniffiRustCallOptions(),
     );
@@ -865,7 +886,7 @@ export class Settings extends UniffiObjectBase {
 
   to_json_string() {
     const loweredSelf = uniffiSettingsObjectFactory.cloneHandle(this);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_settings_to_json_string(loweredSelf, status),
       uniffiRustCallOptions(),
     );
@@ -878,13 +899,13 @@ const uniffiSettingsObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Settings.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrSettings,
   cloneHandle(handle) {
-    return defaultRustCaller.rustCall(
+    return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_settings(handle, status),
       uniffiRustCallOptions(),
     );
   },
   freeHandle(handle) {
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_settings(handle, status),
       uniffiRustCallOptions(),
     );
@@ -895,7 +916,7 @@ const FfiConverterSettings = createObjectConverter(uniffiSettingsObjectFactory);
 export class WriteBatch extends UniffiObjectBase {
   constructor() {
     super();
-    const pointer = defaultRustCaller.rustCall(
+    const pointer = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_constructor_writebatch_new(status),
       uniffiRustCallOptions(),
     );
@@ -905,7 +926,7 @@ export class WriteBatch extends UniffiObjectBase {
   delete(key) {
     const loweredSelf = uniffiWriteBatchObjectFactory.cloneHandle(this);
     const loweredKey = uniffiLowerIntoRustBuffer(FfiConverterBytes, key);
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_writebatch_delete(loweredSelf, loweredKey, status),
       uniffiRustCallOptions(),
     );
@@ -913,7 +934,7 @@ export class WriteBatch extends UniffiObjectBase {
 
   operation_count() {
     const loweredSelf = uniffiWriteBatchObjectFactory.cloneHandle(this);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_writebatch_operation_count(loweredSelf, status),
       uniffiRustCallOptions(),
     );
@@ -924,7 +945,7 @@ export class WriteBatch extends UniffiObjectBase {
     const loweredSelf = uniffiWriteBatchObjectFactory.cloneHandle(this);
     const loweredKey = uniffiLowerIntoRustBuffer(FfiConverterBytes, key);
     const loweredValue = uniffiLowerIntoRustBuffer(FfiConverterBytes, value);
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_method_writebatch_put(loweredSelf, loweredKey, loweredValue, status),
       uniffiRustCallOptions(),
     );
@@ -936,13 +957,13 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
   createInstance: () => Object.create(WriteBatch.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrWriteBatch,
   cloneHandle(handle) {
-    return defaultRustCaller.rustCall(
+    return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_writebatch(handle, status),
       uniffiRustCallOptions(),
     );
   },
   freeHandle(handle) {
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_writebatch(handle, status),
       uniffiRustCallOptions(),
     );
@@ -5120,6 +5141,20 @@ function defaultLiftString(bytes) {
   return FfiConverterString.lift(bytes);
 }
 
+function defaultReadStatus(status) {
+  return status;
+}
+
+function defaultWriteStatus(status, value) {
+  if (status == null || typeof status !== "object") {
+    return value;
+  }
+
+  status.code = value.code;
+  status.error_buf = createMutableRustBuffer(value.error_buf);
+  return status;
+}
+
 function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
   return normalizeRustBuffer(buffer) ?? {
     capacity: 0n,
@@ -5214,27 +5249,31 @@ export class UniffiRustCaller {
     createStatus = () => createRustCallStatus(),
     freeRustBuffer = undefined,
     liftString = defaultLiftString,
+    readStatus = defaultReadStatus,
+    writeStatus = defaultWriteStatus,
   } = {}) {
     this._createStatus = createStatus;
     this._freeRustBuffer = freeRustBuffer;
     this._liftString = liftString;
+    this._readStatus = readStatus;
+    this._writeStatus = writeStatus;
   }
 
   createCallStatus() {
-    return this._createStatus();
+    return this._writeStatus(this._createStatus(), createRustCallStatus());
   }
 
   createErrorStatus(code = CALL_ERROR, error_buf = EMPTY_RUST_BUFFER) {
-    const status = this.createCallStatus();
-    status.code = code;
-    status.error_buf = createMutableRustBuffer(error_buf);
-    return status;
+    return this._writeStatus(
+      this._createStatus(),
+      createRustCallStatus(code, error_buf),
+    );
   }
 
   makeRustCall(caller, options = {}) {
     const status = this.createCallStatus();
     const result = caller(status);
-    checkRustCallStatus(status, {
+    checkRustCallStatus(this._readStatus(status), {
       ...options,
       freeRustBuffer: options.freeRustBuffer ?? this._freeRustBuffer,
       liftString: options.liftString ?? this._liftString,
@@ -5268,6 +5307,13 @@ export type RustErrorHandler<E extends Error = Error> = (
   bytes: Uint8Array,
   status: RustCallStatusStruct,
 ) => E;
+export type RustCallStatusReader<Status = RustCallStatusStruct> = (
+  status: Status,
+) => RustCallStatusStruct | null | undefined;
+export type RustCallStatusWriter<Status = RustCallStatusStruct> = (
+  status: Status,
+  value: RustCallStatusStruct,
+) => Status;
 
 export interface RustCallOptions<E extends Error = Error> {
   errorHandler?: RustErrorHandler<E>;
@@ -5298,12 +5344,14 @@ export declare function rustCallWithError<T, E extends Error = Error>(
 ): T;
 
 export declare class UniffiRustCaller<
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
 > {
   constructor(options?: {
     createStatus?: () => Status;
     freeRustBuffer?: ((buffer: RustBufferStruct) => void) | null;
     liftString?: RustStringLifter;
+    readStatus?: RustCallStatusReader<Status>;
+    writeStatus?: RustCallStatusWriter<Status>;
   });
   createCallStatus(): Status;
   createErrorStatus(code?: number, error_buf?: RustBufferStruct | null): Status;
@@ -5539,7 +5587,7 @@ export interface PollRustFutureOptions {
 }
 
 export interface CompleteRustFutureOptions<
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 > extends RustCallOptions<E> {
   rustCaller?: UniffiRustCaller<Status>;
@@ -5548,7 +5596,7 @@ export interface CompleteRustFutureOptions<
 export interface RustCallAsyncOptions<
   Lowered,
   Result = Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 > extends CompleteRustFutureOptions<Status, E> {
   cancelFunc?: ((rustFuture: bigint) => void) | null;
@@ -5580,7 +5628,7 @@ export declare function pollRustFuture(
 ): Promise<number>;
 export declare function completeRustFuture<
   Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 >(
   rustFuture: bigint,
@@ -5598,7 +5646,7 @@ export declare function freeRustFuture(
 export declare function rustCallAsync<
   Lowered,
   Result = Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 >(
   options: RustCallAsyncOptions<Lowered, Result, Status, E>,
@@ -6426,7 +6474,13 @@ export class UniffiObjectFactory {
     if (handleType == null) {
       return handle;
     }
-    return koffi.as(pointerAddress(handle), handleType);
+    const typedHandle = koffi.as(handle, handleType);
+    try {
+      pointerAddress(typedHandle);
+      return typedHandle;
+    } catch {
+      return handle;
+    }
   }
 
   attach(instance, handle) {

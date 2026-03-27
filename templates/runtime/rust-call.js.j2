@@ -22,6 +22,20 @@ function defaultLiftString(bytes) {
   return FfiConverterString.lift(bytes);
 }
 
+function defaultReadStatus(status) {
+  return status;
+}
+
+function defaultWriteStatus(status, value) {
+  if (status == null || typeof status !== "object") {
+    return value;
+  }
+
+  status.code = value.code;
+  status.error_buf = createMutableRustBuffer(value.error_buf);
+  return status;
+}
+
 function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
   return normalizeRustBuffer(buffer) ?? {
     capacity: 0n,
@@ -116,27 +130,31 @@ export class UniffiRustCaller {
     createStatus = () => createRustCallStatus(),
     freeRustBuffer = undefined,
     liftString = defaultLiftString,
+    readStatus = defaultReadStatus,
+    writeStatus = defaultWriteStatus,
   } = {}) {
     this._createStatus = createStatus;
     this._freeRustBuffer = freeRustBuffer;
     this._liftString = liftString;
+    this._readStatus = readStatus;
+    this._writeStatus = writeStatus;
   }
 
   createCallStatus() {
-    return this._createStatus();
+    return this._writeStatus(this._createStatus(), createRustCallStatus());
   }
 
   createErrorStatus(code = CALL_ERROR, error_buf = EMPTY_RUST_BUFFER) {
-    const status = this.createCallStatus();
-    status.code = code;
-    status.error_buf = createMutableRustBuffer(error_buf);
-    return status;
+    return this._writeStatus(
+      this._createStatus(),
+      createRustCallStatus(code, error_buf),
+    );
   }
 
   makeRustCall(caller, options = {}) {
     const status = this.createCallStatus();
     const result = caller(status);
-    checkRustCallStatus(status, {
+    checkRustCallStatus(this._readStatus(status), {
       ...options,
       freeRustBuffer: options.freeRustBuffer ?? this._freeRustBuffer,
       liftString: options.liftString ?? this._liftString,

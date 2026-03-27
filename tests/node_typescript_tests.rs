@@ -16,7 +16,10 @@ fn typechecks_generated_basic_fixture_package_declarations() {
         "smoke.ts",
         r#"
 import {
+  Config,
   Flavor,
+  Reader,
+  ReaderBuilder,
   ScanResult,
   Store,
   echo_bytes,
@@ -38,6 +41,10 @@ const scanResult: ScanResult = store.inspect(true);
 const echoedBytes: Uint8Array = echo_bytes(new Uint8Array([7, 8, 9]));
 const echoedRecord: BlobRecord = echo_record(seed);
 const asyncRecord: Promise<BlobRecord> = store.fetch_async(true);
+const config: Config = Config.from_json("ok");
+const configValue: string = config.value();
+const readerBuilder = new ReaderBuilder(true);
+const asyncReader: Promise<Reader> = readerBuilder.build();
 
 void current;
 void flavor;
@@ -45,6 +52,8 @@ void scanResult;
 void echoedBytes;
 void echoedRecord;
 void asyncRecord;
+void configValue;
+void asyncReader;
 "#,
     );
 

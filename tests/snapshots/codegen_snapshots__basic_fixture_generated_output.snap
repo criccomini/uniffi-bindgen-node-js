@@ -58,8 +58,8 @@ import {
 } from "./runtime/objects.js";
 import {
   CALL_SUCCESS,
+  UniffiRustCaller,
   createRustCallStatus,
-  defaultRustCaller,
 } from "./runtime/rust-call.js";
 
 export const componentMetadata = Object.freeze({
@@ -83,8 +83,28 @@ function uniffiLiftString(bytes) {
   return FfiConverterString.lift(bytes);
 }
 
+function uniffiDecodeRustCallStatus(status) {
+  return status == null
+    ? createRustCallStatus()
+    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);
+}
+
+function uniffiWriteRustCallStatus(status, value) {
+  if (status != null) {
+    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);
+  }
+  return status;
+}
+
+const uniffiRustCaller = new UniffiRustCaller({
+  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),
+  readStatus: uniffiDecodeRustCallStatus,
+  writeStatus: uniffiWriteRustCallStatus,
+  liftString: uniffiLiftString,
+});
+
 function uniffiFreeRustBuffer(buffer) {
-  return defaultRustCaller.rustCall(
+  return uniffiRustCaller.rustCall(
     (status) => ffiFunctions.ffi_fixture_basic_rustbuffer_free(buffer, status),
     { liftString: uniffiLiftString },
   );
@@ -94,6 +114,7 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   const options = {
     freeRustBuffer: uniffiFreeRustBuffer,
     liftString: uniffiLiftString,
+    rustCaller: uniffiRustCaller,
   };
   if (errorConverter != null) {
     options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);
@@ -102,7 +123,7 @@ function uniffiRustCallOptions(errorConverter = undefined) {
 }
 
 function uniffiLowerIntoRustBuffer(converter, value) {
-  return defaultRustCaller.rustCall(
+  return uniffiRustCaller.rustCall(
     (status) => ffiFunctions.ffi_fixture_basic_rustbuffer_from_bytes(createForeignBytes(converter.lower(value)), status),
     uniffiRustCallOptions(),
   );
@@ -197,6 +218,14 @@ export class FixtureErrorInvalidState extends FixtureError {
   constructor(message) {
     super("InvalidState");
     this.name = "FixtureErrorInvalidState";
+    this["message"] = message;
+  }
+}
+
+export class FixtureErrorParse extends FixtureError {
+  constructor(message) {
+    super("Parse");
+    this.name = "FixtureErrorParse";
     this["message"] = message;
   }
 }
@@ -304,7 +333,10 @@ const FfiConverterFixtureError = new (class extends AbstractFfiConverterByteArra
     if (value instanceof FixtureErrorInvalidState) {
       return 4 + FfiConverterString.allocationSize(value["message"]);
     }
-    throw new TypeError("FixtureError values must be instances of FixtureErrorMissing, FixtureErrorInvalidState.");
+    if (value instanceof FixtureErrorParse) {
+      return 4 + FfiConverterString.allocationSize(value["message"]);
+    }
+    throw new TypeError("FixtureError values must be instances of FixtureErrorMissing, FixtureErrorInvalidState, FixtureErrorParse.");
   }
 
   write(value, writer) {
@@ -317,7 +349,12 @@ const FfiConverterFixtureError = new (class extends AbstractFfiConverterByteArra
       FfiConverterString.write(value["message"], writer);
       return;
     }
-    throw new TypeError("FixtureError values must be instances of FixtureErrorMissing, FixtureErrorInvalidState.");
+    if (value instanceof FixtureErrorParse) {
+      writer.writeInt32(3);
+      FfiConverterString.write(value["message"], writer);
+      return;
+    }
+    throw new TypeError("FixtureError values must be instances of FixtureErrorMissing, FixtureErrorInvalidState, FixtureErrorParse.");
   }
 
   read(reader) {
@@ -327,6 +364,8 @@ const FfiConverterFixtureError = new (class extends AbstractFfiConverterByteArra
         return new FixtureErrorMissing();
       case 2:
         return new FixtureErrorInvalidState(FfiConverterString.read(reader));
+      case 3:
+        return new FixtureErrorParse(FfiConverterString.read(reader));
       default:
         throw new UnexpectedEnumCase(`Unexpected FixtureError case ${String(enumTag)}.`);
     }
@@ -335,7 +374,7 @@ const FfiConverterFixtureError = new (class extends AbstractFfiConverterByteArra
 
 export function echo_bytes(value) {
     const loweredValue = uniffiLowerIntoRustBuffer(FfiConverterBytes, value);
-  const uniffiResult = defaultRustCaller.rustCall(
+  const uniffiResult = uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_basic_fn_func_echo_bytes(loweredValue, status),
     uniffiRustCallOptions(),
   );
@@ -344,18 +383,141 @@ export function echo_bytes(value) {
 
 export function echo_record(record) {
     const loweredRecord = uniffiLowerIntoRustBuffer(FfiConverterBlobRecord, record);
-  const uniffiResult = defaultRustCaller.rustCall(
+  const uniffiResult = uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_basic_fn_func_echo_record(loweredRecord, status),
     uniffiRustCallOptions(),
   );
   return uniffiLiftFromRustBuffer(FfiConverterBlobRecord, uniffiResult);
 }
 
+export class Config extends UniffiObjectBase {
+  constructor() {
+    super();
+    return uniffiNotImplemented("Config.constructor");
+  }
+
+  static from_json(json) {
+    const loweredJson = uniffiLowerIntoRustBuffer(FfiConverterString, json);
+    const pointer = uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_constructor_config_from_json(loweredJson, status),
+      uniffiRustCallOptions(FfiConverterFixtureError),
+    );
+    return uniffiConfigObjectFactory.create(pointer);
+  }
+
+  value() {
+    const loweredSelf = uniffiConfigObjectFactory.cloneHandle(this);
+    const uniffiResult = uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_config_value(loweredSelf, status),
+      uniffiRustCallOptions(),
+    );
+    return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
+  }
+}
+
+const uniffiConfigObjectFactory = createObjectFactory({
+  typeName: "Config",
+  createInstance: () => Object.create(Config.prototype),
+  handleType: () => getFfiBindings().ffiTypes.RustArcPtrConfig,
+  cloneHandle(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_config(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_config(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+const FfiConverterConfig = createObjectConverter(uniffiConfigObjectFactory);
+
+export class Reader extends UniffiObjectBase {
+  constructor() {
+    super();
+    return uniffiNotImplemented("Reader.constructor");
+  }
+
+  label() {
+    const loweredSelf = uniffiReaderObjectFactory.cloneHandle(this);
+    const uniffiResult = uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_reader_label(loweredSelf, status),
+      uniffiRustCallOptions(),
+    );
+    return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
+  }
+}
+
+const uniffiReaderObjectFactory = createObjectFactory({
+  typeName: "Reader",
+  createInstance: () => Object.create(Reader.prototype),
+  handleType: () => getFfiBindings().ffiTypes.RustArcPtrReader,
+  cloneHandle(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_reader(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_reader(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+const FfiConverterReader = createObjectConverter(uniffiReaderObjectFactory);
+
+export class ReaderBuilder extends UniffiObjectBase {
+  constructor(valid) {
+    super();
+    const loweredValid = FfiConverterBool.lower(valid);
+    const pointer = uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_constructor_readerbuilder_new(loweredValid, status),
+      uniffiRustCallOptions(),
+    );
+    return uniffiReaderBuilderObjectFactory.attach(this, pointer);
+  }
+
+  async build() {
+    const loweredSelf = uniffiReaderBuilderObjectFactory.cloneHandle(this);
+    return rustCallAsync({
+      rustFutureFunc: () => ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(loweredSelf),
+      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(rustFuture, continuationCallback, continuationHandle),
+      cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(rustFuture),
+      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(rustFuture, status),
+      freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_free_pointer(rustFuture),
+      liftFunc: (uniffiResult) => uniffiReaderObjectFactory.create(uniffiResult),
+      ...uniffiRustCallOptions(FfiConverterFixtureError),
+    });
+  }
+}
+
+const uniffiReaderBuilderObjectFactory = createObjectFactory({
+  typeName: "ReaderBuilder",
+  createInstance: () => Object.create(ReaderBuilder.prototype),
+  handleType: () => getFfiBindings().ffiTypes.RustArcPtrReaderBuilder,
+  cloneHandle(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+const FfiConverterReaderBuilder = createObjectConverter(uniffiReaderBuilderObjectFactory);
+
 export class Store extends UniffiObjectBase {
   constructor(seed) {
     super();
     const loweredSeed = uniffiLowerIntoRustBuffer(FfiConverterBlobRecord, seed);
-    const pointer = defaultRustCaller.rustCall(
+    const pointer = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_constructor_store_new(loweredSeed, status),
       uniffiRustCallOptions(),
     );
@@ -364,7 +526,7 @@ export class Store extends UniffiObjectBase {
 
   current() {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_current(loweredSelf, status),
       uniffiRustCallOptions(),
     );
@@ -387,7 +549,7 @@ export class Store extends UniffiObjectBase {
 
   flavor() {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor(loweredSelf, status),
       uniffiRustCallOptions(),
     );
@@ -397,7 +559,7 @@ export class Store extends UniffiObjectBase {
   inspect(include_payload) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
     const loweredIncludePayload = FfiConverterBool.lower(include_payload);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect(loweredSelf, loweredIncludePayload, status),
       uniffiRustCallOptions(),
     );
@@ -407,7 +569,7 @@ export class Store extends UniffiObjectBase {
   replace(next_value) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
     const loweredNextValue = uniffiLowerIntoRustBuffer(FfiConverterBytes, next_value);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_replace(loweredSelf, loweredNextValue, status),
       uniffiRustCallOptions(),
     );
@@ -417,7 +579,7 @@ export class Store extends UniffiObjectBase {
   require_value(present) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
     const loweredPresent = FfiConverterBool.lower(present);
-    const uniffiResult = defaultRustCaller.rustCall(
+    const uniffiResult = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value(loweredSelf, loweredPresent, status),
       uniffiRustCallOptions(FfiConverterFixtureError),
     );
@@ -430,13 +592,13 @@ const uniffiStoreObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Store.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrStore,
   cloneHandle(handle) {
-    return defaultRustCaller.rustCall(
+    return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_store(handle, status),
       uniffiRustCallOptions(),
     );
   },
   freeHandle(handle) {
-    defaultRustCaller.rustCall(
+    uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_free_store(handle, status),
       uniffiRustCallOptions(),
     );
@@ -509,9 +671,31 @@ export declare class FixtureErrorInvalidState extends FixtureError {
   constructor(message: string);
 }
 
+export declare class FixtureErrorParse extends FixtureError {
+  readonly tag: "Parse";
+  readonly "message": string;
+  constructor(message: string);
+}
+
 export declare function echo_bytes(value: Uint8Array): Uint8Array;
 
 export declare function echo_record(record: BlobRecord): BlobRecord;
+
+export declare class Config extends UniffiObjectBase {
+  protected constructor();
+  static from_json(json: string): Config;
+  value(): string;
+}
+
+export declare class Reader extends UniffiObjectBase {
+  protected constructor();
+  label(): string;
+}
+
+export declare class ReaderBuilder extends UniffiObjectBase {
+  constructor(valid: boolean);
+  build(): Promise<Reader>;
+}
 
 export declare class Store extends UniffiObjectBase {
   constructor(seed: BlobRecord);
@@ -565,6 +749,12 @@ export const ffiIntegrity = Object.freeze({
 
     "uniffi_fixture_basic_checksum_func_echo_record": 53928,
 
+    "uniffi_fixture_basic_checksum_method_config_value": 50455,
+
+    "uniffi_fixture_basic_checksum_method_reader_label": 13441,
+
+    "uniffi_fixture_basic_checksum_method_readerbuilder_build": 27340,
+
     "uniffi_fixture_basic_checksum_method_store_current": 56884,
 
     "uniffi_fixture_basic_checksum_method_store_fetch_async": 65505,
@@ -576,6 +766,10 @@ export const ffiIntegrity = Object.freeze({
     "uniffi_fixture_basic_checksum_method_store_replace": 62944,
 
     "uniffi_fixture_basic_checksum_method_store_require_value": 19024,
+
+    "uniffi_fixture_basic_checksum_constructor_config_from_json": 11430,
+
+    "uniffi_fixture_basic_checksum_constructor_readerbuilder_new": 23622,
 
     "uniffi_fixture_basic_checksum_constructor_store_new": 56964,
 
@@ -664,6 +858,12 @@ function createBindings(libraryPath) {
 
   const RustArcPtr = defineOpaquePointer("RustArcPtr");
 
+  const RustArcPtrConfig = defineOpaquePointer("RustArcPtrConfig");
+
+  const RustArcPtrReader = defineOpaquePointer("RustArcPtrReader");
+
+  const RustArcPtrReaderBuilder = defineOpaquePointer("RustArcPtrReaderBuilder");
+
   const RustArcPtrStore = defineOpaquePointer("RustArcPtrStore");
 
 
@@ -675,6 +875,12 @@ function createBindings(libraryPath) {
     RustCallStatus,
 
     RustArcPtr,
+
+    RustArcPtrConfig,
+
+    RustArcPtrReader,
+
+    RustArcPtrReaderBuilder,
 
     RustArcPtrStore,
 
@@ -832,6 +1038,28 @@ function createBindings(libraryPath) {
   Object.freeze(ffiCallbacks);
   const ffiFunctions = Object.freeze({
 
+    uniffi_fixture_basic_fn_clone_config: library.func("uniffi_fixture_basic_fn_clone_config", ffiTypes.RustArcPtrConfig, [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_free_config: library.func("uniffi_fixture_basic_fn_free_config", "void", [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_constructor_config_from_json: library.func("uniffi_fixture_basic_fn_constructor_config_from_json", ffiTypes.RustArcPtrConfig, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_config_value: library.func("uniffi_fixture_basic_fn_method_config_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_clone_reader: library.func("uniffi_fixture_basic_fn_clone_reader", ffiTypes.RustArcPtrReader, [ffiTypes.RustArcPtrReader, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_free_reader: library.func("uniffi_fixture_basic_fn_free_reader", "void", [ffiTypes.RustArcPtrReader, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_reader_label: library.func("uniffi_fixture_basic_fn_method_reader_label", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrReader, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_clone_readerbuilder: library.func("uniffi_fixture_basic_fn_clone_readerbuilder", ffiTypes.RustArcPtrReaderBuilder, [ffiTypes.RustArcPtrReaderBuilder, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_free_readerbuilder: library.func("uniffi_fixture_basic_fn_free_readerbuilder", "void", [ffiTypes.RustArcPtrReaderBuilder, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_constructor_readerbuilder_new: library.func("uniffi_fixture_basic_fn_constructor_readerbuilder_new", ffiTypes.RustArcPtrReaderBuilder, ["int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_readerbuilder_build: library.func("uniffi_fixture_basic_fn_method_readerbuilder_build", ffiTypes.UniffiHandle, [ffiTypes.RustArcPtrReaderBuilder]),
+
     uniffi_fixture_basic_fn_clone_store: library.func("uniffi_fixture_basic_fn_clone_store", ffiTypes.RustArcPtrStore, [ffiTypes.RustArcPtrStore, koffi.pointer(ffiTypes.RustCallStatus)]),
 
     uniffi_fixture_basic_fn_free_store: library.func("uniffi_fixture_basic_fn_free_store", "void", [ffiTypes.RustArcPtrStore, koffi.pointer(ffiTypes.RustCallStatus)]),
@@ -970,6 +1198,12 @@ function createBindings(libraryPath) {
 
     uniffi_fixture_basic_checksum_func_echo_record: library.func("uniffi_fixture_basic_checksum_func_echo_record", "uint16_t", []),
 
+    uniffi_fixture_basic_checksum_method_config_value: library.func("uniffi_fixture_basic_checksum_method_config_value", "uint16_t", []),
+
+    uniffi_fixture_basic_checksum_method_reader_label: library.func("uniffi_fixture_basic_checksum_method_reader_label", "uint16_t", []),
+
+    uniffi_fixture_basic_checksum_method_readerbuilder_build: library.func("uniffi_fixture_basic_checksum_method_readerbuilder_build", "uint16_t", []),
+
     uniffi_fixture_basic_checksum_method_store_current: library.func("uniffi_fixture_basic_checksum_method_store_current", "uint16_t", []),
 
     uniffi_fixture_basic_checksum_method_store_fetch_async: library.func("uniffi_fixture_basic_checksum_method_store_fetch_async", "uint16_t", []),
@@ -981,6 +1215,10 @@ function createBindings(libraryPath) {
     uniffi_fixture_basic_checksum_method_store_replace: library.func("uniffi_fixture_basic_checksum_method_store_replace", "uint16_t", []),
 
     uniffi_fixture_basic_checksum_method_store_require_value: library.func("uniffi_fixture_basic_checksum_method_store_require_value", "uint16_t", []),
+
+    uniffi_fixture_basic_checksum_constructor_config_from_json: library.func("uniffi_fixture_basic_checksum_constructor_config_from_json", "uint16_t", []),
+
+    uniffi_fixture_basic_checksum_constructor_readerbuilder_new: library.func("uniffi_fixture_basic_checksum_constructor_readerbuilder_new", "uint16_t", []),
 
     uniffi_fixture_basic_checksum_constructor_store_new: library.func("uniffi_fixture_basic_checksum_constructor_store_new", "uint16_t", []),
 
@@ -1105,6 +1343,12 @@ export function getChecksums(bindings = getFfiBindings()) {
 
     "uniffi_fixture_basic_checksum_func_echo_record": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(),
 
+    "uniffi_fixture_basic_checksum_method_config_value": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_config_value(),
+
+    "uniffi_fixture_basic_checksum_method_reader_label": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_reader_label(),
+
+    "uniffi_fixture_basic_checksum_method_readerbuilder_build": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_readerbuilder_build(),
+
     "uniffi_fixture_basic_checksum_method_store_current": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_current(),
 
     "uniffi_fixture_basic_checksum_method_store_fetch_async": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_fetch_async(),
@@ -1116,6 +1360,10 @@ export function getChecksums(bindings = getFfiBindings()) {
     "uniffi_fixture_basic_checksum_method_store_replace": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_replace(),
 
     "uniffi_fixture_basic_checksum_method_store_require_value": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_require_value(),
+
+    "uniffi_fixture_basic_checksum_constructor_config_from_json": bindings.ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(),
+
+    "uniffi_fixture_basic_checksum_constructor_readerbuilder_new": bindings.ffiFunctions.uniffi_fixture_basic_checksum_constructor_readerbuilder_new(),
 
     "uniffi_fixture_basic_checksum_constructor_store_new": bindings.ffiFunctions.uniffi_fixture_basic_checksum_constructor_store_new(),
 
@@ -1138,6 +1386,30 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const actual = actualChecksums["uniffi_fixture_basic_checksum_func_echo_record"];
     if (actual !== expected) {
       throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_func_echo_record", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_method_config_value"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_method_config_value"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_method_config_value", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_method_reader_label"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_method_reader_label"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_method_reader_label", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_method_readerbuilder_build"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_method_readerbuilder_build"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_method_readerbuilder_build", expected, actual);
     }
   }
 
@@ -1190,6 +1462,22 @@ export function validateChecksums(bindings = getFfiBindings()) {
   }
 
   {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_constructor_config_from_json"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_constructor_config_from_json"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_constructor_config_from_json", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_constructor_readerbuilder_new"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_constructor_readerbuilder_new"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_constructor_readerbuilder_new", expected, actual);
+    }
+  }
+
+  {
     const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_constructor_store_new"];
     const actual = actualChecksums["uniffi_fixture_basic_checksum_constructor_store_new"];
     if (actual !== expected) {
@@ -1201,6 +1489,83 @@ export function validateChecksums(bindings = getFfiBindings()) {
 }
 
 export const ffiFunctions = Object.freeze({
+
+  uniffi_fixture_basic_fn_clone_config(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_config(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_free_config(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_config(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_constructor_config_from_json(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_config_from_json(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_method_config_value(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_config_value(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  uniffi_fixture_basic_fn_clone_reader(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_reader(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_free_reader(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_reader(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_method_reader_label(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_reader_label(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+  uniffi_fixture_basic_fn_clone_readerbuilder(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_free_readerbuilder(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_fn_method_readerbuilder_build(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(...args);
+
+    return normalizeHandle(result);
+
+  },
 
   uniffi_fixture_basic_fn_clone_store(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_store(...args);
@@ -1685,6 +2050,27 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+  uniffi_fixture_basic_checksum_method_config_value(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_config_value(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_checksum_method_reader_label(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_reader_label(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_checksum_method_readerbuilder_build(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_readerbuilder_build(...args);
+
+    return result;
+
+  },
+
   uniffi_fixture_basic_checksum_method_store_current(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_current(...args);
 
@@ -1727,6 +2113,20 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+  uniffi_fixture_basic_checksum_constructor_config_from_json(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args);
+
+    return result;
+
+  },
+
   uniffi_fixture_basic_checksum_constructor_store_new(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_store_new(...args);
 
@@ -1742,6 +2142,61 @@ export const ffiFunctions = Object.freeze({
   },
 
 });
+
+
+export function uniffi_fixture_basic_fn_clone_config(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_config(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_free_config(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_config(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_constructor_config_from_json(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_constructor_config_from_json(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_method_config_value(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_config_value(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_clone_reader(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_reader(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_free_reader(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_reader(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_method_reader_label(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_reader_label(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_clone_readerbuilder(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_free_readerbuilder(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_method_readerbuilder_build(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(...args);
+}
 
 
 export function uniffi_fixture_basic_fn_clone_store(...args) {
@@ -2089,6 +2544,21 @@ export function uniffi_fixture_basic_checksum_func_echo_record(...args) {
 }
 
 
+export function uniffi_fixture_basic_checksum_method_config_value(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_method_config_value(...args);
+}
+
+
+export function uniffi_fixture_basic_checksum_method_reader_label(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_method_reader_label(...args);
+}
+
+
+export function uniffi_fixture_basic_checksum_method_readerbuilder_build(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_method_readerbuilder_build(...args);
+}
+
+
 export function uniffi_fixture_basic_checksum_method_store_current(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_store_current(...args);
 }
@@ -2116,6 +2586,16 @@ export function uniffi_fixture_basic_checksum_method_store_replace(...args) {
 
 export function uniffi_fixture_basic_checksum_method_store_require_value(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_store_require_value(...args);
+}
+
+
+export function uniffi_fixture_basic_checksum_constructor_config_from_json(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(...args);
+}
+
+
+export function uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args);
 }
 
 
@@ -2175,6 +2655,28 @@ export declare function validateChecksums(
 ): Readonly<Record<string, number>>;
 export declare const ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
 
+
+export declare function uniffi_fixture_basic_fn_clone_config(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_free_config(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_constructor_config_from_json(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_method_config_value(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_clone_reader(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_free_reader(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_method_reader_label(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_clone_readerbuilder(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_free_readerbuilder(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_method_readerbuilder_build(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_fn_clone_store(...args: any[]): any;
 
@@ -2314,6 +2816,12 @@ export declare function uniffi_fixture_basic_checksum_func_echo_bytes(...args: a
 
 export declare function uniffi_fixture_basic_checksum_func_echo_record(...args: any[]): any;
 
+export declare function uniffi_fixture_basic_checksum_method_config_value(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_method_reader_label(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_method_readerbuilder_build(...args: any[]): any;
+
 export declare function uniffi_fixture_basic_checksum_method_store_current(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_method_store_fetch_async(...args: any[]): any;
@@ -2325,6 +2833,10 @@ export declare function uniffi_fixture_basic_checksum_method_store_inspect(...ar
 export declare function uniffi_fixture_basic_checksum_method_store_replace(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_method_store_require_value(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_constructor_config_from_json(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_constructor_store_new(...args: any[]): any;
 
@@ -4089,6 +4601,20 @@ function defaultLiftString(bytes) {
   return FfiConverterString.lift(bytes);
 }
 
+function defaultReadStatus(status) {
+  return status;
+}
+
+function defaultWriteStatus(status, value) {
+  if (status == null || typeof status !== "object") {
+    return value;
+  }
+
+  status.code = value.code;
+  status.error_buf = createMutableRustBuffer(value.error_buf);
+  return status;
+}
+
 function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
   return normalizeRustBuffer(buffer) ?? {
     capacity: 0n,
@@ -4183,27 +4709,31 @@ export class UniffiRustCaller {
     createStatus = () => createRustCallStatus(),
     freeRustBuffer = undefined,
     liftString = defaultLiftString,
+    readStatus = defaultReadStatus,
+    writeStatus = defaultWriteStatus,
   } = {}) {
     this._createStatus = createStatus;
     this._freeRustBuffer = freeRustBuffer;
     this._liftString = liftString;
+    this._readStatus = readStatus;
+    this._writeStatus = writeStatus;
   }
 
   createCallStatus() {
-    return this._createStatus();
+    return this._writeStatus(this._createStatus(), createRustCallStatus());
   }
 
   createErrorStatus(code = CALL_ERROR, error_buf = EMPTY_RUST_BUFFER) {
-    const status = this.createCallStatus();
-    status.code = code;
-    status.error_buf = createMutableRustBuffer(error_buf);
-    return status;
+    return this._writeStatus(
+      this._createStatus(),
+      createRustCallStatus(code, error_buf),
+    );
   }
 
   makeRustCall(caller, options = {}) {
     const status = this.createCallStatus();
     const result = caller(status);
-    checkRustCallStatus(status, {
+    checkRustCallStatus(this._readStatus(status), {
       ...options,
       freeRustBuffer: options.freeRustBuffer ?? this._freeRustBuffer,
       liftString: options.liftString ?? this._liftString,
@@ -4237,6 +4767,13 @@ export type RustErrorHandler<E extends Error = Error> = (
   bytes: Uint8Array,
   status: RustCallStatusStruct,
 ) => E;
+export type RustCallStatusReader<Status = RustCallStatusStruct> = (
+  status: Status,
+) => RustCallStatusStruct | null | undefined;
+export type RustCallStatusWriter<Status = RustCallStatusStruct> = (
+  status: Status,
+  value: RustCallStatusStruct,
+) => Status;
 
 export interface RustCallOptions<E extends Error = Error> {
   errorHandler?: RustErrorHandler<E>;
@@ -4267,12 +4804,14 @@ export declare function rustCallWithError<T, E extends Error = Error>(
 ): T;
 
 export declare class UniffiRustCaller<
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
 > {
   constructor(options?: {
     createStatus?: () => Status;
     freeRustBuffer?: ((buffer: RustBufferStruct) => void) | null;
     liftString?: RustStringLifter;
+    readStatus?: RustCallStatusReader<Status>;
+    writeStatus?: RustCallStatusWriter<Status>;
   });
   createCallStatus(): Status;
   createErrorStatus(code?: number, error_buf?: RustBufferStruct | null): Status;
@@ -4508,7 +5047,7 @@ export interface PollRustFutureOptions {
 }
 
 export interface CompleteRustFutureOptions<
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 > extends RustCallOptions<E> {
   rustCaller?: UniffiRustCaller<Status>;
@@ -4517,7 +5056,7 @@ export interface CompleteRustFutureOptions<
 export interface RustCallAsyncOptions<
   Lowered,
   Result = Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 > extends CompleteRustFutureOptions<Status, E> {
   cancelFunc?: ((rustFuture: bigint) => void) | null;
@@ -4549,7 +5088,7 @@ export declare function pollRustFuture(
 ): Promise<number>;
 export declare function completeRustFuture<
   Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 >(
   rustFuture: bigint,
@@ -4567,7 +5106,7 @@ export declare function freeRustFuture(
 export declare function rustCallAsync<
   Lowered,
   Result = Lowered,
-  Status extends RustCallStatusStruct = RustCallStatusStruct,
+  Status = RustCallStatusStruct,
   E extends Error = Error,
 >(
   options: RustCallAsyncOptions<Lowered, Result, Status, E>,
@@ -5395,7 +5934,13 @@ export class UniffiObjectFactory {
     if (handleType == null) {
       return handle;
     }
-    return koffi.as(pointerAddress(handle), handleType);
+    const typedHandle = koffi.as(handle, handleType);
+    try {
+      pointerAddress(typedHandle);
+      return typedHandle;
+    } catch {
+      return handle;
+    }
   }
 
   attach(instance, handle) {

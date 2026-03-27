@@ -983,7 +983,7 @@ fn render_js_callback_interface_converter(
         proxy_class_name
     ));
     lines.push("  cloneHandle(handle) {".to_string());
-    lines.push("    return defaultRustCaller.rustCall(".to_string());
+    lines.push("    return uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
         "      (status) => ffiFunctions.{}(handle, status),",
         callback_interface.ffi_object_clone_identifier
@@ -992,7 +992,7 @@ fn render_js_callback_interface_converter(
     lines.push("    );".to_string());
     lines.push("  },".to_string());
     lines.push("  freeHandle(handle) {".to_string());
-    lines.push("    defaultRustCaller.rustCall(".to_string());
+    lines.push("    uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
         "      (status) => ffiFunctions.{}(handle, status),",
         callback_interface.ffi_object_free_identifier
@@ -1897,7 +1897,7 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
         ffi_opaque_identifier(&object.name)
     ));
     lines.push("  cloneHandle(handle) {".to_string());
-    lines.push("    return defaultRustCaller.rustCall(".to_string());
+    lines.push("    return uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
         "      (status) => ffiFunctions.{}(handle, status),",
         object.ffi_object_clone_identifier
@@ -1906,7 +1906,7 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
     lines.push("    );".to_string());
     lines.push("  },".to_string());
     lines.push("  freeHandle(handle) {".to_string());
-    lines.push("    defaultRustCaller.rustCall(".to_string());
+    lines.push("    uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
         "      (status) => ffiFunctions.{}(handle, status),",
         object.ffi_object_free_identifier
@@ -1979,7 +1979,7 @@ fn render_js_runtime_helpers(
     ffi_rustbuffer_free_identifier: &str,
 ) -> String {
     format!(
-        "function uniffiLiftString(bytes) {{\n  return FfiConverterString.lift(bytes);\n}}\n\nfunction uniffiFreeRustBuffer(buffer) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: uniffiLiftString }},\n  );\n}}\n\nfunction uniffiRustCallOptions(errorConverter = undefined) {{\n  const options = {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: uniffiLiftString,\n  }};\n  if (errorConverter != null) {{\n    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);\n  }}\n  return options;\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return defaultRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiRequireTaggedEnumValue(typeName, value) {{\n  const enumValue = uniffiRequireRecordObject(typeName, value);\n  if (typeof enumValue.tag !== \"string\") {{\n    throw new TypeError(`${{typeName}} values must be tagged objects with a string tag field.`);\n  }}\n  return enumValue;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
+        "function uniffiLiftString(bytes) {{\n  return FfiConverterString.lift(bytes);\n}}\n\nfunction uniffiDecodeRustCallStatus(status) {{\n  return status == null\n    ? createRustCallStatus()\n    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);\n}}\n\nfunction uniffiWriteRustCallStatus(status, value) {{\n  if (status != null) {{\n    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);\n  }}\n  return status;\n}}\n\nconst uniffiRustCaller = new UniffiRustCaller({{\n  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),\n  readStatus: uniffiDecodeRustCallStatus,\n  writeStatus: uniffiWriteRustCallStatus,\n  liftString: uniffiLiftString,\n}});\n\nfunction uniffiFreeRustBuffer(buffer) {{\n  return uniffiRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: uniffiLiftString }},\n  );\n}}\n\nfunction uniffiRustCallOptions(errorConverter = undefined) {{\n  const options = {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: uniffiLiftString,\n    rustCaller: uniffiRustCaller,\n  }};\n  if (errorConverter != null) {{\n    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);\n  }}\n  return options;\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return uniffiRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiRequireTaggedEnumValue(typeName, value) {{\n  const enumValue = uniffiRequireRecordObject(typeName, value);\n  if (typeof enumValue.tag !== \"string\") {{\n    throw new TypeError(`${{typeName}} values must be tagged objects with a string tag field.`);\n  }}\n  return enumValue;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
     )
 }
 
@@ -2002,7 +2002,7 @@ fn render_js_sync_constructor_body(
 ) -> Result<Vec<String>> {
     let mut lines = render_js_argument_lowering(&constructor.arguments)?;
     let call_args = render_js_ffi_call_args(&constructor.arguments, Some("status"));
-    lines.push("    const pointer = defaultRustCaller.rustCall(".to_string());
+    lines.push("    const pointer = uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
         "      (status) => ffiFunctions.{}({}),",
         constructor.ffi_func_identifier, call_args
@@ -2123,7 +2123,7 @@ fn render_js_sync_method_body(
     );
 
     if let Some(return_type) = method.return_type.as_ref() {
-        lines.push("    const uniffiResult = defaultRustCaller.rustCall(".to_string());
+        lines.push("    const uniffiResult = uniffiRustCaller.rustCall(".to_string());
         lines.push(format!(
             "      (status) => ffiFunctions.{}({}),",
             method.ffi_func_identifier, call_args
@@ -2138,7 +2138,7 @@ fn render_js_sync_method_body(
             render_js_lift_expression(return_type, "uniffiResult")?
         ));
     } else {
-        lines.push("    defaultRustCaller.rustCall(".to_string());
+        lines.push("    uniffiRustCaller.rustCall(".to_string());
         lines.push(format!(
             "      (status) => ffiFunctions.{}({}),",
             method.ffi_func_identifier, call_args
@@ -2726,7 +2726,7 @@ fn render_js_sync_function_body(function: &FunctionModel) -> Result<Vec<String>>
     let call_args = render_js_ffi_call_args(&function.arguments, Some("status"));
 
     if let Some(return_type) = function.return_type.as_ref() {
-        lines.push("  const uniffiResult = defaultRustCaller.rustCall(".to_string());
+        lines.push("  const uniffiResult = uniffiRustCaller.rustCall(".to_string());
         lines.push(format!(
             "    (status) => ffiFunctions.{}({}),",
             function.ffi_func_identifier, call_args
@@ -2741,7 +2741,7 @@ fn render_js_sync_function_body(function: &FunctionModel) -> Result<Vec<String>>
             render_js_lift_expression(return_type, "uniffiResult")?
         ));
     } else {
-        lines.push("  defaultRustCaller.rustCall(".to_string());
+        lines.push("  uniffiRustCaller.rustCall(".to_string());
         lines.push(format!(
             "    (status) => ffiFunctions.{}({}),",
             function.ffi_func_identifier, call_args
@@ -3303,7 +3303,7 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("const pointer = defaultRustCaller.rustCall("),
+                .contains("const pointer = uniffiRustCaller.rustCall("),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -3729,7 +3729,7 @@ mod tests {
             rendered.js
         );
         assert!(
-            rendered.js.contains("defaultRustCaller.rustCall("),
+            rendered.js.contains("uniffiRustCaller.rustCall("),
             "unexpected JS output: {}",
             rendered.js
         );

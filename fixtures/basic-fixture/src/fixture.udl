@@ -18,6 +18,7 @@ interface ScanResult {
 interface FixtureError {
     Missing();
     InvalidState(string message);
+    Parse(string message);
 };
 
 interface Store {
@@ -28,6 +29,21 @@ interface Store {
     ScanResult inspect(boolean include_payload);
     [Throws=FixtureError] bytes require_value(boolean present);
     [Async, Throws=FixtureError] BlobRecord fetch_async(boolean succeed);
+};
+
+interface Config {
+    [Name=from_json, Throws=FixtureError]
+    constructor(string json);
+    string value();
+};
+
+interface Reader {
+    string label();
+};
+
+interface ReaderBuilder {
+    constructor(boolean valid);
+    [Async, Throws=FixtureError] Reader build();
 };
 
 dictionary BlobRecord {

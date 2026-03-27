@@ -29,8 +29,36 @@ function emptyRustBuffer() {
   };
 }
 
+function isAllocatedValue(value) {
+  return typeof value === "object" && value != null && value.__koffiAlloc === true;
+}
+
+function cloneEncodedValue(value) {
+  if (typeof value !== "object" || value == null) {
+    return value;
+  }
+  return { ...value };
+}
+
+function readEncodedValue(value) {
+  return isAllocatedValue(value)
+    ? value.__koffiValue
+    : value;
+}
+
+function writeEncodedValue(target, value) {
+  if (!isAllocatedValue(target)) {
+    return false;
+  }
+  target.__koffiValue = cloneEncodedValue(value);
+  return true;
+}
+
 function setCallStatus(status, code, errorBuffer = emptyRustBuffer()) {
   if (status == null) {
+    return;
+  }
+  if (writeEncodedValue(status, { code, error_buf: errorBuffer })) {
     return;
   }
   status.code = code;
@@ -311,6 +339,14 @@ function encodeFixtureErrorInvalidState(message) {
   return writer.finish();
 }
 
+function encodeFixtureErrorParse(message) {
+  const encodedMessage = encodeString(message);
+  const writer = new ByteWriter(4 + encodedMessage.byteLength);
+  writer.writeInt32(3);
+  writer.writeBytes(encodedMessage);
+  return writer.finish();
+}
+
 function optionalStringAllocationSize(value) {
   return value == null ? 1 : 1 + encodeString(value).byteLength;
 }
@@ -520,11 +556,44 @@ function parseFfiMetadata(libraryPath) {
 }
 
 function createBasicFixtureRuntime(libraryPath) {
+  const configs = new Map();
+  const readers = new Map();
+  const readerBuilders = new Map();
   const metadata = parseFfiMetadata(libraryPath);
   const stores = new Map();
   const futures = new Map();
+  let nextConfigHandle = 10_000n;
+  let nextReaderHandle = 20_000n;
+  let nextReaderBuilderHandle = 30_000n;
   let nextStoreHandle = 1n;
   let nextFutureHandle = 1000n;
+
+  function getConfig(handle) {
+    const normalizedHandle = normalizeBigInt(handle);
+    const config = configs.get(normalizedHandle);
+    if (config == null) {
+      throw new Error(`unknown Config handle ${normalizedHandle}`);
+    }
+    return config;
+  }
+
+  function getReader(handle) {
+    const normalizedHandle = normalizeBigInt(handle);
+    const reader = readers.get(normalizedHandle);
+    if (reader == null) {
+      throw new Error(`unknown Reader handle ${normalizedHandle}`);
+    }
+    return reader;
+  }
+
+  function getReaderBuilder(handle) {
+    const normalizedHandle = normalizeBigInt(handle);
+    const readerBuilder = readerBuilders.get(normalizedHandle);
+    if (readerBuilder == null) {
+      throw new Error(`unknown ReaderBuilder handle ${normalizedHandle}`);
+    }
+    return readerBuilder;
+  }
 
   function getStore(handle) {
     const normalizedHandle = normalizeBigInt(handle);
@@ -533,6 +602,13 @@ function createBasicFixtureRuntime(libraryPath) {
       throw new Error(`unknown Store handle ${normalizedHandle}`);
     }
     return store;
+  }
+
+  function setPointerCallError(status, errorBuffer) {
+    if (!isAllocatedValue(status)) {
+      return;
+    }
+    setCallError(status, errorBuffer);
   }
 
   const handlers = new Map([
@@ -568,6 +644,118 @@ function createBasicFixtureRuntime(libraryPath) {
         reserved.set(current);
         setCallSuccess(status);
         return rustBufferFromBytes(reserved);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_clone_config",
+      (handle, status) => {
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_free_config",
+      (handle, status) => {
+        configs.delete(normalizeBigInt(handle));
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_constructor_config_from_json",
+      (jsonBuffer, status) => {
+        const json = decodeSerializedString(rustBufferToUint8Array(jsonBuffer));
+        if (json !== "ok") {
+          setPointerCallError(
+            status,
+            rustBufferFromBytes(encodeFixtureErrorParse("invalid json")),
+          );
+          return null;
+        }
+
+        const handle = nextConfigHandle;
+        nextConfigHandle += 1n;
+        configs.set(handle, { value: json });
+        setCallSuccess(status);
+        return handle;
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_method_config_value",
+      (handle, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(encodeString(getConfig(handle).value));
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_clone_reader",
+      (handle, status) => {
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_free_reader",
+      (handle, status) => {
+        readers.delete(normalizeBigInt(handle));
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_method_reader_label",
+      (handle, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(encodeString(getReader(handle).label));
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_clone_readerbuilder",
+      (handle, status) => {
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_free_readerbuilder",
+      (handle, status) => {
+        readerBuilders.delete(normalizeBigInt(handle));
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_constructor_readerbuilder_new",
+      (valid, status) => {
+        const handle = nextReaderBuilderHandle;
+        nextReaderBuilderHandle += 1n;
+        readerBuilders.set(handle, { valid: Boolean(valid) });
+        setCallSuccess(status);
+        return handle;
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_method_readerbuilder_build",
+      (handle) => {
+        const futureHandle = nextFutureHandle;
+        nextFutureHandle += 1n;
+        const readerBuilder = getReaderBuilder(handle);
+
+        if (readerBuilder.valid) {
+          const readerHandle = nextReaderHandle;
+          nextReaderHandle += 1n;
+          readers.set(readerHandle, { label: "ready" });
+          futures.set(futureHandle, {
+            kind: "pointer",
+            payload: readerHandle,
+          });
+        } else {
+          futures.set(futureHandle, {
+            kind: "pointer_error",
+            payload: rustBufferFromBytes(
+              encodeFixtureErrorInvalidState("builder rejected"),
+            ),
+          });
+        }
+
+        return futureHandle;
       },
     ],
     [
@@ -664,6 +852,44 @@ function createBasicFixtureRuntime(libraryPath) {
           });
         }
         return futureHandle;
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_poll_pointer",
+      (futureHandle, continuationCallback, continuationHandle) => {
+        if (!futures.has(normalizeBigInt(futureHandle))) {
+          throw new Error(`unknown Rust future handle ${futureHandle}`);
+        }
+        queueMicrotask(() => {
+          continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+        });
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_complete_pointer",
+      (futureHandle, status) => {
+        const future = futures.get(normalizeBigInt(futureHandle));
+        if (future == null) {
+          throw new Error(`unknown Rust future handle ${futureHandle}`);
+        }
+        if (future.kind === "pointer_error") {
+          setPointerCallError(status, future.payload);
+          return null;
+        }
+        setCallSuccess(status);
+        return future.payload;
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_free_pointer",
+      (futureHandle) => {
+        futures.delete(normalizeBigInt(futureHandle));
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_cancel_pointer",
+      (futureHandle) => {
+        futures.delete(normalizeBigInt(futureHandle));
       },
     ],
     [
@@ -1449,6 +1675,14 @@ const koffi = {
       unload() {},
     };
   },
+  alloc(type, length) {
+    return {
+      __koffiAlloc: true,
+      __koffiLength: length,
+      __koffiType: type,
+      __koffiValue: null,
+    };
+  },
   as(value, _type) {
     return normalizeBigInt(value);
   },
@@ -1463,10 +1697,13 @@ const koffi = {
   },
   unregister(_callback) {},
   decode(value, _type) {
-    return value;
+    return readEncodedValue(value);
   },
   encode(target, _type, value) {
     if (target == null) {
+      return;
+    }
+    if (writeEncodedValue(target, value)) {
       return;
     }
     if (typeof value === "object" && value != null) {

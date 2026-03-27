@@ -118,6 +118,128 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResou
 }
 
 #[test]
+fn runtime_object_factory_preserves_external_pointer_handles_when_retagged_values_are_not_addressable() {
+    let settings =
+        generation_settings("runtime-object-factory-external-pointer-fallback");
+    let output_dir = settings.out_dir.clone();
+
+    generator()
+        .write_bindings(&settings, &[component_with_namespace("example")])
+        .expect("write_bindings should succeed");
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"function normalizePointerAddress(value) {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return BigInt(value);
+  }
+  if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
+    return value.__addr;
+  }
+  throw new TypeError(`expected a pointer-compatible value, got ${typeof value}`);
+}
+
+const koffi = {
+  opaque() {
+    return { kind: "opaque" };
+  },
+  pointer(typeOrName, maybeType) {
+    return {
+      kind: "pointer",
+      name: maybeType == null ? null : typeOrName,
+      to: maybeType ?? typeOrName,
+    };
+  },
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  as(value, type) {
+    if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
+      return {
+        __addr: value.__addr,
+        __retagged: true,
+        __type: type,
+      };
+    }
+    return {
+      __addr: normalizePointerAddress(value),
+      __retagged: false,
+      __type: type,
+    };
+  },
+  address(pointer) {
+    if (pointer?.__retagged === true) {
+      throw new TypeError(
+        `Unexpected ${pointer.__type?.name ?? "pointer"} value for ptr, expected external pointer`,
+      );
+    }
+    return normalizePointerAddress(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-external-pointer-fallback-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import koffi from "koffi";
+import { createObjectFactory } from "./runtime/objects.js";
+
+const genericHandleType = koffi.pointer("RustArcPtr", koffi.opaque());
+const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+
+class Resource {
+  ping() {
+    return resourceFactory.cloneHandle(this);
+  }
+}
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  handleType: () => resourceHandleType,
+  cloneHandle(handle) {
+    assert.equal(handle.__type?.name, "RustArcPtr");
+    return handle;
+  },
+});
+
+const resource = resourceFactory.create(koffi.as(42n, genericHandleType));
+assert.equal(typeof resource.ping, "function");
+assert.doesNotThrow(() => resource.ping());
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+}
+
+#[test]
 fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;
@@ -129,7 +251,17 @@ fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
         &format!(
             r#"
 import assert from "node:assert/strict";
-import {{ Flavor, ScanResult, Store, echo_bytes, echo_record }} from "./index.js";
+import {{
+  Config,
+  FixtureErrorInvalidState,
+  FixtureErrorParse,
+  Flavor,
+  ReaderBuilder,
+  ScanResult,
+  Store,
+  echo_bytes,
+  echo_record,
+}} from "./index.js";
 
 {}
 "#,
@@ -203,7 +335,17 @@ fn runs_plain_js_smoke_script_against_generated_bundled_basic_fixture_package() 
             r#"
 import assert from "node:assert/strict";
 import {{ realpathSync }} from "node:fs";
-import {{ Flavor, ScanResult, Store, echo_bytes, echo_record }} from "./index.js";
+import {{
+  Config,
+  FixtureErrorInvalidState,
+  FixtureErrorParse,
+  Flavor,
+  ReaderBuilder,
+  ScanResult,
+  Store,
+  echo_bytes,
+  echo_record,
+}} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
 assert.equal(ffiMetadata.bundledPrebuilds, true);
@@ -247,7 +389,19 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
             r#"
 import assert from "node:assert/strict";
 import {{ realpathSync }} from "node:fs";
-import {{ Flavor, ScanResult, Store, echo_bytes, echo_record, load, unload }} from "./index.js";
+import {{
+  Config,
+  FixtureErrorInvalidState,
+  FixtureErrorParse,
+  Flavor,
+  ReaderBuilder,
+  ScanResult,
+  Store,
+  echo_bytes,
+  echo_record,
+  load,
+  unload,
+}} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
 assert.equal(ffiMetadata.bundledPrebuilds, true);
@@ -374,7 +528,25 @@ assert.deepStrictEqual(Array.from(asyncRecord.value), [9, 8]);
 assert.deepStrictEqual(
   asyncRecord.chunks.map((chunk) => Array.from(chunk)),
   [[3], [4, 5], [9, 8]],
-);"#
+);
+
+const config = Config.from_json("ok");
+assert.equal(config.value(), "ok");
+assert.throws(() => Config.from_json("not-json"), (error) => {
+  assert.ok(error instanceof FixtureErrorParse);
+  assert.equal(error.name, "FixtureErrorParse");
+  assert.equal(error.message, "invalid json");
+  return true;
+});
+
+const reader = await new ReaderBuilder(true).build();
+assert.equal(reader.label(), "ready");
+await assert.rejects(new ReaderBuilder(false).build(), (error) => {
+  assert.ok(error instanceof FixtureErrorInvalidState);
+  assert.equal(error.name, "FixtureErrorInvalidState");
+  assert.equal(error.message, "builder rejected");
+  return true;
+});"#
 }
 
 fn callback_fixture_api_smoke_body() -> &'static str {

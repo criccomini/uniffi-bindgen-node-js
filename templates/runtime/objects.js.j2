@@ -147,7 +147,13 @@ export class UniffiObjectFactory {
     if (handleType == null) {
       return handle;
     }
-    return koffi.as(pointerAddress(handle), handleType);
+    const typedHandle = koffi.as(handle, handleType);
+    try {
+      pointerAddress(typedHandle);
+      return typedHandle;
+    } catch {
+      return handle;
+    }
   }
 
   attach(instance, handle) {

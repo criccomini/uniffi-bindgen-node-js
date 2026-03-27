@@ -14,6 +14,25 @@ export interface CallbackErrorOptions<E extends Error = Error> {
   defaultMessage?: string;
 }
 
+export interface PendingForeignFuture<Result = unknown> {
+  callbackData: bigint | number | undefined;
+  cancelled: boolean;
+  complete: ((
+    callbackData: bigint | number | undefined,
+    result: Result,
+  ) => void) | undefined;
+  handle: bigint;
+  settled: boolean;
+}
+
+export interface PendingForeignFutureOptions<Result = unknown> {
+  callbackData?: bigint | number;
+  complete?: ((
+    callbackData: bigint | number | undefined,
+    result: Result,
+  ) => void) | null;
+}
+
 export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Error>
   extends CallbackErrorOptions<E>
 {
@@ -31,6 +50,16 @@ export declare function writeCallbackError<E extends Error = Error>(
   error: unknown,
   options?: CallbackErrorOptions<E>,
 ): E;
+export declare function createPendingForeignFuture<Result = unknown>(
+  options?: PendingForeignFutureOptions<Result>,
+): PendingForeignFuture<Result>;
+export declare function takePendingForeignFuture<Result = unknown>(
+  handle: bigint | number,
+): PendingForeignFuture<Result> | undefined;
+export declare function freePendingForeignFuture<Result = unknown>(
+  handle: bigint | number,
+): PendingForeignFuture<Result> | undefined;
+export declare function clearPendingForeignFutures(): void;
 export declare function invokeCallbackMethod<T = unknown, E extends Error = Error>(params: {
   registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
   handle: bigint | number;

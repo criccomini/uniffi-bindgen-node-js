@@ -15,7 +15,11 @@ import {
   getFfiBindings,
   load as loadFfi,
 } from "./callbacks_fixture-ffi.js";
-import { createForeignBytes, RustBufferValue } from "./runtime/ffi-types.js";
+import {
+  createForeignBytes,
+  EMPTY_RUST_BUFFER,
+  RustBufferValue,
+} from "./runtime/ffi-types.js";
 import {
   AbstractFfiConverterByteArray,
   FfiConverterArray,
@@ -75,17 +79,21 @@ function uniffiNotImplemented(member) {
   throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);
 }
 
+function uniffiLiftString(bytes) {
+  return FfiConverterString.lift(bytes);
+}
+
 function uniffiFreeRustBuffer(buffer) {
   return defaultRustCaller.rustCall(
     (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_free(buffer, status),
-    { liftString: FfiConverterString.lift },
+    { liftString: uniffiLiftString },
   );
 }
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   const options = {
     freeRustBuffer: uniffiFreeRustBuffer,
-    liftString: FfiConverterString.lift,
+    liftString: uniffiLiftString,
   };
   if (errorConverter != null) {
     options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);

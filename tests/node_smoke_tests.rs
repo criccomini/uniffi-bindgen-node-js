@@ -1,10 +1,121 @@
 mod support;
 
+use std::fs;
+
 use self::support::{
-    FixturePackageOptions, current_bundled_prebuild_target, generate_fixture_package,
-    generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
-    run_node_script,
+    FixturePackageOptions, component_with_namespace, current_bundled_prebuild_target,
+    generate_fixture_package, generate_fixture_package_with_options, generation_settings,
+    generator, install_fixture_package_dependencies, remove_dir_all, run_node_script,
 };
+use uniffi_bindgen::BindingGenerator;
+
+#[test]
+fn runtime_object_factory_retypes_generic_pointer_handles_before_clone() {
+    let settings = generation_settings("runtime-object-factory-generic-pointer");
+    let output_dir = settings.out_dir.clone();
+
+    generator()
+        .write_bindings(&settings, &[component_with_namespace("example")])
+        .expect("write_bindings should succeed");
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"function normalizePointerAddress(value) {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return BigInt(value);
+  }
+  if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
+    return value.__addr;
+  }
+  throw new TypeError(`expected a pointer-compatible value, got ${typeof value}`);
+}
+
+const koffi = {
+  opaque() {
+    return { kind: "opaque" };
+  },
+  pointer(typeOrName, maybeType) {
+    return {
+      kind: "pointer",
+      name: maybeType == null ? null : typeOrName,
+      to: maybeType ?? typeOrName,
+    };
+  },
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  as(value, type) {
+    return {
+      __addr: normalizePointerAddress(value),
+      __type: type,
+    };
+  },
+  address(pointer) {
+    return normalizePointerAddress(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-generic-pointer-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import koffi from "koffi";
+import { createObjectFactory } from "./runtime/objects.js";
+
+const genericHandleType = koffi.pointer("RustArcPtr", koffi.opaque());
+const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+
+class Resource {
+  ping() {
+    return resourceFactory.cloneHandle(this);
+  }
+}
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  handleType: () => resourceHandleType,
+  cloneHandle(handle) {
+    assert.equal(handle.__type?.name, "RustArcPtrResource");
+    return handle;
+  },
+});
+
+const resource = resourceFactory.create(koffi.as(42n, genericHandleType));
+assert.equal(typeof resource.ping, "function");
+assert.doesNotThrow(() => resource.ping());
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResource");
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+}
 
 #[test]
 fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {

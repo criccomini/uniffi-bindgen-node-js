@@ -132,16 +132,22 @@ export class UniffiObjectFactory {
   }
 
   _coerceHandle(handle) {
-    if (handle == null || (typeof handle !== "bigint" && typeof handle !== "number")) {
+    if (handle == null) {
       return handle;
     }
 
-    const normalizedHandle = normalizeUInt64(handle);
     const handleType = resolveHandleType(this._handleType);
-    if (handleType == null) {
-      return normalizedHandle;
+    if (typeof handle === "bigint" || typeof handle === "number") {
+      const normalizedHandle = normalizeUInt64(handle);
+      if (handleType == null) {
+        return normalizedHandle;
+      }
+      return koffi.as(normalizedHandle, handleType);
     }
-    return koffi.as(normalizedHandle, handleType);
+    if (handleType == null) {
+      return handle;
+    }
+    return koffi.as(pointerAddress(handle), handleType);
   }
 
   attach(instance, handle) {

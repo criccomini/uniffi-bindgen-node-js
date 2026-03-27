@@ -1040,90 +1040,11 @@ fn render_js_callback_interface_converter(
     ));
 
     for method in &callback_interface.methods {
-        let callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
-            format!(
-                "callback interface {}.{} is missing an FFI callback identifier",
-                callback_interface.name, method.name
-            )
-        })?;
-        lines.push(format!(
-            "  const {}Callback = koffi.register(",
-            js_member_identifier(&method.name)
-        ));
-        lines.push(
-            "    (uniffiHandle, ".to_string()
-                + &method
-                    .arguments
-                    .iter()
-                    .map(|argument| js_identifier(&argument.name))
-                    .chain(["uniffiOutReturn".to_string(), "callStatus".to_string()].into_iter())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-                + ") => {",
-        );
-        lines.push(
-            "      const uniffiStatus = callStatus == null
-        ? createRustCallStatus()
-        : koffi.decode(callStatus, bindings.ffiTypes.RustCallStatus);"
-                .to_string(),
-        );
-        lines.push("      const uniffiResult = invokeCallbackMethod({".to_string());
-        lines.push(format!("        registry: {},", registry_name));
-        lines.push("        handle: uniffiHandle,".to_string());
-        lines.push(format!(
-            "        methodName: {},",
-            json_string_literal(&method.name)?
-        ));
-        lines.push("        args: [".to_string());
-        for argument in &method.arguments {
-            lines.push(format!(
-                "          {},",
-                render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))?
-            ));
-        }
-        lines.push("        ],".to_string());
-        if let Some(throws_type) = method.throws_type.as_ref() {
-            lines.push(format!(
-                "        lowerError: (error) => error instanceof {} ? uniffiLowerIntoRustBuffer({}, error) : null,",
-                render_public_type(throws_type)?,
-                render_js_type_converter_expression(throws_type)?
-            ));
-        }
-        lines.push(
-            "        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),"
-                .to_string(),
-        );
-        lines.push("        status: uniffiStatus,".to_string());
-        lines.push("      });".to_string());
-        lines.push("      if (callStatus != null) {".to_string());
-        lines.push(
-            "        koffi.encode(callStatus, bindings.ffiTypes.RustCallStatus, uniffiStatus);"
-                .to_string(),
-        );
-        lines.push("      }".to_string());
-        lines.push("      if (uniffiStatus.code !== CALL_SUCCESS) {".to_string());
-        lines.push("        return;".to_string());
-        lines.push("      }".to_string());
-        if let Some(return_type) = method.return_type.as_ref() {
-            lines.push(format!(
-                "      const loweredReturn = {};",
-                render_js_lower_expression(return_type, "uniffiResult")?
-            ));
-            lines.push(format!(
-                "      koffi.encode(uniffiOutReturn, {}, loweredReturn);",
-                render_js_koffi_type_expression(return_type, "bindings")?
-            ));
-        }
-        lines.push("    },".to_string());
-        lines.push(format!(
-            "    koffi.pointer(bindings.ffiCallbacks.{}),",
-            callback_identifier
-        ));
-        lines.push("  );".to_string());
-        lines.push(format!(
-            "  registrations.push({}Callback);",
-            js_member_identifier(&method.name)
-        ));
+        lines.extend(render_js_callback_vtable_registration(
+            callback_interface,
+            method,
+            &registry_name,
+        )?);
     }
 
     lines.push("  const uniffiFree = koffi.register(".to_string());
@@ -1171,6 +1092,118 @@ fn render_js_callback_interface_converter(
     lines.push("});".to_string());
 
     Ok(lines.join("\n"))
+}
+
+fn render_js_callback_vtable_registration(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    registry_name: &str,
+) -> Result<Vec<String>> {
+    if method.is_async {
+        render_js_async_callback_vtable_registration(callback_interface, method, registry_name)
+    } else {
+        render_js_sync_callback_vtable_registration(callback_interface, method, registry_name)
+    }
+}
+
+fn render_js_sync_callback_vtable_registration(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    registry_name: &str,
+) -> Result<Vec<String>> {
+    let callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
+        format!(
+            "callback interface {}.{} is missing an FFI callback identifier",
+            callback_interface.name, method.name
+        )
+    })?;
+    let mut lines = vec![format!(
+        "  const {}Callback = koffi.register(",
+        js_member_identifier(&method.name)
+    )];
+    lines.push(
+        "    (uniffiHandle, ".to_string()
+            + &method
+                .arguments
+                .iter()
+                .map(|argument| js_identifier(&argument.name))
+                .chain(["uniffiOutReturn".to_string(), "callStatus".to_string()].into_iter())
+                .collect::<Vec<_>>()
+                .join(", ")
+            + ") => {",
+    );
+    lines.push(
+        "      const uniffiStatus = callStatus == null
+        ? createRustCallStatus()
+        : koffi.decode(callStatus, bindings.ffiTypes.RustCallStatus);"
+            .to_string(),
+    );
+    lines.push("      const uniffiResult = invokeCallbackMethod({".to_string());
+    lines.push(format!("        registry: {},", registry_name));
+    lines.push("        handle: uniffiHandle,".to_string());
+    lines.push(format!(
+        "        methodName: {},",
+        json_string_literal(&method.name)?
+    ));
+    lines.push("        args: [".to_string());
+    for argument in &method.arguments {
+        lines.push(format!(
+            "          {},",
+            render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))?
+        ));
+    }
+    lines.push("        ],".to_string());
+    if let Some(throws_type) = method.throws_type.as_ref() {
+        lines.push(format!(
+            "        lowerError: (error) => error instanceof {} ? uniffiLowerIntoRustBuffer({}, error) : null,",
+            render_public_type(throws_type)?,
+            render_js_type_converter_expression(throws_type)?
+        ));
+    }
+    lines.push(
+        "        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),"
+            .to_string(),
+    );
+    lines.push("        status: uniffiStatus,".to_string());
+    lines.push("      });".to_string());
+    lines.push("      if (callStatus != null) {".to_string());
+    lines.push(
+        "        koffi.encode(callStatus, bindings.ffiTypes.RustCallStatus, uniffiStatus);"
+            .to_string(),
+    );
+    lines.push("      }".to_string());
+    lines.push("      if (uniffiStatus.code !== CALL_SUCCESS) {".to_string());
+    lines.push("        return;".to_string());
+    lines.push("      }".to_string());
+    if let Some(return_type) = method.return_type.as_ref() {
+        lines.push(format!(
+            "      const loweredReturn = {};",
+            render_js_lower_expression(return_type, "uniffiResult")?
+        ));
+        lines.push(format!(
+            "      koffi.encode(uniffiOutReturn, {}, loweredReturn);",
+            render_js_koffi_type_expression(return_type, "bindings")?
+        ));
+    }
+    lines.push("    },".to_string());
+    lines.push(format!(
+        "    koffi.pointer(bindings.ffiCallbacks.{}),",
+        callback_identifier
+    ));
+    lines.push("  );".to_string());
+    lines.push(format!(
+        "  registrations.push({}Callback);",
+        js_member_identifier(&method.name)
+    ));
+    Ok(lines)
+}
+
+fn render_js_async_callback_vtable_registration(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    registry_name: &str,
+) -> Result<Vec<String>> {
+    render_js_sync_callback_vtable_registration(callback_interface, method, registry_name)
 }
 
 fn render_js_flat_enum(enum_def: &EnumModel) -> Result<String> {

@@ -92,7 +92,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Extend the callback fixture with async callback-interface methods covering success, error, void, and cancellation cases.
 - [x] Extend the mock Koffi runtime to emulate async callback invocation, completion callbacks, and cancellation cleanup.
 - [x] Add Rust unit tests for async callback model validation and rendered public API output.
-- [ ] Update snapshot tests for generated callback fixture output.
+- [x] Update snapshot tests for generated callback fixture output.
 - [ ] Add Node smoke tests for async callback success, typed error, unexpected error, void completion, and cancellation.
 - [ ] Add TypeScript tests that enforce Promise<...> async callback interface method typing.
 - [ ] Run the full relevant test suite after implementation.

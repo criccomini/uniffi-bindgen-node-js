@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -39,7 +40,10 @@ import {
 import { UnexpectedEnumCase } from "./runtime/errors.js";
 import { rustCallAsync } from "./runtime/async-rust-call.js";
 import {
+  clearPendingForeignFutures,
   createCallbackRegistry,
+  freePendingForeignFuture,
+  invokeAsyncCallbackMethod,
   invokeCallbackMethod,
 } from "./runtime/callbacks.js";
 import {
@@ -156,6 +160,22 @@ export const LogLevel = Object.freeze({
   "Trace": "Trace",
 });
 
+export class AsyncLogError extends globalThis.Error {
+  constructor(tag, message = tag) {
+    super(message);
+    this.name = "AsyncLogError";
+    this.tag = tag;
+  }
+}
+
+export class AsyncLogErrorRejected extends AsyncLogError {
+  constructor(message) {
+    super("Rejected");
+    this.name = "AsyncLogErrorRejected";
+    this["message"] = message;
+  }
+}
+
 const FfiConverterLogRecord = new (class extends AbstractFfiConverterByteArray {
   allocationSize(value) {
     const recordValue = uniffiRequireRecordObject("LogRecord", value);
@@ -235,6 +255,237 @@ const FfiConverterLogLevel = new (class extends AbstractFfiConverterByteArray {
     }
   }
 })();
+const FfiConverterAsyncLogError = new (class extends AbstractFfiConverterByteArray {
+  allocationSize(value) {
+    if (value instanceof AsyncLogErrorRejected) {
+      return 4 + FfiConverterString.allocationSize(value["message"]);
+    }
+    throw new TypeError("AsyncLogError values must be instances of AsyncLogErrorRejected.");
+  }
+
+  write(value, writer) {
+    if (value instanceof AsyncLogErrorRejected) {
+      writer.writeInt32(1);
+      FfiConverterString.write(value["message"], writer);
+      return;
+    }
+    throw new TypeError("AsyncLogError values must be instances of AsyncLogErrorRejected.");
+  }
+
+  read(reader) {
+    const enumTag = reader.readInt32();
+    switch (enumTag) {
+      case 1:
+        return new AsyncLogErrorRejected(FfiConverterString.read(reader));
+      default:
+        throw new UnexpectedEnumCase(`Unexpected AsyncLogError case ${String(enumTag)}.`);
+    }
+  }
+})();
+class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
+
+  async write(message) {
+    const loweredSelf = uniffiAsyncLogSinkFactory.cloneHandle(this);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    return rustCallAsync({
+      rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write(loweredSelf, loweredMessage),
+      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+      cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
+      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+      freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
+      liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+      ...uniffiRustCallOptions(),
+    });
+  }
+
+  async write_fallible(message) {
+    const loweredSelf = uniffiAsyncLogSinkFactory.cloneHandle(this);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    return rustCallAsync({
+      rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_fallible(loweredSelf, loweredMessage),
+      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+      cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
+      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+      freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
+      liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+      ...uniffiRustCallOptions(FfiConverterAsyncLogError),
+    });
+  }
+
+  async flush() {
+    const loweredSelf = uniffiAsyncLogSinkFactory.cloneHandle(this);
+    return rustCallAsync({
+      rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_flush(loweredSelf),
+      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, continuationCallback, continuationHandle),
+      cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(rustFuture),
+      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status),
+      freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(rustFuture),
+      liftFunc: (_uniffiResult) => undefined,
+      ...uniffiRustCallOptions(),
+    });
+  }
+}
+
+const uniffiAsyncLogSinkFactory = createObjectFactory({
+  typeName: "AsyncLogSink",
+  createInstance: () => Object.create(UniffiAsyncLogSinkProxy.prototype),
+  cloneHandle(handle) {
+    return defaultRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_asynclogsink(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    defaultRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_asynclogsink(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+
+function uniffiValidateAsyncLogSinkImplementation(implementation) {
+  if ((typeof implementation !== "object" && typeof implementation !== "function") || implementation == null) {
+    throw new TypeError(`${"AsyncLogSink"} implementations must be objects with callable methods.`);
+  }
+  if (typeof implementation.write !== "function") {
+    throw new TypeError(`${"AsyncLogSink"} is missing required method write().`);
+  }
+  if (typeof implementation.write_fallible !== "function") {
+    throw new TypeError(`${"AsyncLogSink"} is missing required method write_fallible().`);
+  }
+  if (typeof implementation.flush !== "function") {
+    throw new TypeError(`${"AsyncLogSink"} is missing required method flush().`);
+  }
+  return implementation;
+}
+
+const uniffiAsyncLogSinkRegistry = createCallbackRegistry({
+  interfaceName: "AsyncLogSink",
+  validate: uniffiValidateAsyncLogSinkImplementation,
+});
+
+function uniffiRegisterAsyncLogSinkVtable(bindings, registrations) {
+  const writeFutureFree = koffi.register(
+    (uniffiFutureHandle) => {
+      freePendingForeignFuture(uniffiFutureHandle);
+    },
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+  );
+  registrations.push(writeFutureFree);
+  const writeCallback = koffi.register(
+    (uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {
+      const uniffiFutureHandle = invokeAsyncCallbackMethod({
+        registry: uniffiAsyncLogSinkRegistry,
+        handle: uniffiHandle,
+        methodName: "write",
+        args: [
+          uniffiLiftFromRustBuffer(FfiConverterString, message),
+        ],
+        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),
+        callbackData: uniffiCallbackData,
+        lowerReturn: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        defaultReturnValue: EMPTY_RUST_BUFFER,
+        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+      });
+      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+        handle: uniffiFutureHandle,
+        free: writeFutureFree,
+      });
+    },
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod0),
+  );
+  registrations.push(writeCallback);
+  const write_fallibleFutureFree = koffi.register(
+    (uniffiFutureHandle) => {
+      freePendingForeignFuture(uniffiFutureHandle);
+    },
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+  );
+  registrations.push(write_fallibleFutureFree);
+  const write_fallibleCallback = koffi.register(
+    (uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {
+      const uniffiFutureHandle = invokeAsyncCallbackMethod({
+        registry: uniffiAsyncLogSinkRegistry,
+        handle: uniffiHandle,
+        methodName: "write_fallible",
+        args: [
+          uniffiLiftFromRustBuffer(FfiConverterString, message),
+        ],
+        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),
+        callbackData: uniffiCallbackData,
+        lowerError: (error) => error instanceof AsyncLogError ? uniffiLowerIntoRustBuffer(FfiConverterAsyncLogError, error) : null,
+        lowerReturn: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        defaultReturnValue: EMPTY_RUST_BUFFER,
+        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+      });
+      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+        handle: uniffiFutureHandle,
+        free: write_fallibleFutureFree,
+      });
+    },
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod1),
+  );
+  registrations.push(write_fallibleCallback);
+  const flushFutureFree = koffi.register(
+    (uniffiFutureHandle) => {
+      freePendingForeignFuture(uniffiFutureHandle);
+    },
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+  );
+  registrations.push(flushFutureFree);
+  const flushCallback = koffi.register(
+    (uniffiHandle, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {
+      const uniffiFutureHandle = invokeAsyncCallbackMethod({
+        registry: uniffiAsyncLogSinkRegistry,
+        handle: uniffiHandle,
+        methodName: "flush",
+        args: [
+        ],
+        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),
+        callbackData: uniffiCallbackData,
+        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+      });
+      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+        handle: uniffiFutureHandle,
+        free: flushFutureFree,
+      });
+    },
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod2),
+  );
+  registrations.push(flushCallback);
+  const uniffiFree = koffi.register(
+    (uniffiHandle) => uniffiAsyncLogSinkRegistry.remove(uniffiHandle),
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
+  );
+  registrations.push(uniffiFree);
+  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink({
+    "write": writeCallback,
+    "write_fallible": write_fallibleCallback,
+    "flush": flushCallback,
+    uniffi_free: uniffiFree,
+  });
+}
+
+const FfiConverterAsyncLogSink = Object.freeze({
+  lower(value) {
+    if (uniffiAsyncLogSinkFactory.isInstance(value)) {
+      return uniffiAsyncLogSinkFactory.cloneHandle(value);
+    }
+    return uniffiAsyncLogSinkRegistry.register(value);
+  },
+  lift(handle) {
+    return uniffiAsyncLogSinkFactory.create(handle);
+  },
+  write(value, writer) {
+    writer.writeUInt64(this.lower(value));
+  },
+  read(reader) {
+    return this.lift(reader.readUInt64());
+  },
+  allocationSize() {
+    return UNIFFI_OBJECT_HANDLE_SIZE;
+  },
+});
 class UniffiLogCollectorProxy extends UniffiObjectBase {
 
   log(record) {
@@ -479,11 +730,14 @@ const FfiConverterLogSink = Object.freeze({
 const uniffiRegisteredCallbackPointers = [];
 
 function uniffiRegisterCallbackVtables(bindings) {
+  uniffiRegisterAsyncLogSinkVtable(bindings, uniffiRegisteredCallbackPointers);
   uniffiRegisterLogCollectorVtable(bindings, uniffiRegisteredCallbackPointers);
   uniffiRegisterLogSinkVtable(bindings, uniffiRegisteredCallbackPointers);
 }
 
 function uniffiUnregisterCallbackVtables() {
+  clearPendingForeignFutures();
+  uniffiAsyncLogSinkRegistry.clear();
   uniffiLogCollectorRegistry.clear();
   uniffiLogSinkRegistry.clear();
   while (uniffiRegisteredCallbackPointers.length > 0) {
@@ -500,6 +754,15 @@ configureRuntimeHooks({
   },
 });
 
+export function cancel_emit_async(sink, message) {
+    const loweredSink = FfiConverterAsyncLogSink.lower(sink);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+  defaultRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_cancel_emit_async(loweredSink, loweredMessage, status),
+    uniffiRustCallOptions(),
+  );
+}
+
 export function emit(sink, message) {
     const loweredSink = FfiConverterLogSink.lower(sink);
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
@@ -507,6 +770,47 @@ export function emit(sink, message) {
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(loweredSink, loweredMessage, status),
     uniffiRustCallOptions(),
   );
+}
+
+export async function emit_async(sink, message) {
+    const loweredSink = FfiConverterAsyncLogSink.lower(sink);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+  return rustCallAsync({
+    rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async(loweredSink, loweredMessage),
+    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+    cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
+    completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+    freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
+    liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+    ...uniffiRustCallOptions(),
+  });
+}
+
+export async function emit_async_fallible(sink, message) {
+    const loweredSink = FfiConverterAsyncLogSink.lower(sink);
+    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+  return rustCallAsync({
+    rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async_fallible(loweredSink, loweredMessage),
+    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+    cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
+    completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+    freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
+    liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+    ...uniffiRustCallOptions(FfiConverterAsyncLogError),
+  });
+}
+
+export async function flush_async(sink) {
+    const loweredSink = FfiConverterAsyncLogSink.lower(sink);
+  return rustCallAsync({
+    rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_flush_async(loweredSink),
+    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, continuationCallback, continuationHandle),
+    cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(rustFuture),
+    completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status),
+    freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(rustFuture),
+    liftFunc: (_uniffiResult) => undefined,
+    ...uniffiRustCallOptions(),
+  });
 }
 
 export function init_logging(level, collector) {
@@ -678,6 +982,23 @@ export declare const LogLevel: Readonly<{
 }>;
 export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
+export declare class AsyncLogError extends globalThis.Error {
+  readonly tag: string;
+  protected constructor(tag: string, message?: string);
+}
+
+export declare class AsyncLogErrorRejected extends AsyncLogError {
+  readonly tag: "Rejected";
+  readonly "message": string;
+  constructor(message: string);
+}
+
+export interface AsyncLogSink {
+  write(message: string): Promise<string>;
+  write_fallible(message: string): Promise<string>;
+  flush(): Promise<void>;
+}
+
 export interface LogCollector {
   log(record: LogRecord): void;
 }
@@ -687,7 +1008,15 @@ export interface LogSink {
   latest(): string | undefined;
 }
 
+export declare function cancel_emit_async(sink: AsyncLogSink, message: string): void;
+
 export declare function emit(sink: LogSink, message: string): void;
+
+export declare function emit_async(sink: AsyncLogSink, message: string): Promise<string>;
+
+export declare function emit_async_fallible(sink: AsyncLogSink, message: string): Promise<string>;
+
+export declare function flush_async(sink: AsyncLogSink): Promise<void>;
 
 export declare function init_logging(level: LogLevel, collector: LogCollector | undefined): void;
 
@@ -745,7 +1074,15 @@ export const ffiIntegrity = Object.freeze({
   expectedContractVersion: 29,
   checksums: Object.freeze({
 
+    "uniffi_fixture_callbacks_checksum_func_cancel_emit_async": 6018,
+
     "uniffi_fixture_callbacks_checksum_func_emit": 8597,
+
+    "uniffi_fixture_callbacks_checksum_func_emit_async": 58074,
+
+    "uniffi_fixture_callbacks_checksum_func_emit_async_fallible": 1746,
+
+    "uniffi_fixture_callbacks_checksum_func_flush_async": 30360,
 
     "uniffi_fixture_callbacks_checksum_func_init_logging": 6992,
 
@@ -764,6 +1101,12 @@ export const ffiIntegrity = Object.freeze({
     "uniffi_fixture_callbacks_checksum_constructor_settings_default": 479,
 
     "uniffi_fixture_callbacks_checksum_constructor_writebatch_new": 49225,
+
+    "uniffi_fixture_callbacks_checksum_method_asynclogsink_write": 22775,
+
+    "uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible": 18109,
+
+    "uniffi_fixture_callbacks_checksum_method_asynclogsink_flush": 40068,
 
     "uniffi_fixture_callbacks_checksum_method_logcollector_log": 21938,
 
@@ -1002,6 +1345,18 @@ function createBindings(libraryPath) {
 
     });
 
+    ffiStructs.VTableCallbackInterfaceAsyncLogSink = defineCallbackVtable("VTableCallbackInterfaceAsyncLogSink", {
+
+      "write": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod0),
+
+      "write_fallible": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod1),
+
+      "flush": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod2),
+
+      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
+
+    });
+
     ffiStructs.VTableCallbackInterfaceLogCollector = defineCallbackVtable("VTableCallbackInterfaceLogCollector", {
 
       "log": koffi.pointer(ffiCallbacks.CallbackInterfaceLogCollectorMethod0),
@@ -1049,6 +1404,12 @@ function createBindings(libraryPath) {
 
   ffiCallbacks.ForeignFutureCompleteVoid = koffi.proto("ForeignFutureCompleteVoid", "void", ["uint64_t", ffiStructs.ForeignFutureStructVoid]);
 
+  ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod0 = koffi.proto("CallbackInterfaceAsyncLogSinkMethod0", "void", ["uint64_t", ffiTypes.RustBuffer, koffi.pointer(ffiCallbacks.ForeignFutureCompleteRustBuffer), "uint64_t", koffi.pointer(ffiStructs.ForeignFuture)]);
+
+  ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod1 = koffi.proto("CallbackInterfaceAsyncLogSinkMethod1", "void", ["uint64_t", ffiTypes.RustBuffer, koffi.pointer(ffiCallbacks.ForeignFutureCompleteRustBuffer), "uint64_t", koffi.pointer(ffiStructs.ForeignFuture)]);
+
+  ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod2 = koffi.proto("CallbackInterfaceAsyncLogSinkMethod2", "void", ["uint64_t", koffi.pointer(ffiCallbacks.ForeignFutureCompleteVoid), "uint64_t", koffi.pointer(ffiStructs.ForeignFuture)]);
+
   Object.freeze(ffiCallbacks);
   const ffiFunctions = Object.freeze({
 
@@ -1074,11 +1435,21 @@ function createBindings(libraryPath) {
 
     uniffi_fixture_callbacks_fn_method_writebatch_put: library.func("uniffi_fixture_callbacks_fn_method_writebatch_put", "void", [ffiTypes.RustArcPtrWriteBatch, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink: library.func("uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink", "void", [koffi.pointer(ffiStructs.VTableCallbackInterfaceAsyncLogSink)]),
+
     uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector: library.func("uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector", "void", [koffi.pointer(ffiStructs.VTableCallbackInterfaceLogCollector)]),
 
     uniffi_fixture_callbacks_fn_init_callback_vtable_logsink: library.func("uniffi_fixture_callbacks_fn_init_callback_vtable_logsink", "void", [koffi.pointer(ffiStructs.VTableCallbackInterfaceLogSink)]),
 
+    uniffi_fixture_callbacks_fn_func_cancel_emit_async: library.func("uniffi_fixture_callbacks_fn_func_cancel_emit_async", "void", ["uint64_t", ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
     uniffi_fixture_callbacks_fn_func_emit: library.func("uniffi_fixture_callbacks_fn_func_emit", "void", ["uint64_t", ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_callbacks_fn_func_emit_async: library.func("uniffi_fixture_callbacks_fn_func_emit_async", ffiTypes.UniffiHandle, ["uint64_t", ffiTypes.RustBuffer]),
+
+    uniffi_fixture_callbacks_fn_func_emit_async_fallible: library.func("uniffi_fixture_callbacks_fn_func_emit_async_fallible", ffiTypes.UniffiHandle, ["uint64_t", ffiTypes.RustBuffer]),
+
+    uniffi_fixture_callbacks_fn_func_flush_async: library.func("uniffi_fixture_callbacks_fn_func_flush_async", ffiTypes.UniffiHandle, ["uint64_t"]),
 
     uniffi_fixture_callbacks_fn_func_init_logging: library.func("uniffi_fixture_callbacks_fn_func_init_logging", "void", [ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
@@ -1196,7 +1567,15 @@ function createBindings(libraryPath) {
 
     ffi_fixture_callbacks_rust_future_complete_void: library.func("ffi_fixture_callbacks_rust_future_complete_void", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_callbacks_checksum_func_cancel_emit_async: library.func("uniffi_fixture_callbacks_checksum_func_cancel_emit_async", "uint16_t", []),
+
     uniffi_fixture_callbacks_checksum_func_emit: library.func("uniffi_fixture_callbacks_checksum_func_emit", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_func_emit_async: library.func("uniffi_fixture_callbacks_checksum_func_emit_async", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_func_emit_async_fallible: library.func("uniffi_fixture_callbacks_checksum_func_emit_async_fallible", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_func_flush_async: library.func("uniffi_fixture_callbacks_checksum_func_flush_async", "uint16_t", []),
 
     uniffi_fixture_callbacks_checksum_func_init_logging: library.func("uniffi_fixture_callbacks_checksum_func_init_logging", "uint16_t", []),
 
@@ -1215,6 +1594,12 @@ function createBindings(libraryPath) {
     uniffi_fixture_callbacks_checksum_constructor_settings_default: library.func("uniffi_fixture_callbacks_checksum_constructor_settings_default", "uint16_t", []),
 
     uniffi_fixture_callbacks_checksum_constructor_writebatch_new: library.func("uniffi_fixture_callbacks_checksum_constructor_writebatch_new", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_method_asynclogsink_write: library.func("uniffi_fixture_callbacks_checksum_method_asynclogsink_write", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible: library.func("uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible", "uint16_t", []),
+
+    uniffi_fixture_callbacks_checksum_method_asynclogsink_flush: library.func("uniffi_fixture_callbacks_checksum_method_asynclogsink_flush", "uint16_t", []),
 
     uniffi_fixture_callbacks_checksum_method_logcollector_log: library.func("uniffi_fixture_callbacks_checksum_method_logcollector_log", "uint16_t", []),
 
@@ -1335,7 +1720,15 @@ export function validateContractVersion(bindings = getFfiBindings()) {
 export function getChecksums(bindings = getFfiBindings()) {
   return Object.freeze({
 
+    "uniffi_fixture_callbacks_checksum_func_cancel_emit_async": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_cancel_emit_async(),
+
     "uniffi_fixture_callbacks_checksum_func_emit": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit(),
+
+    "uniffi_fixture_callbacks_checksum_func_emit_async": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit_async(),
+
+    "uniffi_fixture_callbacks_checksum_func_emit_async_fallible": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit_async_fallible(),
+
+    "uniffi_fixture_callbacks_checksum_func_flush_async": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_flush_async(),
 
     "uniffi_fixture_callbacks_checksum_func_init_logging": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_func_init_logging(),
 
@@ -1355,6 +1748,12 @@ export function getChecksums(bindings = getFfiBindings()) {
 
     "uniffi_fixture_callbacks_checksum_constructor_writebatch_new": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_constructor_writebatch_new(),
 
+    "uniffi_fixture_callbacks_checksum_method_asynclogsink_write": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_write(),
+
+    "uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible(),
+
+    "uniffi_fixture_callbacks_checksum_method_asynclogsink_flush": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_flush(),
+
     "uniffi_fixture_callbacks_checksum_method_logcollector_log": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_logcollector_log(),
 
     "uniffi_fixture_callbacks_checksum_method_logsink_write": bindings.ffiFunctions.uniffi_fixture_callbacks_checksum_method_logsink_write(),
@@ -1368,10 +1767,42 @@ export function validateChecksums(bindings = getFfiBindings()) {
   const actualChecksums = getChecksums(bindings);
 
   {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_cancel_emit_async"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_cancel_emit_async"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_cancel_emit_async", expected, actual);
+    }
+  }
+
+  {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit"];
     if (actual !== expected) {
       throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit_async"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit_async"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit_async", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit_async_fallible"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit_async_fallible"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit_async_fallible", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_flush_async"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_flush_async"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_flush_async", expected, actual);
     }
   }
 
@@ -1444,6 +1875,30 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_constructor_writebatch_new"];
     if (actual !== expected) {
       throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_constructor_writebatch_new", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_write", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_flush"];
+    const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_flush"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_flush", expected, actual);
     }
   }
 
@@ -1553,6 +2008,13 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+  uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink(...args);
+
+    return result;
+
+  },
+
   uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector(...args);
 
@@ -1567,10 +2029,38 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+  uniffi_fixture_callbacks_fn_func_cancel_emit_async(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_cancel_emit_async(...args);
+
+    return result;
+
+  },
+
   uniffi_fixture_callbacks_fn_func_emit(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(...args);
 
     return result;
+
+  },
+
+  uniffi_fixture_callbacks_fn_func_emit_async(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async(...args);
+
+    return normalizeHandle(result);
+
+  },
+
+  uniffi_fixture_callbacks_fn_func_emit_async_fallible(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async_fallible(...args);
+
+    return normalizeHandle(result);
+
+  },
+
+  uniffi_fixture_callbacks_fn_func_flush_async(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_fn_func_flush_async(...args);
+
+    return normalizeHandle(result);
 
   },
 
@@ -1980,8 +2470,36 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+  uniffi_fixture_callbacks_checksum_func_cancel_emit_async(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_cancel_emit_async(...args);
+
+    return result;
+
+  },
+
   uniffi_fixture_callbacks_checksum_func_emit(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_func_emit_async(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit_async(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_func_emit_async_fallible(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit_async_fallible(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_func_flush_async(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_func_flush_async(...args);
 
     return result;
 
@@ -2045,6 +2563,27 @@ export const ffiFunctions = Object.freeze({
 
   uniffi_fixture_callbacks_checksum_constructor_writebatch_new(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_constructor_writebatch_new(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_method_asynclogsink_write(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_write(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible(...args);
+
+    return result;
+
+  },
+
+  uniffi_fixture_callbacks_checksum_method_asynclogsink_flush(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_flush(...args);
 
     return result;
 
@@ -2136,6 +2675,11 @@ export function uniffi_fixture_callbacks_fn_method_writebatch_put(...args) {
 }
 
 
+export function uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink(...args);
+}
+
+
 export function uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector(...args) {
   return ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector(...args);
 }
@@ -2146,8 +2690,28 @@ export function uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args
 }
 
 
+export function uniffi_fixture_callbacks_fn_func_cancel_emit_async(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_func_cancel_emit_async(...args);
+}
+
+
 export function uniffi_fixture_callbacks_fn_func_emit(...args) {
   return ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(...args);
+}
+
+
+export function uniffi_fixture_callbacks_fn_func_emit_async(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async(...args);
+}
+
+
+export function uniffi_fixture_callbacks_fn_func_emit_async_fallible(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async_fallible(...args);
+}
+
+
+export function uniffi_fixture_callbacks_fn_func_flush_async(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_fn_func_flush_async(...args);
 }
 
 
@@ -2441,8 +3005,28 @@ export function ffi_fixture_callbacks_rust_future_complete_void(...args) {
 }
 
 
+export function uniffi_fixture_callbacks_checksum_func_cancel_emit_async(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_func_cancel_emit_async(...args);
+}
+
+
 export function uniffi_fixture_callbacks_checksum_func_emit(...args) {
   return ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_func_emit_async(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit_async(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_func_emit_async_fallible(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_func_emit_async_fallible(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_func_flush_async(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_func_flush_async(...args);
 }
 
 
@@ -2488,6 +3072,21 @@ export function uniffi_fixture_callbacks_checksum_constructor_settings_default(.
 
 export function uniffi_fixture_callbacks_checksum_constructor_writebatch_new(...args) {
   return ffiFunctions.uniffi_fixture_callbacks_checksum_constructor_writebatch_new(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_method_asynclogsink_write(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_write(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible(...args);
+}
+
+
+export function uniffi_fixture_callbacks_checksum_method_asynclogsink_flush(...args) {
+  return ffiFunctions.uniffi_fixture_callbacks_checksum_method_asynclogsink_flush(...args);
 }
 
 
@@ -2580,11 +3179,21 @@ export declare function uniffi_fixture_callbacks_fn_method_writebatch_operation_
 
 export declare function uniffi_fixture_callbacks_fn_method_writebatch_put(...args: any[]): any;
 
+export declare function uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink(...args: any[]): any;
+
 export declare function uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector(...args: any[]): any;
 
 export declare function uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(...args: any[]): any;
 
+export declare function uniffi_fixture_callbacks_fn_func_cancel_emit_async(...args: any[]): any;
+
 export declare function uniffi_fixture_callbacks_fn_func_emit(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_fn_func_emit_async(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_fn_func_emit_async_fallible(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_fn_func_flush_async(...args: any[]): any;
 
 export declare function uniffi_fixture_callbacks_fn_func_init_logging(...args: any[]): any;
 
@@ -2702,7 +3311,15 @@ export declare function ffi_fixture_callbacks_rust_future_free_void(...args: any
 
 export declare function ffi_fixture_callbacks_rust_future_complete_void(...args: any[]): any;
 
+export declare function uniffi_fixture_callbacks_checksum_func_cancel_emit_async(...args: any[]): any;
+
 export declare function uniffi_fixture_callbacks_checksum_func_emit(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_func_emit_async(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_func_emit_async_fallible(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_func_flush_async(...args: any[]): any;
 
 export declare function uniffi_fixture_callbacks_checksum_func_init_logging(...args: any[]): any;
 
@@ -2721,6 +3338,12 @@ export declare function uniffi_fixture_callbacks_checksum_method_writebatch_put(
 export declare function uniffi_fixture_callbacks_checksum_constructor_settings_default(...args: any[]): any;
 
 export declare function uniffi_fixture_callbacks_checksum_constructor_writebatch_new(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_method_asynclogsink_write(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible(...args: any[]): any;
+
+export declare function uniffi_fixture_callbacks_checksum_method_asynclogsink_flush(...args: any[]): any;
 
 export declare function uniffi_fixture_callbacks_checksum_method_logcollector_log(...args: any[]): any;
 
@@ -5158,6 +5781,8 @@ import {
   createRustCallStatus,
 } from "./rust-call.js";
 
+const PENDING_FOREIGN_FUTURES = new UniffiHandleMap();
+
 function requireCallbackImplementation(value, interfaceName = "callback interface") {
   if ((typeof value !== "object" && typeof value !== "function") || value == null) {
     throw new TypeError(`${interfaceName} implementations must be objects with callable methods.`);
@@ -5224,6 +5849,139 @@ export function writeCallbackError(status, error, options = {}) {
   return lowered.error;
 }
 
+export function createPendingForeignFuture({
+  callbackData = undefined,
+  complete = undefined,
+} = {}) {
+  const pending = {
+    callbackData,
+    cancelled: false,
+    complete,
+    handle: 0n,
+    settled: false,
+  };
+  pending.handle = PENDING_FOREIGN_FUTURES.insert(pending);
+  return pending;
+}
+
+export function takePendingForeignFuture(handle) {
+  const pending = PENDING_FOREIGN_FUTURES.remove(handle);
+  if (pending == null) {
+    return undefined;
+  }
+  pending.settled = true;
+  return pending;
+}
+
+export function freePendingForeignFuture(handle) {
+  const pending = takePendingForeignFuture(handle);
+  if (pending == null) {
+    return undefined;
+  }
+  pending.cancelled = true;
+  return pending;
+}
+
+export function clearPendingForeignFutures() {
+  for (const pending of PENDING_FOREIGN_FUTURES.values()) {
+    pending.cancelled = true;
+  }
+  PENDING_FOREIGN_FUTURES.clear();
+}
+
+export function foreignFutureHandleCount() {
+  return PENDING_FOREIGN_FUTURES.size;
+}
+
+function createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue) {
+  const completion = {
+    call_status: callStatus,
+  };
+  if (hasReturnValue) {
+    completion.return_value = returnValue;
+  }
+  return completion;
+}
+
+function takeCompletablePendingForeignFuture(handle) {
+  const pending = takePendingForeignFuture(handle);
+  if (pending == null || pending.cancelled || typeof pending.complete !== "function") {
+    return undefined;
+  }
+  return pending;
+}
+
+function createAsyncCallbackFailureCompletion(error, options = {}) {
+  const {
+    defaultReturnValue = undefined,
+    hasReturnValue = false,
+    interfaceName = "callback interface",
+    lowerError,
+    lowerString,
+    methodName = "callback",
+  } = options;
+  const callStatus = createRustCallStatus();
+  writeCallbackError(callStatus, error, {
+    lowerError,
+    lowerString,
+    defaultMessage: `${interfaceName}.${String(methodName)}() failed.`,
+  });
+  return createAsyncCallbackCompletion(callStatus, defaultReturnValue, hasReturnValue);
+}
+
+function completeAsyncCallbackFailure(handle, error, options = {}) {
+  const pending = takeCompletablePendingForeignFuture(handle);
+  if (pending == null) {
+    return;
+  }
+
+  pending.complete(
+    pending.callbackData,
+    createAsyncCallbackFailureCompletion(error, options),
+  );
+}
+
+function completeAsyncCallbackSuccess(handle, result, options = {}) {
+  const pending = takeCompletablePendingForeignFuture(handle);
+  if (pending == null) {
+    return;
+  }
+
+  const {
+    defaultReturnValue = undefined,
+    hasReturnValue = false,
+    interfaceName = "callback interface",
+    lowerError,
+    lowerReturn = undefined,
+    lowerString,
+    methodName = "callback",
+  } = options;
+
+  try {
+    const callStatus = resetCallbackCallStatus(createRustCallStatus());
+    const returnValue =
+      typeof lowerReturn === "function"
+        ? lowerReturn(result)
+        : result;
+    pending.complete(
+      pending.callbackData,
+      createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue),
+    );
+  } catch (error) {
+    pending.complete(
+      pending.callbackData,
+      createAsyncCallbackFailureCompletion(error, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerString,
+        methodName,
+      }),
+    );
+  }
+}
+
 export function invokeCallbackMethod({
   registry,
   handle,
@@ -5254,6 +6012,63 @@ export function invokeCallbackMethod({
     });
     return defaultReturnValue;
   }
+}
+
+export function invokeAsyncCallbackMethod({
+  registry,
+  handle,
+  methodName,
+  args = [],
+  callbackData = undefined,
+  complete = undefined,
+  defaultReturnValue = undefined,
+  interfaceName = registry?.interfaceName ?? "callback interface",
+  lowerError,
+  lowerReturn = undefined,
+  lowerString,
+}) {
+  const pending = createPendingForeignFuture({
+    callbackData,
+    complete,
+  });
+  const hasReturnValue =
+    typeof lowerReturn === "function"
+    || defaultReturnValue !== undefined;
+
+  let promise;
+  try {
+    const implementation = registry.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, interfaceName);
+    promise = Promise.resolve(method.apply(implementation, Array.from(args)));
+  } catch (error) {
+    promise = Promise.reject(error);
+  }
+
+  void promise.then(
+    (result) => {
+      completeAsyncCallbackSuccess(pending.handle, result, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerReturn,
+        lowerString,
+        methodName,
+      });
+    },
+    (error) => {
+      completeAsyncCallbackFailure(pending.handle, error, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerString,
+        methodName,
+      });
+    },
+  );
+
+  return pending.handle;
 }
 
 export class UniffiCallbackRegistry {
@@ -5347,6 +6162,30 @@ export interface CallbackErrorOptions<E extends Error = Error> {
   defaultMessage?: string;
 }
 
+export interface PendingForeignFuture<Result = unknown> {
+  callbackData: bigint | number | undefined;
+  cancelled: boolean;
+  complete: ((
+    callbackData: bigint | number | undefined,
+    result: Result,
+  ) => void) | undefined;
+  handle: bigint;
+  settled: boolean;
+}
+
+export interface PendingForeignFutureOptions<Result = unknown> {
+  callbackData?: bigint | number;
+  complete?: ((
+    callbackData: bigint | number | undefined,
+    result: Result,
+  ) => void) | null;
+}
+
+export interface AsyncCallbackCompletion<Lowered = unknown> {
+  call_status: RustCallStatusStruct;
+  return_value?: Lowered;
+}
+
 export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Error>
   extends CallbackErrorOptions<E>
 {
@@ -5354,6 +6193,23 @@ export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Erro
   defaultReturnValue?: T;
   interfaceName?: string;
   status?: RustCallStatusStruct | null;
+}
+
+export interface InvokeAsyncCallbackMethodOptions<
+  Result = unknown,
+  Lowered = Result,
+  E extends Error = Error,
+> extends CallbackErrorOptions<E>
+{
+  args?: readonly unknown[];
+  callbackData?: bigint | number;
+  complete?: ((
+    callbackData: bigint | number | undefined,
+    result: AsyncCallbackCompletion<Lowered>,
+  ) => void) | null;
+  defaultReturnValue?: Lowered;
+  interfaceName?: string;
+  lowerReturn?: ((value: Result) => Lowered) | null;
 }
 
 export declare function resetCallbackCallStatus(
@@ -5364,11 +6220,31 @@ export declare function writeCallbackError<E extends Error = Error>(
   error: unknown,
   options?: CallbackErrorOptions<E>,
 ): E;
+export declare function createPendingForeignFuture<Result = unknown>(
+  options?: PendingForeignFutureOptions<Result>,
+): PendingForeignFuture<Result>;
+export declare function takePendingForeignFuture<Result = unknown>(
+  handle: bigint | number,
+): PendingForeignFuture<Result> | undefined;
+export declare function freePendingForeignFuture<Result = unknown>(
+  handle: bigint | number,
+): PendingForeignFuture<Result> | undefined;
+export declare function clearPendingForeignFutures(): void;
+export declare function foreignFutureHandleCount(): number;
 export declare function invokeCallbackMethod<T = unknown, E extends Error = Error>(params: {
   registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
   handle: bigint | number;
   methodName: string;
 } & InvokeCallbackMethodOptions<T, E>): T;
+export declare function invokeAsyncCallbackMethod<
+  Result = unknown,
+  Lowered = Result,
+  E extends Error = Error,
+>(params: {
+  registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
+  handle: bigint | number;
+  methodName: string;
+} & InvokeAsyncCallbackMethodOptions<Result, Lowered, E>): bigint;
 
 export declare class UniffiCallbackRegistry<T extends object = Record<string, unknown>> {
   readonly interfaceName: string;

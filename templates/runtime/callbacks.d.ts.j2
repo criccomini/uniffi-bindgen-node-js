@@ -82,6 +82,7 @@ export declare function freePendingForeignFuture<Result = unknown>(
   handle: bigint | number,
 ): PendingForeignFuture<Result> | undefined;
 export declare function clearPendingForeignFutures(): void;
+export declare function foreignFutureHandleCount(): number;
 export declare function invokeCallbackMethod<T = unknown, E extends Error = Error>(params: {
   registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
   handle: bigint | number;

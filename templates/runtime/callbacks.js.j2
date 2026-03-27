@@ -116,6 +116,10 @@ export function clearPendingForeignFutures() {
   PENDING_FOREIGN_FUTURES.clear();
 }
 
+export function foreignFutureHandleCount() {
+  return PENDING_FOREIGN_FUTURES.size;
+}
+
 function createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue) {
   const completion = {
     call_status: callStatus,

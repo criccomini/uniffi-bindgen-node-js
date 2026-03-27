@@ -927,32 +927,26 @@ const uniffiSettingsObjectFactory = createObjectFactory({
       bindings.ffiTypes.RustArcPtrSettings,
       [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
     );
+    const clonedHandle = uniffiRustCaller.rustCall(
+      (status) => genericCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+    return {
+      adoptedHandle: handle,
+      handle: clonedHandle,
+    };
+  },
+  freeRetypedHandle(handle) {
+    const bindings = getFfiBindings();
     const genericFreeHandle = bindings.library.func(
       "uniffi_fixture_callbacks_fn_free_settings",
       "void",
       [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
     );
-    const clonedHandle = uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
+    uniffiRustCaller.rustCall(
+      (status) => genericFreeHandle(handle, status),
       uniffiRustCallOptions(),
     );
-    try {
-      uniffiRustCaller.rustCall(
-        (status) => genericFreeHandle(handle, status),
-        uniffiRustCallOptions(),
-      );
-    } catch (error) {
-      try {
-        uniffiRustCaller.rustCall(
-          (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_settings(clonedHandle, status),
-          uniffiRustCallOptions(),
-        );
-      } catch {
-        // Preserve the original free failure while attempting to avoid leaks.
-      }
-      throw error;
-    }
-    return clonedHandle;
   },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
@@ -1019,32 +1013,26 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
       bindings.ffiTypes.RustArcPtrWriteBatch,
       [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
     );
+    const clonedHandle = uniffiRustCaller.rustCall(
+      (status) => genericCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+    return {
+      adoptedHandle: handle,
+      handle: clonedHandle,
+    };
+  },
+  freeRetypedHandle(handle) {
+    const bindings = getFfiBindings();
     const genericFreeHandle = bindings.library.func(
       "uniffi_fixture_callbacks_fn_free_writebatch",
       "void",
       [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
     );
-    const clonedHandle = uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
+    uniffiRustCaller.rustCall(
+      (status) => genericFreeHandle(handle, status),
       uniffiRustCallOptions(),
     );
-    try {
-      uniffiRustCaller.rustCall(
-        (status) => genericFreeHandle(handle, status),
-        uniffiRustCallOptions(),
-      );
-    } catch (error) {
-      try {
-        uniffiRustCaller.rustCall(
-          (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_writebatch(clonedHandle, status),
-          uniffiRustCallOptions(),
-        );
-      } catch {
-        // Preserve the original free failure while attempting to avoid leaks.
-      }
-      throw error;
-    }
-    return clonedHandle;
   },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
@@ -6420,6 +6408,7 @@ import { UnexpectedNullPointer } from "./errors.js";
 import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
 
 const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
+const uniffiRetypedHandleCleanupSymbol = Symbol("uniffi.retypedHandleCleanup");
 
 export const uniffiTypeNameSymbol = Symbol("uniffi.typeName");
 export const uniffiObjectFactorySymbol = Symbol("uniffi.objectFactory");
@@ -6500,6 +6489,7 @@ export class UniffiObjectFactory {
     createInstance = () => Object.create(UniffiObjectBase.prototype),
     cloneHandle = undefined,
     freeHandle = undefined,
+    freeRetypedHandle = undefined,
     handleType = undefined,
     retypeHandle = undefined,
     serializeHandle = undefined,
@@ -6509,16 +6499,23 @@ export class UniffiObjectFactory {
     this._createInstance = createInstance;
     this._cloneHandle = cloneHandle;
     this._freeHandle = freeHandle;
+    this._freeRetypedHandle = freeRetypedHandle;
     this._handleType = handleType;
     this._retypeHandle = retypeHandle;
     this._serializeHandle = serializeHandle;
     this._deserializeHandle = deserializeHandle;
     this._registry =
-      typeof FinalizationRegistry === "undefined" || typeof freeHandle !== "function"
+      typeof FinalizationRegistry === "undefined"
+      || (typeof freeHandle !== "function" && typeof freeRetypedHandle !== "function")
         ? null
-        : new FinalizationRegistry((handle) => {
+        : new FinalizationRegistry((record) => {
             try {
-              this._freeHandle(this._coerceHandle(handle));
+              if (typeof this._freeHandle === "function") {
+                this._freeHandle(this._coerceHandle(record.handle));
+              }
+              if (typeof this._freeRetypedHandle === "function" && record.cleanupHandle != null) {
+                this._freeRetypedHandle(record.cleanupHandle);
+              }
             } catch {
               // Finalizers must not surface user-visible errors.
             }
@@ -6548,6 +6545,7 @@ export class UniffiObjectFactory {
     instance[uniffiObjectHandleSymbol] = null;
     instance[uniffiObjectDestroyedSymbol] = true;
     instance[uniffiFinalizerTokenSymbol] = null;
+    instance[uniffiRetypedHandleCleanupSymbol] = null;
   }
 
   _normalizeHandle(handle) {
@@ -6573,11 +6571,12 @@ export class UniffiObjectFactory {
     return koffi.as(this._normalizeHandle(handle), handleType);
   }
 
-  attach(instance, handle) {
+  attach(instance, handle, options = undefined) {
     const normalizedHandle = requireHandle(
       this._normalizeHandle(handle),
       `${this.typeName} handle`,
     );
+    const cleanupHandle = this._normalizeHandle(options?.cleanupHandle);
     const target = requireObjectInstance(instance, this.typeName);
 
     if (storedHandle(target) != null && target[uniffiObjectDestroyedSymbol] !== true) {
@@ -6604,6 +6603,11 @@ export class UniffiObjectFactory {
         value: false,
         writable: true,
       },
+      [uniffiRetypedHandleCleanupSymbol]: {
+        configurable: true,
+        value: cleanupHandle,
+        writable: true,
+      },
       [uniffiFinalizerTokenSymbol]: {
         configurable: true,
         value: null,
@@ -6611,7 +6615,10 @@ export class UniffiObjectFactory {
       },
     });
 
-    this._registerFinalizer(target, normalizedHandle);
+    this._registerFinalizer(target, {
+      cleanupHandle,
+      handle: normalizedHandle,
+    });
     return target;
   }
 
@@ -6624,11 +6631,16 @@ export class UniffiObjectFactory {
   }
 
   createRetyped(handle) {
-    const normalizedHandle =
+    const retyped =
       typeof this._retypeHandle === "function"
         ? this._retypeHandle(handle)
         : handle;
-    return this.create(normalizedHandle);
+    if (typeof retyped === "object" && retyped != null && "handle" in retyped) {
+      return this.attach(this._createInstance(), retyped.handle, {
+        cleanupHandle: retyped.adoptedHandle ?? null,
+      });
+    }
+    return this.create(retyped);
   }
 
   handle(value) {
@@ -6668,6 +6680,10 @@ export class UniffiObjectFactory {
 
     if (typeof this._freeHandle === "function") {
       this._freeHandle(handle, value);
+    }
+    const cleanupHandle = value[uniffiRetypedHandleCleanupSymbol];
+    if (typeof this._freeRetypedHandle === "function" && cleanupHandle != null) {
+      this._freeRetypedHandle(cleanupHandle, value);
     }
     return true;
   }
@@ -6754,6 +6770,7 @@ export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase>
   createInstance?: () => T;
   cloneHandle?: ((handle: unknown, value: T) => unknown) | null;
   freeHandle?: ((handle: unknown, value?: T) => void) | null;
+  freeRetypedHandle?: ((handle: unknown, value?: T) => void) | null;
   handleType?: unknown | (() => unknown) | null;
   retypeHandle?: ((handle: unknown) => unknown) | null;
   serializeHandle?: ((handle: unknown, value: T) => bigint | number) | null;

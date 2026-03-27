@@ -197,7 +197,7 @@ impl CallbackFunctionModel {
             .arguments()
             .into_iter()
             .map(FfiArgument::type_)
-            .map(render_argument_type_expr)
+            .map(render_type_expr)
             .collect::<Vec<_>>();
         if callback.has_rust_call_status_arg() {
             argument_type_exprs.push("koffi.pointer(ffiTypes.RustCallStatus)".to_string());
@@ -261,7 +261,7 @@ impl FunctionModel {
             .arguments()
             .into_iter()
             .map(FfiArgument::type_)
-            .map(render_argument_type_expr)
+            .map(render_type_expr)
             .collect::<Vec<_>>();
         if function.has_rust_call_status_arg() {
             argument_type_exprs.push("koffi.pointer(ffiTypes.RustCallStatus)".to_string());
@@ -371,15 +371,6 @@ fn render_type_expr(type_: FfiType) -> String {
     }
 }
 
-fn render_argument_type_expr(type_: FfiType) -> String {
-    match type_ {
-        FfiType::RustArcPtr(_) => "ffiTypes.RustArcPtr".to_string(),
-        FfiType::Reference(inner) | FfiType::MutReference(inner) => {
-            format!("koffi.pointer({})", render_argument_type_expr(*inner))
-        }
-        other => render_type_expr(other),
-    }
-}
 
 fn opaque_type_name(name: &str) -> String {
     format!("RustArcPtr{name}")

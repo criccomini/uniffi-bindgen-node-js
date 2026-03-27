@@ -120,6 +120,45 @@ function wrapReturnValue(value, returnType) {
   return wrapPointerValue(value, returnType);
 }
 
+function setHandleValue(map, handle, value) {
+  map.set(normalizeBigInt(handle), {
+    refCount: 1,
+    value,
+  });
+}
+
+function getHandleValue(map, handle, label) {
+  const normalizedHandle = normalizeBigInt(handle);
+  const entry = map.get(normalizedHandle);
+  if (entry == null) {
+    throw new Error(`unknown ${label} handle ${normalizedHandle}`);
+  }
+  return entry.value;
+}
+
+function cloneHandleValue(map, handle, label) {
+  const normalizedHandle = normalizeBigInt(handle);
+  const entry = map.get(normalizedHandle);
+  if (entry == null) {
+    throw new Error(`unknown ${label} handle ${normalizedHandle}`);
+  }
+  entry.refCount += 1;
+  return normalizedHandle;
+}
+
+function freeHandleValue(map, handle) {
+  const normalizedHandle = normalizeBigInt(handle);
+  const entry = map.get(normalizedHandle);
+  if (entry == null) {
+    return;
+  }
+  if (entry.refCount <= 1) {
+    map.delete(normalizedHandle);
+    return;
+  }
+  entry.refCount -= 1;
+}
+
 function emptyRustBuffer() {
   return {
     capacity: 0n,
@@ -668,39 +707,19 @@ function createBasicFixtureRuntime(libraryPath) {
   let nextFutureHandle = 1000n;
 
   function getConfig(handle) {
-    const normalizedHandle = normalizeBigInt(handle);
-    const config = configs.get(normalizedHandle);
-    if (config == null) {
-      throw new Error(`unknown Config handle ${normalizedHandle}`);
-    }
-    return config;
+    return getHandleValue(configs, handle, "Config");
   }
 
   function getReader(handle) {
-    const normalizedHandle = normalizeBigInt(handle);
-    const reader = readers.get(normalizedHandle);
-    if (reader == null) {
-      throw new Error(`unknown Reader handle ${normalizedHandle}`);
-    }
-    return reader;
+    return getHandleValue(readers, handle, "Reader");
   }
 
   function getReaderBuilder(handle) {
-    const normalizedHandle = normalizeBigInt(handle);
-    const readerBuilder = readerBuilders.get(normalizedHandle);
-    if (readerBuilder == null) {
-      throw new Error(`unknown ReaderBuilder handle ${normalizedHandle}`);
-    }
-    return readerBuilder;
+    return getHandleValue(readerBuilders, handle, "ReaderBuilder");
   }
 
   function getStore(handle) {
-    const normalizedHandle = normalizeBigInt(handle);
-    const store = stores.get(normalizedHandle);
-    if (store == null) {
-      throw new Error(`unknown Store handle ${normalizedHandle}`);
-    }
-    return store;
+    return getHandleValue(stores, handle, "Store");
   }
 
   function setPointerCallError(status, errorBuffer) {
@@ -748,14 +767,15 @@ function createBasicFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_basic_fn_clone_config",
       (handle, status) => {
+        const clonedHandle = cloneHandleValue(configs, handle, "Config");
         setCallSuccess(status);
-        return normalizeBigInt(handle);
+        return clonedHandle;
       },
     ],
     [
       "uniffi_fixture_basic_fn_free_config",
       (handle, status) => {
-        configs.delete(normalizeBigInt(handle));
+        freeHandleValue(configs, handle);
         setCallSuccess(status);
       },
     ],
@@ -773,7 +793,7 @@ function createBasicFixtureRuntime(libraryPath) {
 
         const handle = nextConfigHandle;
         nextConfigHandle += 1n;
-        configs.set(handle, { value: json });
+        setHandleValue(configs, handle, { value: json });
         setCallSuccess(status);
         return handle;
       },
@@ -788,14 +808,15 @@ function createBasicFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_basic_fn_clone_reader",
       (handle, status) => {
+        const clonedHandle = cloneHandleValue(readers, handle, "Reader");
         setCallSuccess(status);
-        return normalizeBigInt(handle);
+        return clonedHandle;
       },
     ],
     [
       "uniffi_fixture_basic_fn_free_reader",
       (handle, status) => {
-        readers.delete(normalizeBigInt(handle));
+        freeHandleValue(readers, handle);
         setCallSuccess(status);
       },
     ],
@@ -809,14 +830,15 @@ function createBasicFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_basic_fn_clone_readerbuilder",
       (handle, status) => {
+        const clonedHandle = cloneHandleValue(readerBuilders, handle, "ReaderBuilder");
         setCallSuccess(status);
-        return normalizeBigInt(handle);
+        return clonedHandle;
       },
     ],
     [
       "uniffi_fixture_basic_fn_free_readerbuilder",
       (handle, status) => {
-        readerBuilders.delete(normalizeBigInt(handle));
+        freeHandleValue(readerBuilders, handle);
         setCallSuccess(status);
       },
     ],
@@ -825,7 +847,7 @@ function createBasicFixtureRuntime(libraryPath) {
       (valid, status) => {
         const handle = nextReaderBuilderHandle;
         nextReaderBuilderHandle += 1n;
-        readerBuilders.set(handle, { valid: Boolean(valid) });
+        setHandleValue(readerBuilders, handle, { valid: Boolean(valid) });
         setCallSuccess(status);
         return handle;
       },
@@ -840,7 +862,7 @@ function createBasicFixtureRuntime(libraryPath) {
         if (readerBuilder.valid) {
           const readerHandle = nextReaderHandle;
           nextReaderHandle += 1n;
-          readers.set(readerHandle, { label: "ready" });
+          setHandleValue(readers, readerHandle, { label: "ready" });
           futures.set(futureHandle, {
             kind: "pointer",
             payload: readerHandle,
@@ -860,14 +882,15 @@ function createBasicFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_basic_fn_clone_store",
       (handle, status) => {
+        const clonedHandle = cloneHandleValue(stores, handle, "Store");
         setCallSuccess(status);
-        return normalizeBigInt(handle);
+        return clonedHandle;
       },
     ],
     [
       "uniffi_fixture_basic_fn_free_store",
       (handle, status) => {
-        stores.delete(normalizeBigInt(handle));
+        freeHandleValue(stores, handle);
         setCallSuccess(status);
       },
     ],
@@ -876,7 +899,7 @@ function createBasicFixtureRuntime(libraryPath) {
       (seedBuffer, status) => {
         const handle = nextStoreHandle;
         nextStoreHandle += 1n;
-        stores.set(handle, decodeBlobRecord(rustBufferToUint8Array(seedBuffer)));
+        setHandleValue(stores, handle, decodeBlobRecord(rustBufferToUint8Array(seedBuffer)));
         setCallSuccess(status);
         return handle;
       },
@@ -1075,21 +1098,11 @@ function createCallbacksFixtureRuntime(libraryPath) {
   let logSinkVtable = null;
 
   function getSettings(handle) {
-    const normalizedHandle = normalizeBigInt(handle);
-    const value = settings.get(normalizedHandle);
-    if (value == null) {
-      throw new Error(`unknown Settings handle ${normalizedHandle}`);
-    }
-    return value;
+    return getHandleValue(settings, handle, "Settings");
   }
 
   function getWriteBatch(handle) {
-    const normalizedHandle = normalizeBigInt(handle);
-    const value = writeBatches.get(normalizedHandle);
-    if (value == null) {
-      throw new Error(`unknown WriteBatch handle ${normalizedHandle}`);
-    }
-    return value;
+    return getHandleValue(writeBatches, handle, "WriteBatch");
   }
 
   function getRustFuture(handle) {
@@ -1411,15 +1424,15 @@ function createCallbacksFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_callbacks_fn_clone_settings",
       (handle, status) => {
-        getSettings(handle);
+        const clonedHandle = cloneHandleValue(settings, handle, "Settings");
         setCallSuccess(status);
-        return normalizeBigInt(handle);
+        return clonedHandle;
       },
     ],
     [
       "uniffi_fixture_callbacks_fn_free_settings",
       (handle, status) => {
-        settings.delete(normalizeBigInt(handle));
+        freeHandleValue(settings, handle);
         setCallSuccess(status);
       },
     ],
@@ -1428,7 +1441,7 @@ function createCallbacksFixtureRuntime(libraryPath) {
       (status) => {
         const handle = nextSettingsHandle;
         nextSettingsHandle += 1n;
-        settings.set(handle, createJsonObjectNode());
+        setHandleValue(settings, handle, createJsonObjectNode());
         setCallSuccess(status);
         return handle;
       },
@@ -1453,15 +1466,15 @@ function createCallbacksFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_callbacks_fn_clone_writebatch",
       (handle, status) => {
-        getWriteBatch(handle);
+        const clonedHandle = cloneHandleValue(writeBatches, handle, "WriteBatch");
         setCallSuccess(status);
-        return normalizeBigInt(handle);
+        return clonedHandle;
       },
     ],
     [
       "uniffi_fixture_callbacks_fn_free_writebatch",
       (handle, status) => {
-        writeBatches.delete(normalizeBigInt(handle));
+        freeHandleValue(writeBatches, handle);
         setCallSuccess(status);
       },
     ],
@@ -1470,7 +1483,7 @@ function createCallbacksFixtureRuntime(libraryPath) {
       (status) => {
         const handle = nextWriteBatchHandle;
         nextWriteBatchHandle += 1n;
-        writeBatches.set(handle, []);
+        setHandleValue(writeBatches, handle, []);
         setCallSuccess(status);
         return handle;
       },

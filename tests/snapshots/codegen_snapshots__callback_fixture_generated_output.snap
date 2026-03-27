@@ -920,6 +920,40 @@ const uniffiSettingsObjectFactory = createObjectFactory({
   typeName: "Settings",
   createInstance: () => Object.create(Settings.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrSettings,
+  retypeHandle(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_callbacks_fn_clone_settings",
+      bindings.ffiTypes.RustArcPtrSettings,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    const genericFreeHandle = bindings.library.func(
+      "uniffi_fixture_callbacks_fn_free_settings",
+      "void",
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    const clonedHandle = uniffiRustCaller.rustCall(
+      (status) => genericCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+    try {
+      uniffiRustCaller.rustCall(
+        (status) => genericFreeHandle(handle, status),
+        uniffiRustCallOptions(),
+      );
+    } catch (error) {
+      try {
+        uniffiRustCaller.rustCall(
+          (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_settings(clonedHandle, status),
+          uniffiRustCallOptions(),
+        );
+      } catch {
+        // Preserve the original free failure while attempting to avoid leaks.
+      }
+      throw error;
+    }
+    return clonedHandle;
+  },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_settings(handle, status),
@@ -978,6 +1012,40 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
   typeName: "WriteBatch",
   createInstance: () => Object.create(WriteBatch.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrWriteBatch,
+  retypeHandle(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_callbacks_fn_clone_writebatch",
+      bindings.ffiTypes.RustArcPtrWriteBatch,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    const genericFreeHandle = bindings.library.func(
+      "uniffi_fixture_callbacks_fn_free_writebatch",
+      "void",
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    const clonedHandle = uniffiRustCaller.rustCall(
+      (status) => genericCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+    try {
+      uniffiRustCaller.rustCall(
+        (status) => genericFreeHandle(handle, status),
+        uniffiRustCallOptions(),
+      );
+    } catch (error) {
+      try {
+        uniffiRustCaller.rustCall(
+          (status) => ffiFunctions.uniffi_fixture_callbacks_fn_free_writebatch(clonedHandle, status),
+          uniffiRustCallOptions(),
+        );
+      } catch {
+        // Preserve the original free failure while attempting to avoid leaks.
+      }
+      throw error;
+    }
+    return clonedHandle;
+  },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_writebatch(handle, status),
@@ -1464,27 +1532,27 @@ function createBindings(libraryPath) {
   Object.freeze(ffiCallbacks);
   const ffiFunctions = Object.freeze({
 
-    uniffi_fixture_callbacks_fn_clone_settings: library.func("uniffi_fixture_callbacks_fn_clone_settings", ffiTypes.RustArcPtrSettings, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_clone_settings: library.func("uniffi_fixture_callbacks_fn_clone_settings", ffiTypes.RustArcPtrSettings, [ffiTypes.RustArcPtrSettings, koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_free_settings: library.func("uniffi_fixture_callbacks_fn_free_settings", "void", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_free_settings: library.func("uniffi_fixture_callbacks_fn_free_settings", "void", [ffiTypes.RustArcPtrSettings, koffi.pointer(ffiTypes.RustCallStatus)]),
 
     uniffi_fixture_callbacks_fn_constructor_settings_default: library.func("uniffi_fixture_callbacks_fn_constructor_settings_default", ffiTypes.RustArcPtrSettings, [koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_method_settings_set: library.func("uniffi_fixture_callbacks_fn_method_settings_set", "void", [ffiTypes.RustArcPtr, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_method_settings_set: library.func("uniffi_fixture_callbacks_fn_method_settings_set", "void", [ffiTypes.RustArcPtrSettings, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_method_settings_to_json_string: library.func("uniffi_fixture_callbacks_fn_method_settings_to_json_string", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_method_settings_to_json_string: library.func("uniffi_fixture_callbacks_fn_method_settings_to_json_string", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrSettings, koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_clone_writebatch: library.func("uniffi_fixture_callbacks_fn_clone_writebatch", ffiTypes.RustArcPtrWriteBatch, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_clone_writebatch: library.func("uniffi_fixture_callbacks_fn_clone_writebatch", ffiTypes.RustArcPtrWriteBatch, [ffiTypes.RustArcPtrWriteBatch, koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_free_writebatch: library.func("uniffi_fixture_callbacks_fn_free_writebatch", "void", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_free_writebatch: library.func("uniffi_fixture_callbacks_fn_free_writebatch", "void", [ffiTypes.RustArcPtrWriteBatch, koffi.pointer(ffiTypes.RustCallStatus)]),
 
     uniffi_fixture_callbacks_fn_constructor_writebatch_new: library.func("uniffi_fixture_callbacks_fn_constructor_writebatch_new", ffiTypes.RustArcPtrWriteBatch, [koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_method_writebatch_delete: library.func("uniffi_fixture_callbacks_fn_method_writebatch_delete", "void", [ffiTypes.RustArcPtr, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_method_writebatch_delete: library.func("uniffi_fixture_callbacks_fn_method_writebatch_delete", "void", [ffiTypes.RustArcPtrWriteBatch, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_method_writebatch_operation_count: library.func("uniffi_fixture_callbacks_fn_method_writebatch_operation_count", "uint32_t", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_method_writebatch_operation_count: library.func("uniffi_fixture_callbacks_fn_method_writebatch_operation_count", "uint32_t", [ffiTypes.RustArcPtrWriteBatch, koffi.pointer(ffiTypes.RustCallStatus)]),
 
-    uniffi_fixture_callbacks_fn_method_writebatch_put: library.func("uniffi_fixture_callbacks_fn_method_writebatch_put", "void", [ffiTypes.RustArcPtr, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+    uniffi_fixture_callbacks_fn_method_writebatch_put: library.func("uniffi_fixture_callbacks_fn_method_writebatch_put", "void", [ffiTypes.RustArcPtrWriteBatch, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
     uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink: library.func("uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink", "void", [koffi.pointer(ffiStructs.VTableCallbackInterfaceAsyncLogSink)]),
 
@@ -6433,6 +6501,7 @@ export class UniffiObjectFactory {
     cloneHandle = undefined,
     freeHandle = undefined,
     handleType = undefined,
+    retypeHandle = undefined,
     serializeHandle = undefined,
     deserializeHandle = undefined,
   } = {}) {
@@ -6441,6 +6510,7 @@ export class UniffiObjectFactory {
     this._cloneHandle = cloneHandle;
     this._freeHandle = freeHandle;
     this._handleType = handleType;
+    this._retypeHandle = retypeHandle;
     this._serializeHandle = serializeHandle;
     this._deserializeHandle = deserializeHandle;
     this._registry =
@@ -6554,7 +6624,11 @@ export class UniffiObjectFactory {
   }
 
   createRetyped(handle) {
-    return this.create(handle);
+    const normalizedHandle =
+      typeof this._retypeHandle === "function"
+        ? this._retypeHandle(handle)
+        : handle;
+    return this.create(normalizedHandle);
   }
 
   handle(value) {
@@ -6681,6 +6755,7 @@ export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase>
   cloneHandle?: ((handle: unknown, value: T) => unknown) | null;
   freeHandle?: ((handle: unknown, value?: T) => void) | null;
   handleType?: unknown | (() => unknown) | null;
+  retypeHandle?: ((handle: unknown) => unknown) | null;
   serializeHandle?: ((handle: unknown, value: T) => bigint | number) | null;
   deserializeHandle?: ((handle: bigint | number) => unknown) | null;
 }

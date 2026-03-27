@@ -84,6 +84,7 @@ export class UniffiObjectFactory {
     cloneHandle = undefined,
     freeHandle = undefined,
     handleType = undefined,
+    retypeHandle = undefined,
     serializeHandle = undefined,
     deserializeHandle = undefined,
   } = {}) {
@@ -92,6 +93,7 @@ export class UniffiObjectFactory {
     this._cloneHandle = cloneHandle;
     this._freeHandle = freeHandle;
     this._handleType = handleType;
+    this._retypeHandle = retypeHandle;
     this._serializeHandle = serializeHandle;
     this._deserializeHandle = deserializeHandle;
     this._registry =
@@ -205,7 +207,11 @@ export class UniffiObjectFactory {
   }
 
   createRetyped(handle) {
-    return this.create(handle);
+    const normalizedHandle =
+      typeof this._retypeHandle === "function"
+        ? this._retypeHandle(handle)
+        : handle;
+    return this.create(normalizedHandle);
   }
 
   handle(value) {

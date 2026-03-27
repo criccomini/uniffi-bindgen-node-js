@@ -1927,6 +1927,58 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
         "  handleType: () => getFfiBindings().ffiTypes.{},",
         ffi_opaque_identifier(&object.name)
     ));
+    lines.push("  retypeHandle(handle) {".to_string());
+    lines.push("    const bindings = getFfiBindings();".to_string());
+    lines.push("    const genericCloneHandle = bindings.library.func(".to_string());
+    lines.push(format!(
+        "      {},",
+        json_string_literal(&object.ffi_object_clone_identifier)?
+    ));
+    lines.push(format!(
+        "      bindings.ffiTypes.{},",
+        ffi_opaque_identifier(&object.name)
+    ));
+    lines.push(
+        "      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+            .to_string(),
+    );
+    lines.push("    );".to_string());
+    lines.push("    const genericFreeHandle = bindings.library.func(".to_string());
+    lines.push(format!(
+        "      {},",
+        json_string_literal(&object.ffi_object_free_identifier)?
+    ));
+    lines.push("      \"void\",".to_string());
+    lines.push(
+        "      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+            .to_string(),
+    );
+    lines.push("    );".to_string());
+    lines.push("    const clonedHandle = uniffiRustCaller.rustCall(".to_string());
+    lines.push("      (status) => genericCloneHandle(handle, status),".to_string());
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("    try {".to_string());
+    lines.push("      uniffiRustCaller.rustCall(".to_string());
+    lines.push("        (status) => genericFreeHandle(handle, status),".to_string());
+    lines.push("        uniffiRustCallOptions(),".to_string());
+    lines.push("      );".to_string());
+    lines.push("    } catch (error) {".to_string());
+    lines.push("      try {".to_string());
+    lines.push("        uniffiRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "          (status) => ffiFunctions.{}(clonedHandle, status),",
+        object.ffi_object_free_identifier
+    ));
+    lines.push("          uniffiRustCallOptions(),".to_string());
+    lines.push("        );".to_string());
+    lines.push("      } catch {".to_string());
+    lines.push("        // Preserve the original free failure while attempting to avoid leaks.".to_string());
+    lines.push("      }".to_string());
+    lines.push("      throw error;".to_string());
+    lines.push("    }".to_string());
+    lines.push("    return clonedHandle;".to_string());
+    lines.push("  },".to_string());
     lines.push("  cloneHandle(handle) {".to_string());
     lines.push("    return uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(

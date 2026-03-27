@@ -78,7 +78,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 ## TODO
 
 - [x] Remove the async callback-interface unsupported-feature validation from component model building.
-- [ ] Extend callback method metadata to capture foreign-future completion identifiers and async result-struct requirements.
+- [x] Extend callback method metadata to capture foreign-future completion identifiers and async result-struct requirements.
 - [ ] Add generator support for default lowered FFI return values used in async callback error completion structs.
 - [ ] Render callback proxy methods as async when the callback-interface method is async.
 - [ ] Split callback vtable registration code into synchronous and asynchronous callback generation paths.

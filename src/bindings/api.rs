@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
 use uniffi_bindgen::interface::{
+    ffi::FfiType,
     AsType, Callable, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function,
     Method, Object, Type, Variant,
 };
@@ -620,6 +621,7 @@ pub(crate) struct MethodModel {
     pub throws_type: Option<Type>,
     pub ffi_func_identifier: String,
     pub ffi_callback_identifier: Option<String>,
+    pub async_callback_ffi: Option<AsyncCallbackMethodModel>,
     pub async_ffi: Option<AsyncScaffoldingModel>,
 }
 
@@ -638,6 +640,7 @@ impl MethodModel {
             throws_type: method.throws_type().cloned(),
             ffi_func_identifier: ffi_symbol_identifier(method.ffi_func().name()),
             ffi_callback_identifier: None,
+            async_callback_ffi: None,
             async_ffi: AsyncScaffoldingModel::from_callable(method, ci),
         }
     }
@@ -653,7 +656,34 @@ impl MethodModel {
             callback_interface_name,
             index,
         )));
+        model.async_callback_ffi = AsyncCallbackMethodModel::from_method(method);
         model
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AsyncCallbackMethodModel {
+    pub complete_identifier: String,
+    pub result_struct_identifier: String,
+    pub result_struct_has_return_value: bool,
+}
+
+impl AsyncCallbackMethodModel {
+    fn from_method(method: &Method) -> Option<Self> {
+        method.is_async().then(|| {
+            let return_ffi_type = method.return_type().map(FfiType::from);
+            let result_struct = method.foreign_future_ffi_result_struct();
+            Self {
+                complete_identifier: ffi_symbol_identifier(&foreign_future_complete_ffi_name(
+                    return_ffi_type.as_ref(),
+                )),
+                result_struct_identifier: ffi_symbol_identifier(result_struct.name()),
+                result_struct_has_return_value: result_struct
+                    .fields()
+                    .iter()
+                    .any(|field| field.name() == "return_value"),
+            }
+        })
     }
 }
 
@@ -2405,6 +2435,13 @@ fn callback_method_ffi_name(callback_interface_name: &str, index: usize) -> Stri
     format!("CallbackInterface{callback_interface_name}Method{index}")
 }
 
+fn foreign_future_complete_ffi_name(return_ffi_type: Option<&FfiType>) -> String {
+    format!(
+        "ForeignFutureComplete{}",
+        FfiType::return_type_name(return_ffi_type).to_upper_camel_case()
+    )
+}
+
 fn ffi_opaque_identifier(name: &str) -> String {
     ffi_symbol_identifier(&format!("RustArcPtr{name}"))
 }
@@ -2763,6 +2800,43 @@ mod tests {
 
         assert_eq!(model.callback_interfaces.len(), 1);
         assert!(model.callback_interfaces[0].methods[0].is_async);
+        assert!(
+            model.callback_interfaces[0].methods[0]
+                .async_callback_ffi
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn component_model_captures_async_callback_foreign_future_metadata() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            callback interface Logger {
+                [Async] string write(string message);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let model = ComponentModel::from_ci(&ci).expect("async callback interfaces should build");
+        let method = &model.callback_interfaces[0].methods[0];
+        let async_callback_ffi = method
+            .async_callback_ffi
+            .as_ref()
+            .expect("async callback method should capture ForeignFuture metadata");
+
+        assert_eq!(
+            async_callback_ffi.complete_identifier,
+            "ForeignFutureCompleteRustBuffer"
+        );
+        assert_eq!(
+            async_callback_ffi.result_struct_identifier,
+            "ForeignFutureStructRustBuffer"
+        );
+        assert!(async_callback_ffi.result_struct_has_return_value);
     }
 
     #[test]

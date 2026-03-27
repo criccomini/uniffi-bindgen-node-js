@@ -4,8 +4,8 @@ use anyhow::Result;
 use askama::Template;
 use serde::Serialize;
 use uniffi_bindgen::interface::{
-    ComponentInterface, FfiArgument, FfiCallbackFunction, FfiDefinition, FfiFunction, FfiStruct,
-    FfiType,
+    Callable, ComponentInterface, FfiArgument, FfiCallbackFunction, FfiDefinition, FfiFunction,
+    FfiStruct, FfiType,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub(crate) fn render_component_ffi(
         lib_path_literal_json: json_optional_string(lib_path_literal)?,
         bundled_prebuilds,
         manual_load,
-        requires_runtime_hooks: ci.has_callback_definitions(),
+        requires_runtime_hooks: component_requires_runtime_hooks(ci),
         contract_version: model.contract_version,
         checksums: model.checksums,
         opaque_types: model.opaque_types,
@@ -48,6 +48,21 @@ pub(crate) fn render_component_ffi(
         }
         .render()?,
     })
+}
+
+fn component_requires_runtime_hooks(ci: &ComponentInterface) -> bool {
+    ci.has_callback_definitions()
+        || ci
+            .function_definitions()
+            .iter()
+            .any(|function| function.is_async())
+        || ci.object_definitions().iter().any(|object| {
+            object
+                .constructors()
+                .iter()
+                .any(|constructor| constructor.is_async())
+                || object.methods().iter().any(|method| method.is_async())
+        })
 }
 
 #[derive(Debug, Clone)]

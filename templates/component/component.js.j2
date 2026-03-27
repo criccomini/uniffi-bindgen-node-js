@@ -32,7 +32,12 @@ import {
   FfiConverterUInt64,
 } from "./runtime/ffi-converters.js";
 import { UnexpectedEnumCase } from "./runtime/errors.js";
-import { rustCallAsync } from "./runtime/async-rust-call.js";
+import {
+  rustCallAsync,
+{% if requires_async_rust_future_hooks %}
+  rustFutureContinuationCallback,
+{% endif %}
+} from "./runtime/async-rust-call.js";
 import {
   clearPendingForeignFutures,
   createCallbackRegistry,

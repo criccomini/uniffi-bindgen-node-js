@@ -25,6 +25,7 @@ pub(crate) struct ComponentModel {
 pub(crate) struct RenderedComponentApi {
     pub js: String,
     pub dts: String,
+    pub requires_async_rust_future_hooks: bool,
 }
 
 impl ComponentModel {
@@ -98,6 +99,7 @@ impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
         let mut js_sections = Vec::new();
         let mut dts_sections = Vec::new();
+        let has_async_public_callables = self.has_async_public_callables();
 
         if !self.functions.is_empty() || !self.objects.is_empty() {
             js_sections.push(
@@ -111,6 +113,10 @@ impl ComponentModel {
                 &self.ffi_rustbuffer_from_bytes_identifier,
                 &self.ffi_rustbuffer_free_identifier,
             ));
+        }
+
+        if has_async_public_callables {
+            js_sections.push(render_js_async_rust_future_helpers());
         }
 
         if !self.records.is_empty() {
@@ -188,6 +194,13 @@ impl ComponentModel {
             js_sections.push(self.render_js_placeholder_converters()?);
         }
 
+        if !self.callback_interfaces.is_empty() || has_async_public_callables {
+            js_sections.push(render_js_runtime_hooks(
+                &self.callback_interfaces,
+                has_async_public_callables,
+            )?);
+        }
+
         if !self.functions.is_empty() {
             let functions_js = self
                 .functions
@@ -225,6 +238,7 @@ impl ComponentModel {
         Ok(RenderedComponentApi {
             js: js_sections.join("\n\n"),
             dts: dts_sections.join("\n\n"),
+            requires_async_rust_future_hooks: has_async_public_callables,
         })
     }
 
@@ -234,6 +248,17 @@ impl ComponentModel {
             || !self.tagged_enums.is_empty()
             || !self.errors.is_empty()
             || !self.callback_interfaces.is_empty()
+    }
+
+    fn has_async_public_callables(&self) -> bool {
+        self.functions.iter().any(|function| function.is_async)
+            || self.objects.iter().any(|object| {
+                object
+                    .constructors
+                    .iter()
+                    .any(|constructor| constructor.is_async)
+                    || object.methods.iter().any(|method| method.is_async)
+            })
     }
 
     fn render_js_placeholder_converters(&self) -> Result<String> {
@@ -253,10 +278,6 @@ impl ComponentModel {
         }
         for callback_interface in &self.callback_interfaces {
             lines.push(render_js_callback_interface_converter(callback_interface)?);
-        }
-
-        if !self.callback_interfaces.is_empty() {
-            lines.push(render_js_callback_runtime_hooks(&self.callback_interfaces)?);
         }
 
         Ok(lines.join("\n"))
@@ -1983,6 +2004,11 @@ fn render_js_runtime_helpers(
     )
 }
 
+fn render_js_async_rust_future_helpers() -> String {
+    "let uniffiRustFutureContinuationPointer = null;\n\nfunction uniffiGetRustFutureContinuationPointer() {\n  if (uniffiRustFutureContinuationPointer == null) {\n    const bindings = getFfiBindings();\n    uniffiRustFutureContinuationPointer = koffi.register(\n      rustFutureContinuationCallback,\n      koffi.pointer(bindings.ffiCallbacks.RustFutureContinuationCallback),\n    );\n  }\n  return uniffiRustFutureContinuationPointer;\n}"
+        .to_string()
+}
+
 fn render_js_constructor_body(
     constructor: &ConstructorModel,
     factory_name: &str,
@@ -2038,7 +2064,7 @@ fn render_js_async_constructor_body(
         constructor.ffi_func_identifier, start_args
     ));
     lines.push(format!(
-        "      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, continuationCallback, continuationHandle),",
+        "      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
         async_ffi.poll_identifier
     ));
     lines.push(format!(
@@ -2181,7 +2207,7 @@ fn render_js_async_method_body(
         method.ffi_func_identifier, start_args
     ));
     lines.push(format!(
-        "      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, continuationCallback, continuationHandle),",
+        "      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
         async_ffi.poll_identifier
     ));
     lines.push(format!(
@@ -2334,8 +2360,9 @@ fn render_js_type_converter_expression(type_: &Type) -> Result<String> {
     }
 }
 
-fn render_js_callback_runtime_hooks(
+fn render_js_runtime_hooks(
     callback_interfaces: &[CallbackInterfaceModel],
+    needs_async_rust_future_hooks: bool,
 ) -> Result<String> {
     let mut lines = vec![
         "const uniffiRegisteredCallbackPointers = [];".to_string(),
@@ -2366,9 +2393,19 @@ fn render_js_callback_runtime_hooks(
     lines.push(String::new());
     lines.push("configureRuntimeHooks({".to_string());
     lines.push("  onLoad(bindings) {".to_string());
-    lines.push("    uniffiRegisterCallbackVtables(bindings);".to_string());
+    if callback_interfaces.is_empty() {
+        lines.push("    void bindings;".to_string());
+    } else {
+        lines.push("    uniffiRegisterCallbackVtables(bindings);".to_string());
+    }
     lines.push("  },".to_string());
     lines.push("  onUnload() {".to_string());
+    if needs_async_rust_future_hooks {
+        lines.push("    if (uniffiRustFutureContinuationPointer != null) {".to_string());
+        lines.push("      koffi.unregister(uniffiRustFutureContinuationPointer);".to_string());
+        lines.push("      uniffiRustFutureContinuationPointer = null;".to_string());
+        lines.push("    }".to_string());
+    }
     lines.push("    uniffiUnregisterCallbackVtables();".to_string());
     lines.push("  },".to_string());
     lines.push("});".to_string());
@@ -2772,7 +2809,7 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
         function.ffi_func_identifier, start_args
     ));
     lines.push(format!(
-        "    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, continuationCallback, continuationHandle),",
+        "    pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
         async_ffi.poll_identifier
     ));
     lines.push(format!(
@@ -3660,8 +3697,15 @@ mod tests {
 
         assert!(
             rendered.js.contains(
-                "pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions."
+                "pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions."
             ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("uniffiGetRustFutureContinuationPointer(), continuationHandle)"),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -3789,6 +3833,42 @@ mod tests {
             rendered.js.contains(
                 "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),"
             ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_async_runtime_hooks_without_placeholder_converters() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                [Async] u32 current_generation();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains("configureRuntimeHooks({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("rustFutureContinuationCallback"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("function uniffiGetRustFutureContinuationPointer() {"),
             "unexpected JS output: {}",
             rendered.js
         );

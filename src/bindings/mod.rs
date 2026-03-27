@@ -400,6 +400,7 @@ struct GeneratedPackage {
     lib_path_literal: Option<String>,
     bundled_prebuilds: bool,
     manual_load: bool,
+    requires_async_rust_future_hooks: bool,
     public_api: RenderedComponentApi,
     ffi_api: RenderedComponentFfi,
 }
@@ -433,6 +434,7 @@ impl GeneratedPackage {
             lib_path_literal: component.config.lib_path_literal.clone(),
             bundled_prebuilds: component.config.bundled_prebuilds,
             manual_load: component.config.manual_load,
+            requires_async_rust_future_hooks: public_api.requires_async_rust_future_hooks,
             public_api,
             ffi_api,
         })
@@ -475,6 +477,7 @@ impl GeneratedPackage {
                 lib_path_literal_json: template_context.lib_path_literal_json.clone(),
                 bundled_prebuilds: template_context.bundled_prebuilds,
                 manual_load: self.manual_load,
+                requires_async_rust_future_hooks: self.requires_async_rust_future_hooks,
                 public_api_js: self.public_api.js.clone(),
             },
         )?;
@@ -643,6 +646,7 @@ struct ComponentJsTemplate {
     lib_path_literal_json: String,
     bundled_prebuilds: bool,
     manual_load: bool,
+    requires_async_rust_future_hooks: bool,
     public_api_js: String,
 }
 
@@ -1409,6 +1413,8 @@ mod tests {
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
+        let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
 
         assert!(
             component_js.contains("export class Db extends UniffiObjectBase {"),
@@ -1512,6 +1518,46 @@ mod tests {
                 "const loweredIsolationLevel = uniffiLowerIntoRustBuffer(FfiConverterIsolationLevel, isolation_level);"
             ),
             "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("rustFutureContinuationCallback"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("let uniffiRustFutureContinuationPointer = null;"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("function uniffiGetRustFutureContinuationPointer() {"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions."
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains(
+                "uniffiGetRustFutureContinuationPointer(), continuationHandle)"
+            ),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("configureRuntimeHooks({"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("koffi.unregister(uniffiRustFutureContinuationPointer);"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_ffi_js.contains("export function configureRuntimeHooks"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            !component_ffi_js.contains("if (!ffiMetadata.manualLoad) {\n  load();\n}"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

@@ -389,6 +389,7 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
             r#"
 import assert from "node:assert/strict";
 import {{ realpathSync }} from "node:fs";
+import koffi from "koffi";
 import {{
   Config,
   FixtureErrorInvalidState,
@@ -414,11 +415,14 @@ assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
 
 const secondBindings = load("libfixture_basic.dylib");
 assert.strictEqual(secondBindings, firstBindings);
+assert.equal(koffi.registeredCallbackCount(), 0);
 
 {}
 
+assert.equal(koffi.registeredCallbackCount(), 1);
 assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
+assert.equal(koffi.registeredCallbackCount(), 0);
 "#,
             serde_json::to_string(expected_library_path.as_str())
                 .expect("sibling library path should serialize"),

@@ -42,7 +42,12 @@ import {
   FfiConverterUInt64,
 } from "./runtime/ffi-converters.js";
 import { UnexpectedEnumCase } from "./runtime/errors.js";
-import { rustCallAsync } from "./runtime/async-rust-call.js";
+import {
+  rustCallAsync,
+
+  rustFutureContinuationCallback,
+
+} from "./runtime/async-rust-call.js";
 import {
   clearPendingForeignFutures,
   createCallbackRegistry,
@@ -178,6 +183,19 @@ function uniffiNotImplementedConverter(typeName) {
       return fail("allocationSize");
     },
   });
+}
+
+let uniffiRustFutureContinuationPointer = null;
+
+function uniffiGetRustFutureContinuationPointer() {
+  if (uniffiRustFutureContinuationPointer == null) {
+    const bindings = getFfiBindings();
+    uniffiRustFutureContinuationPointer = koffi.register(
+      rustFutureContinuationCallback,
+      koffi.pointer(bindings.ffiCallbacks.RustFutureContinuationCallback),
+    );
+  }
+  return uniffiRustFutureContinuationPointer;
 }
 
 export const LogLevel = Object.freeze({
@@ -318,7 +336,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
     return rustCallAsync({
       rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write(loweredSelf, loweredMessage),
-      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
@@ -332,7 +350,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
     return rustCallAsync({
       rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_fallible(loweredSelf, loweredMessage),
-      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
@@ -345,7 +363,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
     const loweredSelf = uniffiAsyncLogSinkFactory.cloneHandle(this);
     return rustCallAsync({
       rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_flush(loweredSelf),
-      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, continuationCallback, continuationHandle),
+      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status),
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(rustFuture),
@@ -756,6 +774,7 @@ const FfiConverterLogSink = Object.freeze({
     return UNIFFI_OBJECT_HANDLE_SIZE;
   },
 });
+
 const uniffiRegisteredCallbackPointers = [];
 
 function uniffiRegisterCallbackVtables(bindings) {
@@ -779,6 +798,10 @@ configureRuntimeHooks({
     uniffiRegisterCallbackVtables(bindings);
   },
   onUnload() {
+    if (uniffiRustFutureContinuationPointer != null) {
+      koffi.unregister(uniffiRustFutureContinuationPointer);
+      uniffiRustFutureContinuationPointer = null;
+    }
     uniffiUnregisterCallbackVtables();
   },
 });
@@ -806,7 +829,7 @@ export async function emit_async(sink, message) {
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async(loweredSink, loweredMessage),
-    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+    pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
     completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
@@ -820,7 +843,7 @@ export async function emit_async_fallible(sink, message) {
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async_fallible(loweredSink, loweredMessage),
-    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+    pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
     completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
@@ -833,7 +856,7 @@ export async function flush_async(sink) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_flush_async(loweredSink),
-    pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, continuationCallback, continuationHandle),
+    pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(rustFuture),
     completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status),
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(rustFuture),

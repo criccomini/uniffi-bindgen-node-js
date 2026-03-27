@@ -10,6 +10,14 @@ const CALL_UNEXPECTED_ERROR = 2;
 const CALL_CANCELLED = 3;
 const RUST_FUTURE_POLL_READY = 0;
 const RUST_FUTURE_POLL_WAKE = 1;
+const REGISTERED_CALLBACKS = new Set();
+
+function requireRegisteredCallback(callback, context) {
+  if (!REGISTERED_CALLBACKS.has(callback)) {
+    throw new Error(`${context} requires a registered callback pointer`);
+  }
+  return callback;
+}
 
 function normalizeBigInt(value) {
   if (typeof value === "bigint") {
@@ -860,8 +868,12 @@ function createBasicFixtureRuntime(libraryPath) {
         if (!futures.has(normalizeBigInt(futureHandle))) {
           throw new Error(`unknown Rust future handle ${futureHandle}`);
         }
+        const registeredContinuation = requireRegisteredCallback(
+          continuationCallback,
+          "ffi_fixture_basic_rust_future_poll_pointer",
+        );
         queueMicrotask(() => {
-          continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+          registeredContinuation(continuationHandle, RUST_FUTURE_POLL_READY);
         });
       },
     ],
@@ -898,8 +910,12 @@ function createBasicFixtureRuntime(libraryPath) {
         if (!futures.has(normalizeBigInt(futureHandle))) {
           throw new Error(`unknown Rust future handle ${futureHandle}`);
         }
+        const registeredContinuation = requireRegisteredCallback(
+          continuationCallback,
+          "ffi_fixture_basic_rust_future_poll_rust_buffer",
+        );
         queueMicrotask(() => {
-          continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+          registeredContinuation(continuationHandle, RUST_FUTURE_POLL_READY);
         });
       },
     ],
@@ -1194,14 +1210,18 @@ function createCallbacksFixtureRuntime(libraryPath) {
       "ffi_fixture_callbacks_rust_future_poll_rust_buffer",
       (futureHandle, continuationCallback, continuationHandle) => {
         const future = getRustFuture(futureHandle);
+        const registeredContinuation = requireRegisteredCallback(
+          continuationCallback,
+          "ffi_fixture_callbacks_rust_future_poll_rust_buffer",
+        );
         if (future.ready) {
           queueMicrotask(() => {
-            continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+            registeredContinuation(continuationHandle, RUST_FUTURE_POLL_READY);
           });
           return;
         }
         future.continuation = {
-          callback: continuationCallback,
+          callback: registeredContinuation,
           handle: continuationHandle,
         };
       },
@@ -1246,14 +1266,18 @@ function createCallbacksFixtureRuntime(libraryPath) {
       "ffi_fixture_callbacks_rust_future_poll_void",
       (futureHandle, continuationCallback, continuationHandle) => {
         const future = getRustFuture(futureHandle);
+        const registeredContinuation = requireRegisteredCallback(
+          continuationCallback,
+          "ffi_fixture_callbacks_rust_future_poll_void",
+        );
         if (future.ready) {
           queueMicrotask(() => {
-            continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+            registeredContinuation(continuationHandle, RUST_FUTURE_POLL_READY);
           });
           return;
         }
         future.continuation = {
-          callback: continuationCallback,
+          callback: registeredContinuation,
           handle: continuationHandle,
         };
       },
@@ -1692,10 +1716,25 @@ const koffi = {
   view(pointer, length) {
     return toUint8Array(pointer, length);
   },
-  register(callback, _type) {
-    return callback;
+  register(thisArgOrCallback, callbackOrType, _maybeType) {
+    const callback =
+      typeof thisArgOrCallback === "function"
+        ? thisArgOrCallback
+        : callbackOrType;
+    const thisArg =
+      typeof thisArgOrCallback === "function"
+        ? undefined
+        : thisArgOrCallback;
+    const wrapped = (...args) => callback.apply(thisArg, args);
+    REGISTERED_CALLBACKS.add(wrapped);
+    return wrapped;
   },
-  unregister(_callback) {},
+  unregister(callback) {
+    REGISTERED_CALLBACKS.delete(callback);
+  },
+  registeredCallbackCount() {
+    return REGISTERED_CALLBACKS.size;
+  },
   decode(value, _type) {
     return readEncodedValue(value);
   },

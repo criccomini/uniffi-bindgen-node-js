@@ -42,7 +42,12 @@ import {
   FfiConverterUInt64,
 } from "./runtime/ffi-converters.js";
 import { UnexpectedEnumCase } from "./runtime/errors.js";
-import { rustCallAsync } from "./runtime/async-rust-call.js";
+import {
+  rustCallAsync,
+
+  rustFutureContinuationCallback,
+
+} from "./runtime/async-rust-call.js";
 import {
   clearPendingForeignFutures,
   createCallbackRegistry,
@@ -178,6 +183,19 @@ function uniffiNotImplementedConverter(typeName) {
       return fail("allocationSize");
     },
   });
+}
+
+let uniffiRustFutureContinuationPointer = null;
+
+function uniffiGetRustFutureContinuationPointer() {
+  if (uniffiRustFutureContinuationPointer == null) {
+    const bindings = getFfiBindings();
+    uniffiRustFutureContinuationPointer = koffi.register(
+      rustFutureContinuationCallback,
+      koffi.pointer(bindings.ffiCallbacks.RustFutureContinuationCallback),
+    );
+  }
+  return uniffiRustFutureContinuationPointer;
 }
 
 export const Flavor = Object.freeze({
@@ -372,6 +390,31 @@ const FfiConverterFixtureError = new (class extends AbstractFfiConverterByteArra
   }
 })();
 
+const uniffiRegisteredCallbackPointers = [];
+
+function uniffiRegisterCallbackVtables(bindings) {
+}
+
+function uniffiUnregisterCallbackVtables() {
+  clearPendingForeignFutures();
+  while (uniffiRegisteredCallbackPointers.length > 0) {
+    koffi.unregister(uniffiRegisteredCallbackPointers.pop());
+  }
+}
+
+configureRuntimeHooks({
+  onLoad(bindings) {
+    void bindings;
+  },
+  onUnload() {
+    if (uniffiRustFutureContinuationPointer != null) {
+      koffi.unregister(uniffiRustFutureContinuationPointer);
+      uniffiRustFutureContinuationPointer = null;
+    }
+    uniffiUnregisterCallbackVtables();
+  },
+});
+
 export function echo_bytes(value) {
     const loweredValue = uniffiLowerIntoRustBuffer(FfiConverterBytes, value);
   const uniffiResult = uniffiRustCaller.rustCall(
@@ -484,7 +527,7 @@ export class ReaderBuilder extends UniffiObjectBase {
     const loweredSelf = uniffiReaderBuilderObjectFactory.cloneHandle(this);
     return rustCallAsync({
       rustFutureFunc: () => ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(loweredSelf),
-      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(rustFuture, continuationCallback, continuationHandle),
+      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(rustFuture, status),
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_free_pointer(rustFuture),
@@ -538,7 +581,7 @@ export class Store extends UniffiObjectBase {
     const loweredSucceed = FfiConverterBool.lower(succeed);
     return rustCallAsync({
       rustFutureFunc: () => ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async(loweredSelf, loweredSucceed),
-      pollFunc: (rustFuture, continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_rust_buffer(rustFuture, continuationCallback, continuationHandle),
+      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_rust_buffer(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_rust_buffer(rustFuture, status),
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_free_rust_buffer(rustFuture),
@@ -1307,10 +1350,6 @@ export function configureRuntimeHooks(hooks = undefined) {
   runtimeHooks = Object.freeze(hooks ?? {});
 }
 
-
-if (!ffiMetadata.manualLoad) {
-  load();
-}
 
 
 export function getFfiBindings() {

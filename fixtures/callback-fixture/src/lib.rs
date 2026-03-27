@@ -1,7 +1,11 @@
 use std::{
     collections::BTreeMap,
+    future::Future,
     sync::{Arc, Mutex},
+    task::{Context, Wake, Waker},
 };
+
+use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum LogLevel {
@@ -23,6 +27,12 @@ pub struct LogRecord {
     pub line: Option<u32>,
 }
 
+#[derive(Debug, Error, uniffi::Error)]
+pub enum AsyncLogError {
+    #[error("async callback rejected: {message}")]
+    Rejected { message: String },
+}
+
 #[uniffi::export(callback_interface)]
 pub trait LogSink: Send + Sync {
     fn write(&self, message: String);
@@ -32,6 +42,14 @@ pub trait LogSink: Send + Sync {
 #[uniffi::export(callback_interface)]
 pub trait LogCollector: Send + Sync {
     fn log(&self, record: LogRecord);
+}
+
+#[uniffi::export(callback_interface)]
+#[async_trait::async_trait]
+pub trait AsyncLogSink: Send + Sync {
+    async fn write(&self, message: String) -> String;
+    async fn write_fallible(&self, message: String) -> Result<String, AsyncLogError>;
+    async fn flush(&self);
 }
 
 #[derive(Debug, uniffi::Object)]
@@ -80,6 +98,31 @@ pub fn init_logging(level: LogLevel, collector: Option<Box<dyn LogCollector>>) {
             line: None,
         });
     }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn emit_async(sink: Box<dyn AsyncLogSink>, message: String) -> String {
+    sink.write(message).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn emit_async_fallible(
+    sink: Box<dyn AsyncLogSink>,
+    message: String,
+) -> Result<String, AsyncLogError> {
+    sink.write_fallible(message).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn flush_async(sink: Box<dyn AsyncLogSink>) {
+    sink.flush().await;
+}
+
+#[uniffi::export]
+pub fn cancel_emit_async(sink: Box<dyn AsyncLogSink>, message: String) {
+    poll_once_and_drop(async move {
+        let _ = sink.write(message).await;
+    });
 }
 
 #[uniffi::export]
@@ -178,6 +221,22 @@ fn render_json_node(node: &JsonNode) -> String {
 fn render_json_key(key: &str) -> String {
     let escaped: String = key.chars().flat_map(char::escape_default).collect();
     format!("\"{escaped}\"")
+}
+
+fn poll_once_and_drop<F>(future: F)
+where
+    F: Future,
+{
+    let waker = Waker::from(Arc::new(NoopWaker));
+    let mut context = Context::from_waker(&waker);
+    let mut future = Box::pin(future);
+    let _ = future.as_mut().poll(&mut context);
+}
+
+struct NoopWaker;
+
+impl Wake for NoopWaker {
+    fn wake(self: Arc<Self>) {}
 }
 
 uniffi::setup_scaffolding!("callbacks_fixture");

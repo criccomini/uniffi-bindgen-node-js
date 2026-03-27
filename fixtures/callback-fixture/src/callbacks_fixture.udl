@@ -2,6 +2,10 @@ namespace callbacks_fixture {
     void emit(LogSink sink, string message);
     string? last_message(LogSink? sink);
     void init_logging(LogLevel level, LogCollector? collector);
+    [Async] string emit_async(AsyncLogSink sink, string message);
+    [Async, Throws=AsyncLogError] string emit_async_fallible(AsyncLogSink sink, string message);
+    [Async] void flush_async(AsyncLogSink sink);
+    void cancel_emit_async(AsyncLogSink sink, string message);
 };
 
 enum LogLevel {
@@ -22,6 +26,11 @@ dictionary LogRecord {
     u32? line;
 };
 
+[Error]
+interface AsyncLogError {
+    Rejected(string message);
+};
+
 callback interface LogSink {
     void write(string message);
     string? latest();
@@ -29,6 +38,12 @@ callback interface LogSink {
 
 callback interface LogCollector {
     void log(LogRecord record);
+};
+
+callback interface AsyncLogSink {
+    [Async] string write(string message);
+    [Async, Throws=AsyncLogError] string write_fallible(string message);
+    [Async] void flush();
 };
 
 interface Settings {

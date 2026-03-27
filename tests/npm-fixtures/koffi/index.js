@@ -6,7 +6,10 @@ const TEXT_DECODER = new TextDecoder();
 
 const CALL_SUCCESS = 0;
 const CALL_ERROR = 1;
+const CALL_UNEXPECTED_ERROR = 2;
+const CALL_CANCELLED = 3;
 const RUST_FUTURE_POLL_READY = 0;
+const RUST_FUTURE_POLL_WAKE = 1;
 
 function normalizeBigInt(value) {
   if (typeof value === "bigint") {
@@ -26,20 +29,28 @@ function emptyRustBuffer() {
   };
 }
 
-function setCallSuccess(status) {
+function setCallStatus(status, code, errorBuffer = emptyRustBuffer()) {
   if (status == null) {
     return;
   }
-  status.code = CALL_SUCCESS;
-  status.error_buf = emptyRustBuffer();
+  status.code = code;
+  status.error_buf = errorBuffer;
+}
+
+function setCallSuccess(status) {
+  setCallStatus(status, CALL_SUCCESS, emptyRustBuffer());
 }
 
 function setCallError(status, errorBuffer) {
-  if (status == null) {
-    return;
-  }
-  status.code = CALL_ERROR;
-  status.error_buf = errorBuffer;
+  setCallStatus(status, CALL_ERROR, errorBuffer);
+}
+
+function setCallUnexpectedError(status, message) {
+  setCallStatus(
+    status,
+    CALL_UNEXPECTED_ERROR,
+    rustBufferFromBytes(encodeString(String(message))),
+  );
 }
 
 function toUint8Array(value, length) {
@@ -720,10 +731,13 @@ function createBasicFixtureRuntime(libraryPath) {
 
 function createCallbacksFixtureRuntime(libraryPath) {
   const metadata = parseFfiMetadata(libraryPath);
+  const rustFutures = new Map();
   const settings = new Map();
   const writeBatches = new Map();
   let nextSettingsHandle = 1n;
   let nextWriteBatchHandle = 1000n;
+  let nextRustFutureHandle = 10_000n;
+  let asyncLogSinkVtable = null;
   let logCollectorVtable = null;
   let logSinkVtable = null;
 
@@ -743,6 +757,15 @@ function createCallbacksFixtureRuntime(libraryPath) {
       throw new Error(`unknown WriteBatch handle ${normalizedHandle}`);
     }
     return value;
+  }
+
+  function getRustFuture(handle) {
+    const normalizedHandle = normalizeBigInt(handle);
+    const future = rustFutures.get(normalizedHandle);
+    if (future == null) {
+      throw new Error(`unknown Rust future handle ${normalizedHandle}`);
+    }
+    return future;
   }
 
   function requireCallbackMethod(vtable, interfaceName, methodName, context) {
@@ -798,6 +821,31 @@ function createCallbacksFixtureRuntime(libraryPath) {
     return { callbackStatus, outReturn };
   }
 
+  function invokeAsyncLogSinkCallback(handle, methodName, args, callbackData, completionCallback) {
+    const outReturn = {};
+    requireCallbackMethod(
+      asyncLogSinkVtable,
+      "AsyncLogSink",
+      methodName,
+      `invoking async log sink ${methodName} callbacks`,
+    )(
+      normalizeBigInt(handle),
+      ...args,
+      completionCallback,
+      normalizeBigInt(callbackData),
+      outReturn,
+    );
+    if (outReturn.handle == null || typeof outReturn.free !== "function") {
+      throw new Error(
+        `AsyncLogSink.${methodName} did not populate a ForeignFuture return handle`,
+      );
+    }
+    return {
+      free: outReturn.free,
+      handle: normalizeBigInt(outReturn.handle),
+    };
+  }
+
   function freeCallbackHandle(vtable, interfaceName, handle) {
     requireCallbackMethod(
       vtable,
@@ -805,6 +853,80 @@ function createCallbacksFixtureRuntime(libraryPath) {
       "uniffi_free",
       `freeing ${interfaceName} handles`,
     )(normalizeBigInt(handle));
+  }
+
+  function freeForeignFuture(foreignFuture) {
+    if (foreignFuture == null || typeof foreignFuture.free !== "function") {
+      return;
+    }
+    foreignFuture.free(foreignFuture.handle);
+  }
+
+  function wakeRustFuture(future) {
+    if (future.continuation == null) {
+      return;
+    }
+    const continuation = future.continuation;
+    future.continuation = null;
+    queueMicrotask(() => {
+      continuation.callback(continuation.handle, RUST_FUTURE_POLL_READY);
+    });
+  }
+
+  function finishRustFuture(handle, result) {
+    const future = rustFutures.get(normalizeBigInt(handle));
+    if (future == null) {
+      return;
+    }
+
+    freeForeignFuture(future.foreignFuture);
+    future.foreignFuture = null;
+    future.ready = true;
+    future.statusCode = result?.call_status?.code ?? CALL_SUCCESS;
+    future.errorBuffer = result?.call_status?.error_buf ?? emptyRustBuffer();
+    if (future.kind === "rust_buffer") {
+      future.returnValue = result?.return_value ?? emptyRustBuffer();
+    }
+    wakeRustFuture(future);
+  }
+
+  function failRustFuture(handle, error) {
+    const future = rustFutures.get(normalizeBigInt(handle));
+    if (future == null) {
+      return;
+    }
+
+    future.ready = true;
+    future.statusCode = CALL_UNEXPECTED_ERROR;
+    future.errorBuffer = rustBufferFromBytes(encodeString(String(error)));
+    if (future.kind === "rust_buffer") {
+      future.returnValue = emptyRustBuffer();
+    }
+    wakeRustFuture(future);
+  }
+
+  function createRustFuture(kind, start) {
+    const handle = nextRustFutureHandle;
+    nextRustFutureHandle += 1n;
+    rustFutures.set(handle, {
+      continuation: null,
+      errorBuffer: emptyRustBuffer(),
+      foreignFuture: null,
+      handle,
+      kind,
+      ready: false,
+      returnValue: kind === "rust_buffer" ? emptyRustBuffer() : undefined,
+      statusCode: CALL_SUCCESS,
+    });
+
+    try {
+      const future = getRustFuture(handle);
+      future.foreignFuture = start(handle);
+    } catch (error) {
+      failRustFuture(handle, error);
+    }
+
+    return handle;
   }
 
   const handlers = new Map([
@@ -840,6 +962,109 @@ function createCallbacksFixtureRuntime(libraryPath) {
         reserved.set(current);
         setCallSuccess(status);
         return rustBufferFromBytes(reserved);
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_poll_rust_buffer",
+      (futureHandle, continuationCallback, continuationHandle) => {
+        const future = getRustFuture(futureHandle);
+        if (future.ready) {
+          queueMicrotask(() => {
+            continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+          });
+          return;
+        }
+        future.continuation = {
+          callback: continuationCallback,
+          handle: continuationHandle,
+        };
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_complete_rust_buffer",
+      (futureHandle, status) => {
+        const future = getRustFuture(futureHandle);
+        if (future.statusCode !== CALL_SUCCESS) {
+          setCallStatus(status, future.statusCode, future.errorBuffer ?? emptyRustBuffer());
+          return emptyRustBuffer();
+        }
+        setCallSuccess(status);
+        return future.returnValue ?? emptyRustBuffer();
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_free_rust_buffer",
+      (futureHandle) => {
+        const normalizedHandle = normalizeBigInt(futureHandle);
+        const future = rustFutures.get(normalizedHandle);
+        if (future == null) {
+          return;
+        }
+        freeForeignFuture(future.foreignFuture);
+        rustFutures.delete(normalizedHandle);
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_cancel_rust_buffer",
+      (futureHandle) => {
+        const normalizedHandle = normalizeBigInt(futureHandle);
+        const future = rustFutures.get(normalizedHandle);
+        if (future == null) {
+          return;
+        }
+        freeForeignFuture(future.foreignFuture);
+        rustFutures.delete(normalizedHandle);
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_poll_void",
+      (futureHandle, continuationCallback, continuationHandle) => {
+        const future = getRustFuture(futureHandle);
+        if (future.ready) {
+          queueMicrotask(() => {
+            continuationCallback(continuationHandle, RUST_FUTURE_POLL_READY);
+          });
+          return;
+        }
+        future.continuation = {
+          callback: continuationCallback,
+          handle: continuationHandle,
+        };
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_complete_void",
+      (futureHandle, status) => {
+        const future = getRustFuture(futureHandle);
+        if (future.statusCode !== CALL_SUCCESS) {
+          setCallStatus(status, future.statusCode, future.errorBuffer ?? emptyRustBuffer());
+          return;
+        }
+        setCallSuccess(status);
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_free_void",
+      (futureHandle) => {
+        const normalizedHandle = normalizeBigInt(futureHandle);
+        const future = rustFutures.get(normalizedHandle);
+        if (future == null) {
+          return;
+        }
+        freeForeignFuture(future.foreignFuture);
+        rustFutures.delete(normalizedHandle);
+      },
+    ],
+    [
+      "ffi_fixture_callbacks_rust_future_cancel_void",
+      (futureHandle) => {
+        const normalizedHandle = normalizeBigInt(futureHandle);
+        const future = rustFutures.get(normalizedHandle);
+        if (future == null) {
+          return;
+        }
+        freeForeignFuture(future.foreignFuture);
+        rustFutures.delete(normalizedHandle);
       },
     ],
     [
@@ -946,6 +1171,26 @@ function createCallbacksFixtureRuntime(libraryPath) {
       },
     ],
     [
+      "uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink",
+      (vtable) => {
+        asyncLogSinkVtable = vtable;
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_clone_asynclogsink",
+      (handle, status) => {
+        setCallSuccess(status);
+        return normalizeBigInt(handle);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_free_asynclogsink",
+      (handle, status) => {
+        freeCallbackHandle(asyncLogSinkVtable, "AsyncLogSink", handle);
+        setCallSuccess(status);
+      },
+    ],
+    [
       "uniffi_fixture_callbacks_fn_clone_logcollector",
       (handle, status) => {
         setCallSuccess(status);
@@ -1022,6 +1267,66 @@ function createCallbacksFixtureRuntime(libraryPath) {
           return;
         }
         setCallSuccess(status);
+      },
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_emit_async",
+      (sinkHandle, messageBuffer) =>
+        createRustFuture("rust_buffer", (futureHandle) =>
+          invokeAsyncLogSinkCallback(
+            sinkHandle,
+            "write",
+            [messageBuffer],
+            futureHandle,
+            (callbackData, result) => {
+              finishRustFuture(callbackData, result);
+            },
+          )),
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_emit_async_fallible",
+      (sinkHandle, messageBuffer) =>
+        createRustFuture("rust_buffer", (futureHandle) =>
+          invokeAsyncLogSinkCallback(
+            sinkHandle,
+            "write_fallible",
+            [messageBuffer],
+            futureHandle,
+            (callbackData, result) => {
+              finishRustFuture(callbackData, result);
+            },
+          )),
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_flush_async",
+      (sinkHandle) =>
+        createRustFuture("void", (futureHandle) =>
+          invokeAsyncLogSinkCallback(
+            sinkHandle,
+            "flush",
+            [],
+            futureHandle,
+            (callbackData, result) => {
+              finishRustFuture(callbackData, result);
+            },
+          )),
+    ],
+    [
+      "uniffi_fixture_callbacks_fn_func_cancel_emit_async",
+      (sinkHandle, messageBuffer, status) => {
+        try {
+          const foreignFuture = invokeAsyncLogSinkCallback(
+            sinkHandle,
+            "write",
+            [messageBuffer],
+            0n,
+            () => {},
+          );
+          freeForeignFuture(foreignFuture);
+          setCallSuccess(status);
+        } catch (error) {
+          setCallUnexpectedError(status, error);
+        }
       },
     ],
     [

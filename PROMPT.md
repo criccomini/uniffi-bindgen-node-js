@@ -90,7 +90,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Ignore late async callback completions after foreign-future free or runtime unload.
 - [x] Add a test-only foreign-future handle-count helper for async callback runtime state.
 - [x] Extend the callback fixture with async callback-interface methods covering success, error, void, and cancellation cases.
-- [ ] Extend the mock Koffi runtime to emulate async callback invocation, completion callbacks, and cancellation cleanup.
+- [x] Extend the mock Koffi runtime to emulate async callback invocation, completion callbacks, and cancellation cleanup.
 - [ ] Add Rust unit tests for async callback model validation and rendered public API output.
 - [ ] Update snapshot tests for generated callback fixture output.
 - [ ] Add Node smoke tests for async callback success, typed error, unexpected error, void completion, and cancellation.

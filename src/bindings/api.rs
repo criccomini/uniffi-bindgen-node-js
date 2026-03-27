@@ -3037,6 +3037,40 @@ mod tests {
     }
 
     #[test]
+    fn component_model_captures_async_void_callback_foreign_future_metadata() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            callback interface Logger {
+                [Async] void flush();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let model = ComponentModel::from_ci(&ci).expect("async callback interfaces should build");
+        let method = &model.callback_interfaces[0].methods[0];
+        let async_callback_ffi = method
+            .async_callback_ffi
+            .as_ref()
+            .expect("async callback method should capture ForeignFuture metadata");
+
+        assert_eq!(async_callback_ffi.complete_identifier, "ForeignFutureCompleteVoid");
+        assert_eq!(
+            async_callback_ffi.result_struct_identifier,
+            "ForeignFutureStructVoid"
+        );
+        assert!(!async_callback_ffi.result_struct_has_return_value);
+        assert!(
+            async_callback_ffi
+                .default_error_return_value_expression
+                .is_none()
+        );
+    }
+
+    #[test]
     fn render_js_default_async_callback_return_value_expression_maps_ffi_families() {
         assert_eq!(
             render_js_default_async_callback_return_value_expression(&Type::Int32),
@@ -3796,6 +3830,48 @@ mod tests {
         assert!(
             rendered.js.contains(
                 "koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_async_callback_error_lowering() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                void init_logging(LogCallback callback);
+            };
+
+            [Error]
+            interface CallbackError {
+                Rejected(string message);
+            };
+
+            callback interface LogCallback {
+                [Async, Throws=CallbackError] string log(string message);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.dts.contains(
+                "export interface LogCallback {\n  log(message: string): Promise<string>;\n}"
+            ),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered.js.contains(
+                "lowerError: (error) => error instanceof CallbackError ? uniffiLowerIntoRustBuffer(FfiConverterCallbackError, error) : null,"
             ),
             "unexpected JS output: {}",
             rendered.js

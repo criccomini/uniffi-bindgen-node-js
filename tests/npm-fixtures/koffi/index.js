@@ -11,6 +11,7 @@ const CALL_CANCELLED = 3;
 const RUST_FUTURE_POLL_READY = 0;
 const RUST_FUTURE_POLL_WAKE = 1;
 const REGISTERED_CALLBACKS = new Set();
+let nextAnonymousPointerId = 1;
 
 function requireRegisteredCallback(callback, context) {
   if (!REGISTERED_CALLBACKS.has(callback)) {
@@ -26,7 +27,73 @@ function normalizeBigInt(value) {
   if (typeof value === "number") {
     return BigInt(value);
   }
+  if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
+    return value.__addr;
+  }
   throw new TypeError(`expected a bigint-compatible value, got ${typeof value}`);
+}
+
+function isPointerType(type) {
+  return typeof type === "object" && type != null && type.kind === "pointer";
+}
+
+function isOpaquePointerType(type) {
+  return isPointerType(type)
+    && typeof type.to === "object"
+    && type.to != null
+    && type.to.kind === "opaque";
+}
+
+function anonymousPointerType() {
+  return {
+    kind: "pointer",
+    name: `<anonymous_${nextAnonymousPointerId++}>`,
+    to: { kind: "opaque" },
+  };
+}
+
+function wrapPointerValue(value, type) {
+  return {
+    __addr: normalizeBigInt(value),
+    __koffiPointer: true,
+    __type: type,
+  };
+}
+
+function pointerTypeName(type) {
+  return type?.name ?? "pointer";
+}
+
+function validatePointerArgument(value, expectedType) {
+  if (!isOpaquePointerType(expectedType) || value == null) {
+    return;
+  }
+
+  if (typeof value === "bigint" || typeof value === "number") {
+    return;
+  }
+
+  const actualType = value?.__type;
+  if (!isPointerType(actualType)) {
+    throw new TypeError(
+      `Unexpected ${typeof value} value, expected ${pointerTypeName(expectedType)} *`,
+    );
+  }
+  if (expectedType.name != null && actualType.name !== expectedType.name) {
+    throw new TypeError(
+      `Unexpected ${pointerTypeName(actualType)} * value, expected ${expectedType.name}`,
+    );
+  }
+}
+
+function wrapReturnValue(value, returnType) {
+  if (!isOpaquePointerType(returnType) || value == null) {
+    return value;
+  }
+  if (returnType.name === "RustArcPtr") {
+    return wrapPointerValue(value, anonymousPointerType());
+  }
+  return wrapPointerValue(value, returnType);
 }
 
 function emptyRustBuffer() {
@@ -1685,10 +1752,15 @@ const koffi = {
   load(libraryPath) {
     const handlers = createFixtureHandlers(libraryPath);
     return {
-      func(name) {
+      func(name, returnType, argumentTypes = []) {
         const handler = handlers.get(name);
         if (handler != null) {
-          return handler;
+          return (...args) => {
+            for (let index = 0; index < argumentTypes.length; index += 1) {
+              validatePointerArgument(args[index], argumentTypes[index]);
+            }
+            return wrapReturnValue(handler(...args), returnType);
+          };
         }
         return (..._args) => {
           throw new Error(
@@ -1707,10 +1779,19 @@ const koffi = {
       __koffiValue: null,
     };
   },
-  as(value, _type) {
+  as(value, type) {
+    if (isOpaquePointerType(type)) {
+      if (typeof value === "object" && value != null && value.__koffiPointer === true) {
+        return wrapPointerValue(value, value.__type);
+      }
+      return wrapPointerValue(value, type);
+    }
     return normalizeBigInt(value);
   },
   address(pointer) {
+    if (typeof pointer === "object" && pointer != null && pointer.__koffiPointer === true) {
+      return normalizeBigInt(pointer.__addr);
+    }
     return normalizeBigInt(pointer);
   },
   view(pointer, length) {

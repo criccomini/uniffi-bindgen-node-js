@@ -3,9 +3,8 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
 use uniffi_bindgen::interface::{
-    ffi::FfiType,
     AsType, Callable, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function,
-    Method, Object, Type, Variant,
+    Method, Object, Type, Variant, ffi::FfiType,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1244,16 +1243,16 @@ fn render_js_async_callback_vtable_registration(
     })?;
     let method_identifier = js_identifier(&method.name);
     let future_free_identifier = format!("{method_identifier}FutureFree");
-    let mut lines = vec![format!("  const {} = koffi.register(", future_free_identifier)];
+    let mut lines = vec![format!(
+        "  const {} = koffi.register(",
+        future_free_identifier
+    )];
     lines.push("    (uniffiFutureHandle) => {".to_string());
     lines.push("      freePendingForeignFuture(uniffiFutureHandle);".to_string());
     lines.push("    },".to_string());
     lines.push("    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),".to_string());
     lines.push("  );".to_string());
-    lines.push(format!(
-        "  registrations.push({});",
-        future_free_identifier
-    ));
+    lines.push(format!("  registrations.push({});", future_free_identifier));
     lines.push(format!(
         "  const {}Callback = koffi.register(",
         js_member_identifier(&method.name)
@@ -1333,7 +1332,9 @@ fn render_js_async_callback_vtable_registration(
             .to_string(),
     );
     lines.push("      });".to_string());
-    lines.push("      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {".to_string());
+    lines.push(
+        "      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {".to_string(),
+    );
     lines.push("        handle: uniffiFutureHandle,".to_string());
     lines.push(format!("        free: {},", future_free_identifier));
     lines.push("      });".to_string());
@@ -1794,7 +1795,10 @@ fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
 
 fn render_dts_error(error: &ErrorModel) -> Result<String> {
     let mut lines = vec![
-        format!("export declare class {} extends globalThis.Error {{", error.name),
+        format!(
+            "export declare class {} extends globalThis.Error {{",
+            error.name
+        ),
         "  readonly tag: string;".to_string(),
         "  protected constructor(tag: string, message?: string);".to_string(),
         "}".to_string(),
@@ -2266,10 +2270,16 @@ fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> 
             "uniffiLowerIntoRustBuffer({}, {value_expr})",
             render_js_type_converter_expression(type_)?
         )),
-        Type::Object { name, .. } => Ok(format!(
-            "{}.cloneHandle({value_expr})",
-            object_factory_name(name)
-        )),
+        Type::Object { name, imp, .. } => {
+            if imp.has_callback_interface() {
+                Ok(format!("{}.lower({value_expr})", type_converter_name(name)))
+            } else {
+                Ok(format!(
+                    "{}.cloneHandle({value_expr})",
+                    object_factory_name(name)
+                ))
+            }
+        }
         Type::CallbackInterface { .. } => Ok(format!(
             "{}.lower({value_expr})",
             render_js_type_converter_expression(type_)?
@@ -2303,10 +2313,16 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
             "uniffiLiftFromRustBuffer({}, {value_expr})",
             render_js_type_converter_expression(type_)?
         )),
-        Type::Object { name, .. } => Ok(format!(
-            "{}.create({value_expr})",
-            object_factory_name(name)
-        )),
+        Type::Object { name, imp, .. } => {
+            if imp.has_callback_interface() {
+                Ok(format!("{}.lift({value_expr})", type_converter_name(name)))
+            } else {
+                Ok(format!(
+                    "{}.create({value_expr})",
+                    object_factory_name(name)
+                ))
+            }
+        }
         Type::CallbackInterface { .. } => Ok(format!(
             "{}.lift({value_expr})",
             render_js_type_converter_expression(type_)?
@@ -3074,7 +3090,9 @@ mod tests {
         );
         assert!(async_callback_ffi.result_struct_has_return_value);
         assert_eq!(
-            async_callback_ffi.default_error_return_value_expression.as_deref(),
+            async_callback_ffi
+                .default_error_return_value_expression
+                .as_deref(),
             Some("EMPTY_RUST_BUFFER")
         );
     }
@@ -3100,7 +3118,10 @@ mod tests {
             .as_ref()
             .expect("async callback method should capture ForeignFuture metadata");
 
-        assert_eq!(async_callback_ffi.complete_identifier, "ForeignFutureCompleteVoid");
+        assert_eq!(
+            async_callback_ffi.complete_identifier,
+            "ForeignFutureCompleteVoid"
+        );
         assert_eq!(
             async_callback_ffi.result_struct_identifier,
             "ForeignFutureStructVoid"
@@ -3593,7 +3614,9 @@ mod tests {
             rendered.dts
         );
         assert!(
-            rendered.js.contains("export class ErrorInvalid extends Error {"),
+            rendered
+                .js
+                .contains("export class ErrorInvalid extends Error {"),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -3918,7 +3941,9 @@ mod tests {
             .expect("public API should render");
 
         assert!(
-            rendered.js.contains("const logFutureFree = koffi.register("),
+            rendered
+                .js
+                .contains("const logFutureFree = koffi.register("),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -3930,9 +3955,9 @@ mod tests {
             rendered.js
         );
         assert!(
-            rendered.js.contains(
-                "koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {"
-            ),
+            rendered
+                .js
+                .contains("koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {"),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -4101,5 +4126,38 @@ mod tests {
             "unexpected DTS output: {}",
             rendered.dts
         );
+    }
+
+    #[test]
+    fn render_js_lower_expression_uses_converter_for_callback_trait_objects() {
+        let expression = render_js_lower_expression(
+            &Type::Object {
+                module_path: "crate".to_string(),
+                name: "MergeOperator".to_string(),
+                imp: uniffi_bindgen::interface::ObjectImpl::CallbackTrait,
+            },
+            "merge_operator",
+        )
+        .expect("callback-trait object lowering should succeed");
+
+        assert_eq!(
+            expression,
+            "FfiConverterMergeOperator.lower(merge_operator)"
+        );
+    }
+
+    #[test]
+    fn render_js_lift_expression_uses_converter_for_callback_trait_objects() {
+        let expression = render_js_lift_expression(
+            &Type::Object {
+                module_path: "crate".to_string(),
+                name: "MergeOperator".to_string(),
+                imp: uniffi_bindgen::interface::ObjectImpl::CallbackTrait,
+            },
+            "handle",
+        )
+        .expect("callback-trait object lifting should succeed");
+
+        assert_eq!(expression, "FfiConverterMergeOperator.lift(handle)");
     }
 }

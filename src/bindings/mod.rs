@@ -1538,9 +1538,7 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains(
-                "uniffiGetRustFutureContinuationPointer(), continuationHandle)"
-            ),
+            component_js.contains("uniffiGetRustFutureContinuationPointer(), continuationHandle)"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
@@ -1869,7 +1867,9 @@ mod tests {
                 .unwrap_err();
 
             assert!(
-                error.to_string().contains(&format!("unknown field `{key}`")),
+                error
+                    .to_string()
+                    .contains(&format!("unknown field `{key}`")),
                 "unexpected error for {key}: {error}"
             );
         }

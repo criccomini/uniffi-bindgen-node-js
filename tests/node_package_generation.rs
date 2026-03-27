@@ -3,11 +3,11 @@ mod support;
 #[path = "support/fixtures.rs"]
 mod fixtures;
 
+use self::fixtures::fixture_spec;
 use self::support::{
     FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
     install_fixture_package_dependencies, remove_dir_all,
 };
-use self::fixtures::fixture_spec;
 
 #[test]
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
@@ -132,7 +132,8 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
         .bundled_prebuild_path
         .as_ref()
         .expect("bundled-mode fixture package should record the staged prebuild path");
-    let bundled_library_relative_path = format!("prebuilds/{bundled_target}/{expected_library_filename}");
+    let bundled_library_relative_path =
+        format!("prebuilds/{bundled_target}/{expected_library_filename}");
     let root_library_path = package_dir.join(&expected_library_filename);
 
     assert!(

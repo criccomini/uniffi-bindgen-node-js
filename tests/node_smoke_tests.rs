@@ -118,9 +118,8 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResou
 }
 
 #[test]
-fn runtime_object_factory_preserves_external_pointer_handles_when_retagged_values_are_not_addressable() {
-    let settings =
-        generation_settings("runtime-object-factory-external-pointer-fallback");
+fn runtime_object_factory_keeps_retyped_handles_for_follow_up_calls() {
+    let settings = generation_settings("runtime-object-factory-retyped-handles");
     let output_dir = settings.out_dir.clone();
 
     generator()
@@ -224,7 +223,8 @@ const resourceFactory = createObjectFactory({
   createInstance: () => Object.create(Resource.prototype),
   handleType: () => resourceHandleType,
   cloneHandle(handle) {
-    assert.equal(handle.__type?.name, "RustArcPtr");
+    assert.equal(handle.__type?.name, "RustArcPtrResource");
+    assert.equal(handle.__addr, 42n);
     return handle;
   },
 });
@@ -232,7 +232,7 @@ const resourceFactory = createObjectFactory({
 const resource = resourceFactory.create(koffi.as(42n, genericHandleType));
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
-assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResource");
 "#,
     );
 
@@ -544,6 +544,7 @@ assert.throws(() => Config.from_json("not-json"), (error) => {
 });
 
 const reader = await new ReaderBuilder(true).build();
+assert.equal(reader.label(), "ready");
 assert.equal(reader.label(), "ready");
 await assert.rejects(new ReaderBuilder(false).build(), (error) => {
   assert.ok(error instanceof FixtureErrorInvalidState);

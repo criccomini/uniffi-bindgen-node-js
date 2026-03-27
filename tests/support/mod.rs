@@ -190,7 +190,11 @@ pub fn generate_fixture_package_with_options(
     });
     let sibling_library_path = options.stage_root_sibling_library.then(|| {
         let packaged_library_path = package_dir.join(library_filename);
-        copy_library(&built_fixture.library_path, &packaged_library_path, "fixture");
+        copy_library(
+            &built_fixture.library_path,
+            &packaged_library_path,
+            "fixture",
+        );
         packaged_library_path
     });
     let (bundled_prebuild_target, bundled_prebuild_path) = if options.stage_host_prebuild {
@@ -199,7 +203,11 @@ pub fn generate_fixture_package_with_options(
             .join("prebuilds")
             .join(&target)
             .join(library_filename);
-        copy_library(&built_fixture.library_path, &packaged_library_path, "fixture");
+        copy_library(
+            &built_fixture.library_path,
+            &packaged_library_path,
+            "fixture",
+        );
         (Some(target), Some(packaged_library_path))
     } else {
         (None, None)

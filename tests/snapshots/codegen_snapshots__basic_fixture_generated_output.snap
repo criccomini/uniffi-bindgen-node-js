@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -5973,13 +5972,7 @@ export class UniffiObjectFactory {
     if (handleType == null) {
       return handle;
     }
-    const typedHandle = koffi.as(handle, handleType);
-    try {
-      pointerAddress(typedHandle);
-      return typedHandle;
-    } catch {
-      return handle;
-    }
+    return koffi.as(pointerAddress(handle), handleType);
   }
 
   attach(instance, handle) {

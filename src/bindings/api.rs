@@ -1201,9 +1201,61 @@ fn render_js_sync_callback_vtable_registration(
 fn render_js_async_callback_vtable_registration(
     callback_interface: &CallbackInterfaceModel,
     method: &MethodModel,
-    registry_name: &str,
+    _registry_name: &str,
 ) -> Result<Vec<String>> {
-    render_js_sync_callback_vtable_registration(callback_interface, method, registry_name)
+    let callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
+        format!(
+            "callback interface {}.{} is missing an FFI callback identifier",
+            callback_interface.name, method.name
+        )
+    })?;
+    let method_identifier = js_identifier(&method.name);
+    let future_free_identifier = format!("{method_identifier}FutureFree");
+    let mut lines = vec![format!("  const {} = koffi.register(", future_free_identifier)];
+    lines.push("    () => {},".to_string());
+    lines.push("    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),".to_string());
+    lines.push("  );".to_string());
+    lines.push(format!(
+        "  registrations.push({});",
+        future_free_identifier
+    ));
+    lines.push(format!(
+        "  const {}Callback = koffi.register(",
+        js_member_identifier(&method.name)
+    ));
+    lines.push(
+        "    (uniffiHandle, ".to_string()
+            + &method
+                .arguments
+                .iter()
+                .map(|argument| js_identifier(&argument.name))
+                .chain(
+                    [
+                        "uniffiFutureCallback".to_string(),
+                        "uniffiCallbackData".to_string(),
+                        "uniffiOutReturn".to_string(),
+                    ]
+                    .into_iter(),
+                )
+                .collect::<Vec<_>>()
+                .join(", ")
+            + ") => {",
+    );
+    lines.push("      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {".to_string());
+    lines.push("        handle: 0n,".to_string());
+    lines.push(format!("        free: {},", future_free_identifier));
+    lines.push("      });".to_string());
+    lines.push("    },".to_string());
+    lines.push(format!(
+        "    koffi.pointer(bindings.ffiCallbacks.{}),",
+        callback_identifier
+    ));
+    lines.push("  );".to_string());
+    lines.push(format!(
+        "  registrations.push({}Callback);",
+        js_member_identifier(&method.name)
+    ));
+    Ok(lines)
 }
 
 fn render_js_flat_enum(enum_def: &EnumModel) -> Result<String> {
@@ -3636,6 +3688,48 @@ mod tests {
         assert!(
             rendered.js.contains(
                 "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_async_callback_vtable_signatures() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                void init_logging(LogCallback callback);
+            };
+
+            callback interface LogCallback {
+                [Async] string log(string message);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.js.contains("const logFutureFree = koffi.register("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "(uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {"
             ),
             "unexpected JS output: {}",
             rendered.js

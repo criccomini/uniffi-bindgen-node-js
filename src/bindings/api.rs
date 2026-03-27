@@ -99,7 +99,7 @@ impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
         let mut js_sections = Vec::new();
         let mut dts_sections = Vec::new();
-        let has_async_public_callables = self.has_async_public_callables();
+        let requires_async_rust_future_hooks = self.requires_async_rust_future_hooks();
 
         if !self.functions.is_empty() || !self.objects.is_empty() {
             js_sections.push(
@@ -115,7 +115,7 @@ impl ComponentModel {
             ));
         }
 
-        if has_async_public_callables {
+        if requires_async_rust_future_hooks {
             js_sections.push(render_js_async_rust_future_helpers());
         }
 
@@ -194,10 +194,10 @@ impl ComponentModel {
             js_sections.push(self.render_js_placeholder_converters()?);
         }
 
-        if !self.callback_interfaces.is_empty() || has_async_public_callables {
+        if !self.callback_interfaces.is_empty() || requires_async_rust_future_hooks {
             js_sections.push(render_js_runtime_hooks(
                 &self.callback_interfaces,
-                has_async_public_callables,
+                requires_async_rust_future_hooks,
             )?);
         }
 
@@ -238,7 +238,7 @@ impl ComponentModel {
         Ok(RenderedComponentApi {
             js: js_sections.join("\n\n"),
             dts: dts_sections.join("\n\n"),
-            requires_async_rust_future_hooks: has_async_public_callables,
+            requires_async_rust_future_hooks,
         })
     }
 
@@ -250,7 +250,7 @@ impl ComponentModel {
             || !self.callback_interfaces.is_empty()
     }
 
-    fn has_async_public_callables(&self) -> bool {
+    fn requires_async_rust_future_hooks(&self) -> bool {
         self.functions.iter().any(|function| function.is_async)
             || self.objects.iter().any(|object| {
                 object
@@ -258,6 +258,12 @@ impl ComponentModel {
                     .iter()
                     .any(|constructor| constructor.is_async)
                     || object.methods.iter().any(|method| method.is_async)
+            })
+            || self.callback_interfaces.iter().any(|callback_interface| {
+                callback_interface
+                    .methods
+                    .iter()
+                    .any(|method| method.is_async)
             })
     }
 
@@ -3806,6 +3812,10 @@ mod tests {
             .expect("public API should render");
 
         assert!(
+            rendered.requires_async_rust_future_hooks,
+            "async callback proxies should request Rust future hooks"
+        );
+        assert!(
             rendered.dts.contains(
                 "export interface LogCallback {\n  log(message: string): Promise<string>;\n}"
             ),
@@ -3826,6 +3836,18 @@ mod tests {
         );
         assert!(
             rendered.js.contains("    return rustCallAsync({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("rustFutureContinuationCallback"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("function uniffiGetRustFutureContinuationPointer() {"),
             "unexpected JS output: {}",
             rendered.js
         );

@@ -78,6 +78,10 @@ function validatePointerArgument(value, expectedType) {
     return;
   }
 
+  if (expectedType.name === "RustArcPtr") {
+    return;
+  }
+
   if (value?.__koffiPointerCast === true) {
     const actualType = value.__type;
     if (!isPointerType(actualType)) {

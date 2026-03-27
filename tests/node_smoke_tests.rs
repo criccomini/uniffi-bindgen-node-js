@@ -252,6 +252,136 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
 }
 
 #[test]
+fn runtime_object_factory_keeps_raw_external_handles_for_follow_up_calls() {
+    let settings = generation_settings("runtime-object-factory-raw-external-handles");
+    let output_dir = settings.out_dir.clone();
+
+    generator()
+        .write_bindings(&settings, &[component_with_namespace("example")])
+        .expect("write_bindings should succeed");
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"function normalizePointerAddress(value) {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return BigInt(value);
+  }
+  if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
+    return value.__addr;
+  }
+  throw new TypeError(`expected a pointer-compatible value, got ${typeof value}`);
+}
+
+const koffi = {
+  opaque() {
+    return { kind: "opaque" };
+  },
+  pointer(typeOrName, maybeType) {
+    return {
+      kind: "pointer",
+      name: maybeType == null ? null : typeOrName,
+      to: maybeType ?? typeOrName,
+    };
+  },
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  as(value, type) {
+    if (typeof value !== "object" || value == null || typeof value.__addr !== "bigint") {
+      throw new TypeError("Invalid argument");
+    }
+    return {
+      __addr: value.__addr,
+      __pointer: value,
+      __retagged: true,
+      __type: type,
+    };
+  },
+  address(pointer) {
+    if (pointer?.__retagged === true) {
+      throw new TypeError(
+        `Unexpected ${pointer.__type?.name ?? "pointer"} value for ptr, expected external pointer`,
+      );
+    }
+    return normalizePointerAddress(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-raw-external-pointer-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import { createObjectFactory } from "./runtime/objects.js";
+
+class Resource {
+  ping() {
+    return resourceFactory.cloneHandle(this);
+  }
+}
+
+const rawHandle = {
+  __addr: 42n,
+};
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  cloneHandle() {
+    throw new Error("typed clone should not be used for raw external handles");
+  },
+  cloneHandleRawExternal(handle) {
+    assert.equal(handle.__addr, 42n);
+    assert.equal(handle.__retagged, undefined);
+    return handle;
+  },
+  freeHandle() {
+    throw new Error("typed free should not be used for raw external handles");
+  },
+  freeHandleRawExternal(handle) {
+    assert.equal(handle.__addr, 42n);
+    assert.equal(handle.__retagged, undefined);
+  },
+});
+
+const resource = resourceFactory.createRawExternal(rawHandle);
+assert.equal(typeof resource.ping, "function");
+assert.doesNotThrow(() => resource.ping());
+assert.strictEqual(resourceFactory.peekHandle(resource), rawHandle);
+assert.equal(resourceFactory.usesRawExternal(resource), true);
+assert.equal(resourceFactory.destroy(resource), true);
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+}
+
+#[test]
 fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;

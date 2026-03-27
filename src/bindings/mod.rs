@@ -1462,25 +1462,25 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiDbIteratorObjectFactory.createRetyped(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiDbIteratorObjectFactory.createRawExternal(uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiDbSnapshotObjectFactory.createRetyped(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiDbSnapshotObjectFactory.createRawExternal(uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiDbTransactionObjectFactory.createRetyped(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiDbTransactionObjectFactory.createRawExternal(uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiWalFileIteratorObjectFactory.createRetyped(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiWalFileIteratorObjectFactory.createRawExternal(uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );

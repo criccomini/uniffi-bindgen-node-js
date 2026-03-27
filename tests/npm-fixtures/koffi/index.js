@@ -80,6 +80,18 @@ function pointerTypeName(type) {
   return type?.name ?? "pointer";
 }
 
+function isExternalPointerValue(value) {
+  return typeof value === "bigint"
+    || typeof value === "number"
+    || value?.__koffiExternalPointer === true
+    || (
+      typeof value === "object"
+      && value != null
+      && typeof value.__addr === "bigint"
+      && value.__type == null
+    );
+}
+
 function validatePointerArgument(value, expectedType) {
   if (!isOpaquePointerType(expectedType) || value == null) {
     return;
@@ -105,6 +117,10 @@ function validatePointerArgument(value, expectedType) {
         `Unexpected ${pointerTypeName(actualType)} * value, expected ${expectedType.name}`,
       );
     }
+    return;
+  }
+
+  if (isExternalPointerValue(value)) {
     return;
   }
 

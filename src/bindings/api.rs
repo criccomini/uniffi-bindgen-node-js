@@ -1945,6 +1945,24 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
     lines.push("      uniffiRustCallOptions(),".to_string());
     lines.push("    );".to_string());
     lines.push("  },".to_string());
+    lines.push("  cloneHandleRawExternal(handle) {".to_string());
+    lines.push("    const bindings = getFfiBindings();".to_string());
+    lines.push("    const rawExternalCloneHandle = bindings.library.func(".to_string());
+    lines.push(format!(
+        "      {},",
+        json_string_literal(&object.ffi_object_clone_identifier)?
+    ));
+    lines.push("      bindings.ffiTypes.VoidPointer,".to_string());
+    lines.push(
+        "      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+            .to_string(),
+    );
+    lines.push("    );".to_string());
+    lines.push("    return uniffiRustCaller.rustCall(".to_string());
+    lines.push("      (status) => rawExternalCloneHandle(handle, status),".to_string());
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
     lines.push("  cloneHandle(handle) {".to_string());
     lines.push("    return uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
@@ -1960,6 +1978,24 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
         "      (status) => ffiFunctions.{}_generic_abi(handle, status),",
         object.ffi_object_free_identifier
     ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
+    lines.push("  freeHandleRawExternal(handle) {".to_string());
+    lines.push("    const bindings = getFfiBindings();".to_string());
+    lines.push("    const rawExternalFreeHandle = bindings.library.func(".to_string());
+    lines.push(format!(
+        "      {},",
+        json_string_literal(&object.ffi_object_free_identifier)?
+    ));
+    lines.push("      \"void\",".to_string());
+    lines.push(
+        "      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+            .to_string(),
+    );
+    lines.push("    );".to_string());
+    lines.push("    uniffiRustCaller.rustCall(".to_string());
+    lines.push("      (status) => rawExternalFreeHandle(handle, status),".to_string());
     lines.push("      uniffiRustCallOptions(),".to_string());
     lines.push("    );".to_string());
     lines.push("  },".to_string());
@@ -2095,6 +2131,10 @@ fn render_js_async_constructor_body(
     })?;
     let mut lines = render_js_argument_lowering(&constructor.arguments)?;
     let start_args = render_js_ffi_call_args(&constructor.arguments, None);
+    lines.extend(render_js_async_object_complete_setup(
+        &async_ffi.complete_identifier,
+        "    ",
+    )?);
     lines.push("    return rustCallAsync({".to_string());
     lines.push(format!(
         "      rustFutureFunc: () => ffiFunctions.{}({}),",
@@ -2109,15 +2149,12 @@ fn render_js_async_constructor_body(
         async_ffi.cancel_identifier
     ));
     lines.push(format!(
-        "      completeFunc: (rustFuture, status) => ffiFunctions.{}(rustFuture, status),",
-        async_ffi.complete_identifier
-    ));
-    lines.push(format!(
         "      freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
         async_ffi.free_identifier
     ));
+    lines.push("      completeFunc,".to_string());
     lines.push(format!(
-        "      liftFunc: (pointer) => {}.create(pointer),",
+        "      liftFunc: (pointer) => {}.createRawExternal(pointer),",
         factory_name
     ));
     lines.push(format!(
@@ -2377,7 +2414,7 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
 fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
     match return_type {
         Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(format!(
-            "(uniffiResult) => {}.createRetyped(uniffiResult)",
+            "(uniffiResult) => {}.createRawExternal(uniffiResult)",
             object_factory_name(name)
         )),
         Some(return_type) => Ok(format!(
@@ -2393,10 +2430,33 @@ fn render_js_async_complete_setup(
     complete_identifier: &str,
     indent: &str,
 ) -> Result<Vec<String>> {
-    let _ = return_type;
-    Ok(vec![format!(
-        "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
-    )])
+    match return_type {
+        Some(Type::Object { imp, .. }) if !imp.has_callback_interface() => {
+            render_js_async_object_complete_setup(complete_identifier, indent)
+        }
+        _ => Ok(vec![format!(
+            "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
+        )]),
+    }
+}
+
+fn render_js_async_object_complete_setup(
+    complete_identifier: &str,
+    indent: &str,
+) -> Result<Vec<String>> {
+    Ok(vec![
+        format!("{indent}const bindings = getFfiBindings();"),
+        format!("{indent}const completePointer = bindings.library.func("),
+        format!("{indent}  {},", json_string_literal(complete_identifier)?),
+        format!("{indent}  bindings.ffiTypes.VoidPointer,"),
+        format!(
+            "{indent}  [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+        ),
+        format!("{indent});"),
+        format!(
+            "{indent}const completeFunc = (rustFuture, status) => completePointer(rustFuture, status);"
+        ),
+    ])
 }
 
 fn render_js_type_converter_expression(type_: &Type) -> Result<String> {
@@ -3425,6 +3485,23 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered.js.contains("cloneHandleRawExternal(handle) {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "[bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)]"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("freeHandleRawExternal(handle) {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered
                 .js
                 .contains("const pointer = uniffiRustCaller.rustCall("),
@@ -3714,7 +3791,19 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("liftFunc: (pointer) => uniffiAsyncStoreObjectFactory.create(pointer),"),
+                .contains("const completePointer = bindings.library.func("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("bindings.ffiTypes.VoidPointer,"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "liftFunc: (pointer) => uniffiAsyncStoreObjectFactory.createRawExternal(pointer),"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -3799,8 +3888,55 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered
+                .js
+                .contains("const completePointer = bindings.library.func("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("bindings.ffiTypes.VoidPointer,"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered.js.contains(
-                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.createRetyped(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.createRawExternal(uniffiResult),"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_async_constructor_object_lifting() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            interface Store {
+                [Name=new_async, Async] constructor();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .js
+                .contains("const completePointer = bindings.library.func("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "liftFunc: (pointer) => uniffiStoreObjectFactory.createRawExternal(pointer),"
             ),
             "unexpected JS output: {}",
             rendered.js

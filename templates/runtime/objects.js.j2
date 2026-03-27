@@ -4,6 +4,7 @@ import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
 
 const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
 const uniffiObjectGenericAbiSymbol = Symbol("uniffi.objectGenericAbi");
+const uniffiObjectRawExternalSymbol = Symbol("uniffi.objectRawExternal");
 const uniffiRetypedHandleCleanupSymbol = Symbol("uniffi.retypedHandleCleanup");
 
 export const uniffiTypeNameSymbol = Symbol("uniffi.typeName");
@@ -85,8 +86,10 @@ export class UniffiObjectFactory {
     createInstance = () => Object.create(UniffiObjectBase.prototype),
     cloneHandle = undefined,
     cloneHandleGeneric = undefined,
+    cloneHandleRawExternal = undefined,
     freeHandle = undefined,
     freeHandleGeneric = undefined,
+    freeHandleRawExternal = undefined,
     freeRetypedHandle = undefined,
     handleType = undefined,
     retypeHandle = undefined,
@@ -97,8 +100,10 @@ export class UniffiObjectFactory {
     this._createInstance = createInstance;
     this._cloneHandle = cloneHandle;
     this._cloneHandleGeneric = cloneHandleGeneric;
+    this._cloneHandleRawExternal = cloneHandleRawExternal;
     this._freeHandle = freeHandle;
     this._freeHandleGeneric = freeHandleGeneric;
+    this._freeHandleRawExternal = freeHandleRawExternal;
     this._freeRetypedHandle = freeRetypedHandle;
     this._handleType = handleType;
     this._retypeHandle = retypeHandle;
@@ -109,6 +114,7 @@ export class UniffiObjectFactory {
       || (
         typeof freeHandle !== "function"
         && typeof freeHandleGeneric !== "function"
+        && typeof freeHandleRawExternal !== "function"
         && typeof freeRetypedHandle !== "function"
       )
         ? null
@@ -117,10 +123,13 @@ export class UniffiObjectFactory {
               const freeHandle =
                 record.genericAbi === true
                   ? this._freeHandleGeneric
+                  : record.rawExternal === true
+                    && typeof this._freeHandleRawExternal === "function"
+                    ? this._freeHandleRawExternal
                   : this._freeHandle;
               if (typeof freeHandle === "function") {
                 freeHandle(
-                  record.genericAbi === true
+                  record.genericAbi === true || record.rawExternal === true
                     ? record.handle
                     : this._coerceHandle(record.handle),
                 );
@@ -158,6 +167,7 @@ export class UniffiObjectFactory {
     instance[uniffiObjectDestroyedSymbol] = true;
     instance[uniffiFinalizerTokenSymbol] = null;
     instance[uniffiObjectGenericAbiSymbol] = false;
+    instance[uniffiObjectRawExternalSymbol] = false;
     instance[uniffiRetypedHandleCleanupSymbol] = null;
   }
 
@@ -190,6 +200,7 @@ export class UniffiObjectFactory {
       `${this.typeName} handle`,
     );
     const genericAbi = options?.genericAbi === true;
+    const rawExternal = options?.rawExternal === true;
     const cleanupHandle = this._normalizeHandle(options?.cleanupHandle);
     const target = requireObjectInstance(instance, this.typeName);
 
@@ -222,6 +233,11 @@ export class UniffiObjectFactory {
         value: genericAbi,
         writable: true,
       },
+      [uniffiObjectRawExternalSymbol]: {
+        configurable: true,
+        value: rawExternal,
+        writable: true,
+      },
       [uniffiRetypedHandleCleanupSymbol]: {
         configurable: true,
         value: cleanupHandle,
@@ -236,6 +252,7 @@ export class UniffiObjectFactory {
 
     this._registerFinalizer(target, {
       genericAbi,
+      rawExternal,
       cleanupHandle,
       handle: normalizedHandle,
     });
@@ -256,6 +273,12 @@ export class UniffiObjectFactory {
     });
   }
 
+  createRawExternal(handle) {
+    return this.attach(this._createInstance(), handle, {
+      rawExternal: true,
+    });
+  }
+
   handle(value) {
     if (!this.isInstance(value)) {
       throw new TypeError(`${this.typeName} expected an instance created by this factory.`);
@@ -264,7 +287,7 @@ export class UniffiObjectFactory {
       this._normalizeHandle(storedHandle(value)),
       `${this.typeName} handle`,
     );
-    return this.usesGenericAbi(value)
+    return this.usesGenericAbi(value) || this.usesRawExternal(value)
       ? rawHandle
       : this._coerceHandle(rawHandle);
   }
@@ -281,6 +304,8 @@ export class UniffiObjectFactory {
     const cloneHandle =
       this.usesGenericAbi(value)
         ? this._cloneHandleGeneric
+        : this.usesRawExternal(value) && typeof this._cloneHandleRawExternal === "function"
+          ? this._cloneHandleRawExternal
         : this._cloneHandle;
     if (typeof cloneHandle !== "function") {
       return handle;
@@ -295,6 +320,7 @@ export class UniffiObjectFactory {
 
     const handle = this.handle(value);
     const genericAbi = this.usesGenericAbi(value);
+    const rawExternal = this.usesRawExternal(value);
     const cleanupHandle = value[uniffiRetypedHandleCleanupSymbol];
     this._unregisterFinalizer(value);
     this._markDestroyed(value);
@@ -302,6 +328,8 @@ export class UniffiObjectFactory {
     const freeHandle =
       genericAbi
         ? this._freeHandleGeneric
+        : rawExternal && typeof this._freeHandleRawExternal === "function"
+          ? this._freeHandleRawExternal
         : this._freeHandle;
     if (typeof freeHandle === "function") {
       freeHandle(handle, value);
@@ -323,6 +351,10 @@ export class UniffiObjectFactory {
 
   usesGenericAbi(value) {
     return this.isInstance(value) && value[uniffiObjectGenericAbiSymbol] === true;
+  }
+
+  usesRawExternal(value) {
+    return this.isInstance(value) && value[uniffiObjectRawExternalSymbol] === true;
   }
 
   serializeHandle(value) {

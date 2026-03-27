@@ -477,6 +477,18 @@ const uniffiConfigObjectFactory = createObjectFactory({
       uniffiRustCallOptions(),
     );
   },
+  cloneHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_config",
+      bindings.ffiTypes.VoidPointer,
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    return uniffiRustCaller.rustCall(
+      (status) => rawExternalCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_config(handle, status),
@@ -486,6 +498,18 @@ const uniffiConfigObjectFactory = createObjectFactory({
   freeHandleGeneric(handle) {
     uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_free_config_generic_abi(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalFreeHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_free_config",
+      "void",
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    uniffiRustCaller.rustCall(
+      (status) => rawExternalFreeHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -534,6 +558,18 @@ const uniffiReaderObjectFactory = createObjectFactory({
       uniffiRustCallOptions(),
     );
   },
+  cloneHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_reader",
+      bindings.ffiTypes.VoidPointer,
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    return uniffiRustCaller.rustCall(
+      (status) => rawExternalCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_reader(handle, status),
@@ -543,6 +579,18 @@ const uniffiReaderObjectFactory = createObjectFactory({
   freeHandleGeneric(handle) {
     uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_free_reader_generic_abi(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalFreeHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_free_reader",
+      "void",
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    uniffiRustCaller.rustCall(
+      (status) => rawExternalFreeHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -572,14 +620,20 @@ export class ReaderBuilder extends UniffiObjectBase {
       uniffiReaderBuilderObjectFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi
         : ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build;
-    const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(rustFuture, status);
+    const bindings = getFfiBindings();
+    const completePointer = bindings.library.func(
+      "ffi_fixture_basic_rust_future_complete_pointer",
+      bindings.ffiTypes.VoidPointer,
+      [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    const completeFunc = (rustFuture, status) => completePointer(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(rustFuture),
       completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_free_pointer(rustFuture),
-      liftFunc: (uniffiResult) => uniffiReaderObjectFactory.createRetyped(uniffiResult),
+      liftFunc: (uniffiResult) => uniffiReaderObjectFactory.createRawExternal(uniffiResult),
       ...uniffiRustCallOptions(FfiConverterFixtureError),
     });
   }
@@ -601,6 +655,18 @@ const uniffiReaderBuilderObjectFactory = createObjectFactory({
       uniffiRustCallOptions(),
     );
   },
+  cloneHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_readerbuilder",
+      bindings.ffiTypes.VoidPointer,
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    return uniffiRustCaller.rustCall(
+      (status) => rawExternalCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(handle, status),
@@ -610,6 +676,18 @@ const uniffiReaderBuilderObjectFactory = createObjectFactory({
   freeHandleGeneric(handle) {
     uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalFreeHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_free_readerbuilder",
+      "void",
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    uniffiRustCaller.rustCall(
+      (status) => rawExternalFreeHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -737,6 +815,18 @@ const uniffiStoreObjectFactory = createObjectFactory({
       uniffiRustCallOptions(),
     );
   },
+  cloneHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_store",
+      bindings.ffiTypes.VoidPointer,
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    return uniffiRustCaller.rustCall(
+      (status) => rawExternalCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_store(handle, status),
@@ -746,6 +836,18 @@ const uniffiStoreObjectFactory = createObjectFactory({
   freeHandleGeneric(handle) {
     uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_free_store_generic_abi(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalFreeHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_free_store",
+      "void",
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    uniffiRustCaller.rustCall(
+      (status) => rawExternalFreeHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -6473,6 +6575,7 @@ import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
 
 const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
 const uniffiObjectGenericAbiSymbol = Symbol("uniffi.objectGenericAbi");
+const uniffiObjectRawExternalSymbol = Symbol("uniffi.objectRawExternal");
 const uniffiRetypedHandleCleanupSymbol = Symbol("uniffi.retypedHandleCleanup");
 
 export const uniffiTypeNameSymbol = Symbol("uniffi.typeName");
@@ -6554,8 +6657,10 @@ export class UniffiObjectFactory {
     createInstance = () => Object.create(UniffiObjectBase.prototype),
     cloneHandle = undefined,
     cloneHandleGeneric = undefined,
+    cloneHandleRawExternal = undefined,
     freeHandle = undefined,
     freeHandleGeneric = undefined,
+    freeHandleRawExternal = undefined,
     freeRetypedHandle = undefined,
     handleType = undefined,
     retypeHandle = undefined,
@@ -6566,8 +6671,10 @@ export class UniffiObjectFactory {
     this._createInstance = createInstance;
     this._cloneHandle = cloneHandle;
     this._cloneHandleGeneric = cloneHandleGeneric;
+    this._cloneHandleRawExternal = cloneHandleRawExternal;
     this._freeHandle = freeHandle;
     this._freeHandleGeneric = freeHandleGeneric;
+    this._freeHandleRawExternal = freeHandleRawExternal;
     this._freeRetypedHandle = freeRetypedHandle;
     this._handleType = handleType;
     this._retypeHandle = retypeHandle;
@@ -6578,6 +6685,7 @@ export class UniffiObjectFactory {
       || (
         typeof freeHandle !== "function"
         && typeof freeHandleGeneric !== "function"
+        && typeof freeHandleRawExternal !== "function"
         && typeof freeRetypedHandle !== "function"
       )
         ? null
@@ -6586,10 +6694,13 @@ export class UniffiObjectFactory {
               const freeHandle =
                 record.genericAbi === true
                   ? this._freeHandleGeneric
+                  : record.rawExternal === true
+                    && typeof this._freeHandleRawExternal === "function"
+                    ? this._freeHandleRawExternal
                   : this._freeHandle;
               if (typeof freeHandle === "function") {
                 freeHandle(
-                  record.genericAbi === true
+                  record.genericAbi === true || record.rawExternal === true
                     ? record.handle
                     : this._coerceHandle(record.handle),
                 );
@@ -6627,6 +6738,7 @@ export class UniffiObjectFactory {
     instance[uniffiObjectDestroyedSymbol] = true;
     instance[uniffiFinalizerTokenSymbol] = null;
     instance[uniffiObjectGenericAbiSymbol] = false;
+    instance[uniffiObjectRawExternalSymbol] = false;
     instance[uniffiRetypedHandleCleanupSymbol] = null;
   }
 
@@ -6659,6 +6771,7 @@ export class UniffiObjectFactory {
       `${this.typeName} handle`,
     );
     const genericAbi = options?.genericAbi === true;
+    const rawExternal = options?.rawExternal === true;
     const cleanupHandle = this._normalizeHandle(options?.cleanupHandle);
     const target = requireObjectInstance(instance, this.typeName);
 
@@ -6691,6 +6804,11 @@ export class UniffiObjectFactory {
         value: genericAbi,
         writable: true,
       },
+      [uniffiObjectRawExternalSymbol]: {
+        configurable: true,
+        value: rawExternal,
+        writable: true,
+      },
       [uniffiRetypedHandleCleanupSymbol]: {
         configurable: true,
         value: cleanupHandle,
@@ -6705,6 +6823,7 @@ export class UniffiObjectFactory {
 
     this._registerFinalizer(target, {
       genericAbi,
+      rawExternal,
       cleanupHandle,
       handle: normalizedHandle,
     });
@@ -6725,6 +6844,12 @@ export class UniffiObjectFactory {
     });
   }
 
+  createRawExternal(handle) {
+    return this.attach(this._createInstance(), handle, {
+      rawExternal: true,
+    });
+  }
+
   handle(value) {
     if (!this.isInstance(value)) {
       throw new TypeError(`${this.typeName} expected an instance created by this factory.`);
@@ -6733,7 +6858,7 @@ export class UniffiObjectFactory {
       this._normalizeHandle(storedHandle(value)),
       `${this.typeName} handle`,
     );
-    return this.usesGenericAbi(value)
+    return this.usesGenericAbi(value) || this.usesRawExternal(value)
       ? rawHandle
       : this._coerceHandle(rawHandle);
   }
@@ -6750,6 +6875,8 @@ export class UniffiObjectFactory {
     const cloneHandle =
       this.usesGenericAbi(value)
         ? this._cloneHandleGeneric
+        : this.usesRawExternal(value) && typeof this._cloneHandleRawExternal === "function"
+          ? this._cloneHandleRawExternal
         : this._cloneHandle;
     if (typeof cloneHandle !== "function") {
       return handle;
@@ -6764,6 +6891,7 @@ export class UniffiObjectFactory {
 
     const handle = this.handle(value);
     const genericAbi = this.usesGenericAbi(value);
+    const rawExternal = this.usesRawExternal(value);
     const cleanupHandle = value[uniffiRetypedHandleCleanupSymbol];
     this._unregisterFinalizer(value);
     this._markDestroyed(value);
@@ -6771,6 +6899,8 @@ export class UniffiObjectFactory {
     const freeHandle =
       genericAbi
         ? this._freeHandleGeneric
+        : rawExternal && typeof this._freeHandleRawExternal === "function"
+          ? this._freeHandleRawExternal
         : this._freeHandle;
     if (typeof freeHandle === "function") {
       freeHandle(handle, value);
@@ -6792,6 +6922,10 @@ export class UniffiObjectFactory {
 
   usesGenericAbi(value) {
     return this.isInstance(value) && value[uniffiObjectGenericAbiSymbol] === true;
+  }
+
+  usesRawExternal(value) {
+    return this.isInstance(value) && value[uniffiObjectRawExternalSymbol] === true;
   }
 
   serializeHandle(value) {
@@ -6867,8 +7001,10 @@ export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase>
   createInstance?: () => T;
   cloneHandle?: ((handle: unknown, value: T) => unknown) | null;
   cloneHandleGeneric?: ((handle: unknown, value: T) => unknown) | null;
+  cloneHandleRawExternal?: ((handle: unknown, value: T) => unknown) | null;
   freeHandle?: ((handle: unknown, value?: T) => void) | null;
   freeHandleGeneric?: ((handle: unknown, value?: T) => void) | null;
+  freeHandleRawExternal?: ((handle: unknown, value?: T) => void) | null;
   freeRetypedHandle?: ((handle: unknown, value?: T) => void) | null;
   handleType?: unknown | (() => unknown) | null;
   retypeHandle?: ((handle: unknown) => unknown) | null;
@@ -6893,12 +7029,14 @@ export declare class UniffiObjectFactory<T extends object = UniffiObjectBase> {
   bless(instance: T, handle: unknown): T;
   create(handle: unknown): T;
   createRetyped(handle: unknown): T;
+  createRawExternal(handle: unknown): T;
   handle(value: T): unknown;
   peekHandle(value: unknown): unknown;
   cloneHandle(value: T): unknown;
   destroy(value: unknown): boolean;
   isInstance(value: unknown): value is T;
   isDestroyed(value: unknown): boolean;
+  usesRawExternal(value: unknown): boolean;
   serializeHandle(value: T): bigint;
   deserializeHandle(serialized: bigint | number): unknown;
 }

@@ -854,6 +854,18 @@ function createBasicFixtureRuntime(libraryPath) {
       },
     ],
     [
+      "uniffi_fixture_basic_fn_method_reader_label_async",
+      (handle) => {
+        const futureHandle = nextFutureHandle;
+        nextFutureHandle += 1n;
+        futures.set(futureHandle, {
+          kind: "rust_buffer",
+          payload: rustBufferFromBytes(encodeString(getReader(handle).label)),
+        });
+        return futureHandle;
+      },
+    ],
+    [
       "uniffi_fixture_basic_fn_clone_readerbuilder",
       (handle, status) => {
         const clonedHandle = cloneHandleValue(readerBuilders, handle, "ReaderBuilder");
@@ -1816,7 +1828,11 @@ const koffi = {
     const handlers = createFixtureHandlers(libraryPath);
     return {
       func(name, returnType, argumentTypes = []) {
-        const handler = handlers.get(name);
+        const handler =
+          handlers.get(name)
+          ?? (name.endsWith("_generic_abi")
+            ? handlers.get(name.slice(0, -"_generic_abi".length))
+            : undefined);
         if (handler != null) {
           return (...args) => {
             for (let index = 0; index < argumentTypes.length; index += 1) {

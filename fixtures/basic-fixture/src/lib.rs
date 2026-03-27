@@ -147,6 +147,13 @@ impl Reader {
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+impl Reader {
+    pub async fn label_async(&self) -> String {
+        self.label.clone()
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl ReaderBuilder {
     #[uniffi::constructor]
     pub fn new(valid: bool) -> Arc<Self> {

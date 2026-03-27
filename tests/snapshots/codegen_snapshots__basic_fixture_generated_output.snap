@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -573,22 +572,14 @@ export class ReaderBuilder extends UniffiObjectBase {
       uniffiReaderBuilderObjectFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi
         : ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build;
-    const completeFunc = (() => {
-      const bindings = getFfiBindings();
-      const completePointer = bindings.library.func(
-        "ffi_fixture_basic_rust_future_complete_pointer",
-        bindings.ffiTypes.RustArcPtrReader,
-        [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-      );
-      return (rustFuture, status) => completePointer(rustFuture, status);
-    })();
+    const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(rustFuture),
       completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_free_pointer(rustFuture),
-      liftFunc: (uniffiResult) => uniffiReaderObjectFactory.create(uniffiResult),
+      liftFunc: (uniffiResult) => uniffiReaderObjectFactory.createRetyped(uniffiResult),
       ...uniffiRustCallOptions(FfiConverterFixtureError),
     });
   }

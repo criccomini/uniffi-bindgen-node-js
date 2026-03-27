@@ -557,6 +557,7 @@ assert.throws(() => Config.from_json("not-json"), (error) => {
 
 const reader = await new ReaderBuilder(true).build();
 assert.equal(reader.label(), "ready");
+assert.equal(await reader.label_async(), "ready");
 assert.equal(reader.label(), "ready");
 await assert.rejects(new ReaderBuilder(false).build(), (error) => {
   assert.ok(error instanceof FixtureErrorInvalidState);

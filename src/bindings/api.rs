@@ -2377,7 +2377,7 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
 fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
     match return_type {
         Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(format!(
-            "(uniffiResult) => {}.create(uniffiResult)",
+            "(uniffiResult) => {}.createRetyped(uniffiResult)",
             object_factory_name(name)
         )),
         Some(return_type) => Ok(format!(
@@ -2393,29 +2393,10 @@ fn render_js_async_complete_setup(
     complete_identifier: &str,
     indent: &str,
 ) -> Result<Vec<String>> {
-    match return_type {
-        Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(vec![
-            format!("{indent}const completeFunc = (() => {{"),
-            format!("{indent}  const bindings = getFfiBindings();"),
-            format!("{indent}  const completePointer = bindings.library.func("),
-            format!("{indent}    {},", json_string_literal(complete_identifier)?),
-            format!(
-                "{indent}    bindings.ffiTypes.{},",
-                ffi_opaque_identifier(name)
-            ),
-            format!(
-                "{indent}    [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
-            ),
-            format!("{indent}  );"),
-            format!(
-                "{indent}  return (rustFuture, status) => completePointer(rustFuture, status);"
-            ),
-            format!("{indent}}})();"),
-        ]),
-        _ => Ok(vec![format!(
-            "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
-        )]),
-    }
+    let _ = return_type;
+    Ok(vec![format!(
+        "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
+    )])
 }
 
 fn render_js_type_converter_expression(type_: &Type) -> Result<String> {
@@ -3819,7 +3800,7 @@ mod tests {
         );
         assert!(
             rendered.js.contains(
-                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.create(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.createRetyped(uniffiResult),"
             ),
             "unexpected JS output: {}",
             rendered.js

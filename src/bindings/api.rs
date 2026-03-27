@@ -954,15 +954,24 @@ fn render_js_callback_interface_converter(
     for method in &callback_interface.methods {
         lines.push(String::new());
         lines.push(format!(
-            "  {}({}) {{",
+            "  {}{}({}) {{",
+            if method.is_async { "async " } else { "" },
             js_member_identifier(&method.name),
             render_js_params(&method.arguments)
         ));
-        lines.extend(render_js_sync_method_body(
-            method,
-            &factory_name,
-            &callback_interface.name,
-        )?);
+        if method.is_async {
+            lines.extend(render_js_async_method_body(
+                method,
+                &factory_name,
+                &callback_interface.name,
+            )?);
+        } else {
+            lines.extend(render_js_sync_method_body(
+                method,
+                &factory_name,
+                &callback_interface.name,
+            )?);
+        }
         lines.push("  }".to_string());
     }
     lines.push("}".to_string());
@@ -3541,6 +3550,60 @@ mod tests {
         );
         assert!(
             !rendered.js.contains("init_logging is not implemented yet"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_async_callback_proxy_methods() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                void init_logging(LogCallback callback);
+            };
+
+            callback interface LogCallback {
+                [Async] string log(string message);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered.dts.contains(
+                "export interface LogCallback {\n  log(message: string): Promise<string>;\n}"
+            ),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .js
+                .contains("class UniffiLogCallbackProxy extends UniffiObjectBase {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("  async log(message) {"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("    return rustCallAsync({"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains(
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );

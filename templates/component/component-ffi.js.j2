@@ -156,6 +156,9 @@ function createBindings(libraryPath) {
   const ffiFunctions = Object.freeze({
 {% for function in context.functions %}
     {{ function.identifier }}: library.func({{ function.name_json }}, {{ function.return_type_expr }}, [{% for argument_type_expr in function.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]),
+{% if function.generic_identifier.is_some() %}
+    {{ function.generic_identifier.as_ref().unwrap() }}: library.func({{ function.name_json }}, {{ function.return_type_expr }}, [{% for argument_type_expr in function.generic_argument_type_exprs.as_ref().unwrap() %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]),
+{% endif %}
 {% endfor %}
   });
 
@@ -301,6 +304,17 @@ export const ffiFunctions = Object.freeze({
     return result;
 {% endif %}
   },
+{% if function.generic_identifier.is_some() %}
+
+  {{ function.generic_identifier.as_ref().unwrap() }}(...args) {
+    const result = getFfiBindings().ffiFunctions.{{ function.generic_identifier.as_ref().unwrap() }}(...args);
+{% if let Some(return_normalizer) = function.return_normalizer %}
+    return {{ return_normalizer }}(result);
+{% else %}
+    return result;
+{% endif %}
+  },
+{% endif %}
 {% endfor %}
 });
 
@@ -309,4 +323,10 @@ export function {{ function.identifier }}(...args) {
   return ffiFunctions.{{ function.identifier }}(...args);
 }
 
+{% if function.generic_identifier.is_some() %}
+export function {{ function.generic_identifier.as_ref().unwrap() }}(...args) {
+  return ffiFunctions.{{ function.generic_identifier.as_ref().unwrap() }}(...args);
+}
+
+{% endif %}
 {% endfor %}

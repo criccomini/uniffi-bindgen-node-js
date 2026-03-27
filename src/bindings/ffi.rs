@@ -249,17 +249,20 @@ struct StructFieldModel {
 #[derive(Debug, Clone, Serialize)]
 struct FunctionModel {
     identifier: String,
+    generic_identifier: Option<String>,
     name_json: String,
     return_type_expr: String,
     argument_type_exprs: Vec<String>,
+    generic_argument_type_exprs: Option<Vec<String>>,
     return_normalizer: Option<String>,
 }
 
 impl FunctionModel {
     fn from_function(function: &FfiFunction) -> Self {
-        let mut argument_type_exprs = function
-            .arguments()
-            .into_iter()
+        let arguments = function.arguments();
+        let mut argument_type_exprs = arguments
+            .iter()
+            .copied()
             .map(FfiArgument::type_)
             .map(render_type_expr)
             .collect::<Vec<_>>();
@@ -267,11 +270,37 @@ impl FunctionModel {
             argument_type_exprs.push("koffi.pointer(ffiTypes.RustCallStatus)".to_string());
         }
 
+        let generic_argument_type_exprs = match arguments.first().copied().map(FfiArgument::type_) {
+            Some(FfiType::RustArcPtr(_)) => {
+                let mut generic_argument_type_exprs = arguments
+                    .iter()
+                    .enumerate()
+                    .map(|(index, argument)| {
+                        if index == 0 {
+                            "ffiTypes.RustArcPtr".to_string()
+                        } else {
+                            render_type_expr(argument.type_())
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if function.has_rust_call_status_arg() {
+                    generic_argument_type_exprs
+                        .push("koffi.pointer(ffiTypes.RustCallStatus)".to_string());
+                }
+                Some(generic_argument_type_exprs)
+            }
+            _ => None,
+        };
+
         Self {
             identifier: js_identifier(function.name()),
+            generic_identifier: generic_argument_type_exprs
+                .as_ref()
+                .map(|_| format!("{}_generic_abi", js_identifier(function.name()))),
             name_json: json_string(function.name()).expect("FFI function names should serialize"),
             return_type_expr: render_optional_type_expr(function.return_type()),
             argument_type_exprs,
+            generic_argument_type_exprs,
             return_normalizer: function
                 .return_type()
                 .and_then(render_return_normalizer_expr),
@@ -370,7 +399,6 @@ fn render_type_expr(type_: FfiType) -> String {
         FfiType::VoidPointer => "ffiTypes.VoidPointer".to_string(),
     }
 }
-
 
 fn opaque_type_name(name: &str) -> String {
     format!("RustArcPtr{name}")

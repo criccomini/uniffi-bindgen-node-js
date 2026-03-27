@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -449,8 +450,12 @@ export class Config extends UniffiObjectBase {
 
   value() {
     const loweredSelf = uniffiConfigObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiConfigObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_config_value_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_config_value;
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_config_value(loweredSelf, status),
+      (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
     return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
@@ -461,37 +466,21 @@ const uniffiConfigObjectFactory = createObjectFactory({
   typeName: "Config",
   createInstance: () => Object.create(Config.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrConfig,
-  retypeHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericCloneHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_clone_config",
-      bindings.ffiTypes.RustArcPtrConfig,
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    const clonedHandle = uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
-      uniffiRustCallOptions(),
-    );
-    return {
-      adoptedHandle: handle,
-      handle: clonedHandle,
-    };
-  },
-  freeRetypedHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericFreeHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_free_config",
-      "void",
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    uniffiRustCaller.rustCall(
-      (status) => genericFreeHandle(handle, status),
+  cloneHandleGeneric(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_config_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_config(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleGeneric(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_config_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -512,8 +501,12 @@ export class Reader extends UniffiObjectBase {
 
   label() {
     const loweredSelf = uniffiReaderObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiReaderObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_reader_label_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_reader_label;
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_reader_label(loweredSelf, status),
+      (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
     return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
@@ -524,37 +517,21 @@ const uniffiReaderObjectFactory = createObjectFactory({
   typeName: "Reader",
   createInstance: () => Object.create(Reader.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrReader,
-  retypeHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericCloneHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_clone_reader",
-      bindings.ffiTypes.RustArcPtrReader,
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    const clonedHandle = uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
-      uniffiRustCallOptions(),
-    );
-    return {
-      adoptedHandle: handle,
-      handle: clonedHandle,
-    };
-  },
-  freeRetypedHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericFreeHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_free_reader",
-      "void",
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    uniffiRustCaller.rustCall(
-      (status) => genericFreeHandle(handle, status),
+  cloneHandleGeneric(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_reader_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_reader(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleGeneric(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_reader_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -580,8 +557,12 @@ export class ReaderBuilder extends UniffiObjectBase {
 
   async build() {
     const loweredSelf = uniffiReaderBuilderObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiReaderBuilderObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build;
     return rustCallAsync({
-      rustFutureFunc: () => ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(loweredSelf),
+      rustFutureFunc: () => ffiMethod(loweredSelf),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(rustFuture, status),
@@ -596,37 +577,21 @@ const uniffiReaderBuilderObjectFactory = createObjectFactory({
   typeName: "ReaderBuilder",
   createInstance: () => Object.create(ReaderBuilder.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrReaderBuilder,
-  retypeHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericCloneHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_clone_readerbuilder",
-      bindings.ffiTypes.RustArcPtrReaderBuilder,
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    const clonedHandle = uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
-      uniffiRustCallOptions(),
-    );
-    return {
-      adoptedHandle: handle,
-      handle: clonedHandle,
-    };
-  },
-  freeRetypedHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericFreeHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_free_readerbuilder",
-      "void",
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    uniffiRustCaller.rustCall(
-      (status) => genericFreeHandle(handle, status),
+  cloneHandleGeneric(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleGeneric(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -652,8 +617,12 @@ export class Store extends UniffiObjectBase {
 
   current() {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_current_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_current;
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_current(loweredSelf, status),
+      (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
     return uniffiLiftFromRustBuffer(FfiConverterBlobRecord, uniffiResult);
@@ -661,9 +630,13 @@ export class Store extends UniffiObjectBase {
 
   async fetch_async(succeed) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async;
     const loweredSucceed = FfiConverterBool.lower(succeed);
     return rustCallAsync({
-      rustFutureFunc: () => ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async(loweredSelf, loweredSucceed),
+      rustFutureFunc: () => ffiMethod(loweredSelf, loweredSucceed),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_basic_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_basic_rust_future_cancel_rust_buffer(rustFuture),
       completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_basic_rust_future_complete_rust_buffer(rustFuture, status),
@@ -675,8 +648,12 @@ export class Store extends UniffiObjectBase {
 
   flavor() {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor;
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor(loweredSelf, status),
+      (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
     return uniffiLiftFromRustBuffer(FfiConverterFlavor, uniffiResult);
@@ -684,9 +661,13 @@ export class Store extends UniffiObjectBase {
 
   inspect(include_payload) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect;
     const loweredIncludePayload = FfiConverterBool.lower(include_payload);
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect(loweredSelf, loweredIncludePayload, status),
+      (status) => ffiMethod(loweredSelf, loweredIncludePayload, status),
       uniffiRustCallOptions(),
     );
     return uniffiLiftFromRustBuffer(FfiConverterScanResult, uniffiResult);
@@ -694,9 +675,13 @@ export class Store extends UniffiObjectBase {
 
   replace(next_value) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_replace_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_replace;
     const loweredNextValue = uniffiLowerIntoRustBuffer(FfiConverterBytes, next_value);
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_replace(loweredSelf, loweredNextValue, status),
+      (status) => ffiMethod(loweredSelf, loweredNextValue, status),
       uniffiRustCallOptions(),
     );
     return uniffiLiftFromRustBuffer(FfiConverterBytes, uniffiResult);
@@ -704,9 +689,13 @@ export class Store extends UniffiObjectBase {
 
   require_value(present) {
     const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value;
     const loweredPresent = FfiConverterBool.lower(present);
     const uniffiResult = uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value(loweredSelf, loweredPresent, status),
+      (status) => ffiMethod(loweredSelf, loweredPresent, status),
       uniffiRustCallOptions(FfiConverterFixtureError),
     );
     return uniffiLiftFromRustBuffer(FfiConverterBytes, uniffiResult);
@@ -717,37 +706,21 @@ const uniffiStoreObjectFactory = createObjectFactory({
   typeName: "Store",
   createInstance: () => Object.create(Store.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrStore,
-  retypeHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericCloneHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_clone_store",
-      bindings.ffiTypes.RustArcPtrStore,
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    const clonedHandle = uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
-      uniffiRustCallOptions(),
-    );
-    return {
-      adoptedHandle: handle,
-      handle: clonedHandle,
-    };
-  },
-  freeRetypedHandle(handle) {
-    const bindings = getFfiBindings();
-    const genericFreeHandle = bindings.library.func(
-      "uniffi_fixture_basic_fn_free_store",
-      "void",
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-    );
-    uniffiRustCaller.rustCall(
-      (status) => genericFreeHandle(handle, status),
+  cloneHandleGeneric(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_store_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
   cloneHandle(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_store(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleGeneric(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.uniffi_fixture_basic_fn_free_store_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -1194,189 +1167,316 @@ function createBindings(libraryPath) {
 
     uniffi_fixture_basic_fn_clone_config: library.func("uniffi_fixture_basic_fn_clone_config", ffiTypes.RustArcPtrConfig, [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_clone_config_generic_abi: library.func("uniffi_fixture_basic_fn_clone_config", ffiTypes.RustArcPtrConfig, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_free_config: library.func("uniffi_fixture_basic_fn_free_config", "void", [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_free_config_generic_abi: library.func("uniffi_fixture_basic_fn_free_config", "void", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_constructor_config_from_json: library.func("uniffi_fixture_basic_fn_constructor_config_from_json", ffiTypes.RustArcPtrConfig, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+
     uniffi_fixture_basic_fn_method_config_value: library.func("uniffi_fixture_basic_fn_method_config_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_config_value_generic_abi: library.func("uniffi_fixture_basic_fn_method_config_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_clone_reader: library.func("uniffi_fixture_basic_fn_clone_reader", ffiTypes.RustArcPtrReader, [ffiTypes.RustArcPtrReader, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_clone_reader_generic_abi: library.func("uniffi_fixture_basic_fn_clone_reader", ffiTypes.RustArcPtrReader, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_free_reader: library.func("uniffi_fixture_basic_fn_free_reader", "void", [ffiTypes.RustArcPtrReader, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_free_reader_generic_abi: library.func("uniffi_fixture_basic_fn_free_reader", "void", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_method_reader_label: library.func("uniffi_fixture_basic_fn_method_reader_label", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrReader, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_method_reader_label_generic_abi: library.func("uniffi_fixture_basic_fn_method_reader_label", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_clone_readerbuilder: library.func("uniffi_fixture_basic_fn_clone_readerbuilder", ffiTypes.RustArcPtrReaderBuilder, [ffiTypes.RustArcPtrReaderBuilder, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi: library.func("uniffi_fixture_basic_fn_clone_readerbuilder", ffiTypes.RustArcPtrReaderBuilder, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_free_readerbuilder: library.func("uniffi_fixture_basic_fn_free_readerbuilder", "void", [ffiTypes.RustArcPtrReaderBuilder, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_free_readerbuilder_generic_abi: library.func("uniffi_fixture_basic_fn_free_readerbuilder", "void", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_constructor_readerbuilder_new: library.func("uniffi_fixture_basic_fn_constructor_readerbuilder_new", ffiTypes.RustArcPtrReaderBuilder, ["int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_method_readerbuilder_build: library.func("uniffi_fixture_basic_fn_method_readerbuilder_build", ffiTypes.UniffiHandle, [ffiTypes.RustArcPtrReaderBuilder]),
 
+    uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi: library.func("uniffi_fixture_basic_fn_method_readerbuilder_build", ffiTypes.UniffiHandle, [ffiTypes.RustArcPtr]),
+
+
     uniffi_fixture_basic_fn_clone_store: library.func("uniffi_fixture_basic_fn_clone_store", ffiTypes.RustArcPtrStore, [ffiTypes.RustArcPtrStore, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_clone_store_generic_abi: library.func("uniffi_fixture_basic_fn_clone_store", ffiTypes.RustArcPtrStore, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_free_store: library.func("uniffi_fixture_basic_fn_free_store", "void", [ffiTypes.RustArcPtrStore, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_free_store_generic_abi: library.func("uniffi_fixture_basic_fn_free_store", "void", [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_constructor_store_new: library.func("uniffi_fixture_basic_fn_constructor_store_new", ffiTypes.RustArcPtrStore, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_method_store_current: library.func("uniffi_fixture_basic_fn_method_store_current", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrStore, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_method_store_current_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_current", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_method_store_fetch_async: library.func("uniffi_fixture_basic_fn_method_store_fetch_async", ffiTypes.UniffiHandle, [ffiTypes.RustArcPtrStore, "int8_t"]),
+
+    uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_fetch_async", ffiTypes.UniffiHandle, [ffiTypes.RustArcPtr, "int8_t"]),
+
 
     uniffi_fixture_basic_fn_method_store_flavor: library.func("uniffi_fixture_basic_fn_method_store_flavor", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrStore, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_method_store_flavor_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_flavor", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_method_store_inspect: library.func("uniffi_fixture_basic_fn_method_store_inspect", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrStore, "int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_store_inspect_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_inspect", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, "int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_method_store_replace: library.func("uniffi_fixture_basic_fn_method_store_replace", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrStore, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+    uniffi_fixture_basic_fn_method_store_replace_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_replace", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_method_store_require_value: library.func("uniffi_fixture_basic_fn_method_store_require_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrStore, "int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_store_require_value_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_require_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, "int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_fn_func_echo_bytes: library.func("uniffi_fixture_basic_fn_func_echo_bytes", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+
     uniffi_fixture_basic_fn_func_echo_record: library.func("uniffi_fixture_basic_fn_func_echo_record", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rustbuffer_alloc: library.func("ffi_fixture_basic_rustbuffer_alloc", ffiTypes.RustBuffer, ["uint64_t", koffi.pointer(ffiTypes.RustCallStatus)]),
 
+
     ffi_fixture_basic_rustbuffer_from_bytes: library.func("ffi_fixture_basic_rustbuffer_from_bytes", ffiTypes.RustBuffer, [ffiTypes.ForeignBytes, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rustbuffer_free: library.func("ffi_fixture_basic_rustbuffer_free", "void", [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
+
     ffi_fixture_basic_rustbuffer_reserve: library.func("ffi_fixture_basic_rustbuffer_reserve", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, "uint64_t", koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_u8: library.func("ffi_fixture_basic_rust_future_poll_u8", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_u8: library.func("ffi_fixture_basic_rust_future_cancel_u8", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_u8: library.func("ffi_fixture_basic_rust_future_free_u8", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_u8: library.func("ffi_fixture_basic_rust_future_complete_u8", "uint8_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_i8: library.func("ffi_fixture_basic_rust_future_poll_i8", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_i8: library.func("ffi_fixture_basic_rust_future_cancel_i8", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_i8: library.func("ffi_fixture_basic_rust_future_free_i8", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_i8: library.func("ffi_fixture_basic_rust_future_complete_i8", "int8_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_u16: library.func("ffi_fixture_basic_rust_future_poll_u16", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_u16: library.func("ffi_fixture_basic_rust_future_cancel_u16", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_u16: library.func("ffi_fixture_basic_rust_future_free_u16", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_u16: library.func("ffi_fixture_basic_rust_future_complete_u16", "uint16_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_i16: library.func("ffi_fixture_basic_rust_future_poll_i16", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_i16: library.func("ffi_fixture_basic_rust_future_cancel_i16", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_i16: library.func("ffi_fixture_basic_rust_future_free_i16", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_i16: library.func("ffi_fixture_basic_rust_future_complete_i16", "int16_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_u32: library.func("ffi_fixture_basic_rust_future_poll_u32", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_u32: library.func("ffi_fixture_basic_rust_future_cancel_u32", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_u32: library.func("ffi_fixture_basic_rust_future_free_u32", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_u32: library.func("ffi_fixture_basic_rust_future_complete_u32", "uint32_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_i32: library.func("ffi_fixture_basic_rust_future_poll_i32", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_i32: library.func("ffi_fixture_basic_rust_future_cancel_i32", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_i32: library.func("ffi_fixture_basic_rust_future_free_i32", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_i32: library.func("ffi_fixture_basic_rust_future_complete_i32", "int32_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_u64: library.func("ffi_fixture_basic_rust_future_poll_u64", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_u64: library.func("ffi_fixture_basic_rust_future_cancel_u64", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_u64: library.func("ffi_fixture_basic_rust_future_free_u64", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_u64: library.func("ffi_fixture_basic_rust_future_complete_u64", "uint64_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_i64: library.func("ffi_fixture_basic_rust_future_poll_i64", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_i64: library.func("ffi_fixture_basic_rust_future_cancel_i64", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_i64: library.func("ffi_fixture_basic_rust_future_free_i64", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_i64: library.func("ffi_fixture_basic_rust_future_complete_i64", "int64_t", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_f32: library.func("ffi_fixture_basic_rust_future_poll_f32", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_f32: library.func("ffi_fixture_basic_rust_future_cancel_f32", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_f32: library.func("ffi_fixture_basic_rust_future_free_f32", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_f32: library.func("ffi_fixture_basic_rust_future_complete_f32", "float", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_f64: library.func("ffi_fixture_basic_rust_future_poll_f64", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_f64: library.func("ffi_fixture_basic_rust_future_cancel_f64", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_f64: library.func("ffi_fixture_basic_rust_future_free_f64", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_f64: library.func("ffi_fixture_basic_rust_future_complete_f64", "double", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_pointer: library.func("ffi_fixture_basic_rust_future_poll_pointer", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_pointer: library.func("ffi_fixture_basic_rust_future_cancel_pointer", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_pointer: library.func("ffi_fixture_basic_rust_future_free_pointer", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_pointer: library.func("ffi_fixture_basic_rust_future_complete_pointer", ffiTypes.RustArcPtr, [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_rust_buffer: library.func("ffi_fixture_basic_rust_future_poll_rust_buffer", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_rust_buffer: library.func("ffi_fixture_basic_rust_future_cancel_rust_buffer", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_rust_buffer: library.func("ffi_fixture_basic_rust_future_free_rust_buffer", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_rust_buffer: library.func("ffi_fixture_basic_rust_future_complete_rust_buffer", ffiTypes.RustBuffer, [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     ffi_fixture_basic_rust_future_poll_void: library.func("ffi_fixture_basic_rust_future_poll_void", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiCallbacks.RustFutureContinuationCallback), ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_cancel_void: library.func("ffi_fixture_basic_rust_future_cancel_void", "void", [ffiTypes.UniffiHandle]),
+
 
     ffi_fixture_basic_rust_future_free_void: library.func("ffi_fixture_basic_rust_future_free_void", "void", [ffiTypes.UniffiHandle]),
 
+
     ffi_fixture_basic_rust_future_complete_void: library.func("ffi_fixture_basic_rust_future_complete_void", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
+
 
     uniffi_fixture_basic_checksum_func_echo_bytes: library.func("uniffi_fixture_basic_checksum_func_echo_bytes", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_func_echo_record: library.func("uniffi_fixture_basic_checksum_func_echo_record", "uint16_t", []),
+
 
     uniffi_fixture_basic_checksum_method_config_value: library.func("uniffi_fixture_basic_checksum_method_config_value", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_method_reader_label: library.func("uniffi_fixture_basic_checksum_method_reader_label", "uint16_t", []),
+
 
     uniffi_fixture_basic_checksum_method_readerbuilder_build: library.func("uniffi_fixture_basic_checksum_method_readerbuilder_build", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_method_store_current: library.func("uniffi_fixture_basic_checksum_method_store_current", "uint16_t", []),
+
 
     uniffi_fixture_basic_checksum_method_store_fetch_async: library.func("uniffi_fixture_basic_checksum_method_store_fetch_async", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_method_store_flavor: library.func("uniffi_fixture_basic_checksum_method_store_flavor", "uint16_t", []),
+
 
     uniffi_fixture_basic_checksum_method_store_inspect: library.func("uniffi_fixture_basic_checksum_method_store_inspect", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_method_store_replace: library.func("uniffi_fixture_basic_checksum_method_store_replace", "uint16_t", []),
+
 
     uniffi_fixture_basic_checksum_method_store_require_value: library.func("uniffi_fixture_basic_checksum_method_store_require_value", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_constructor_config_from_json: library.func("uniffi_fixture_basic_checksum_constructor_config_from_json", "uint16_t", []),
+
 
     uniffi_fixture_basic_checksum_constructor_readerbuilder_new: library.func("uniffi_fixture_basic_checksum_constructor_readerbuilder_new", "uint16_t", []),
 
+
     uniffi_fixture_basic_checksum_constructor_store_new: library.func("uniffi_fixture_basic_checksum_constructor_store_new", "uint16_t", []),
 
+
     ffi_fixture_basic_uniffi_contract_version: library.func("ffi_fixture_basic_uniffi_contract_version", "uint32_t", []),
+
 
   });
 
@@ -1647,12 +1747,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_clone_config_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_config_generic_abi(...args);
+
+    return result;
+
+  },
+
+
   uniffi_fixture_basic_fn_free_config(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_config(...args);
 
     return result;
 
   },
+
+
+  uniffi_fixture_basic_fn_free_config_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_config_generic_abi(...args);
+
+    return result;
+
+  },
+
 
   uniffi_fixture_basic_fn_constructor_config_from_json(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_config_from_json(...args);
@@ -1661,12 +1779,22 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_fn_method_config_value(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_config_value(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
+
+  uniffi_fixture_basic_fn_method_config_value_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_config_value_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
 
   uniffi_fixture_basic_fn_clone_reader(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_reader(...args);
@@ -1675,12 +1803,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_clone_reader_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_reader_generic_abi(...args);
+
+    return result;
+
+  },
+
+
   uniffi_fixture_basic_fn_free_reader(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_reader(...args);
 
     return result;
 
   },
+
+
+  uniffi_fixture_basic_fn_free_reader_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_reader_generic_abi(...args);
+
+    return result;
+
+  },
+
 
   uniffi_fixture_basic_fn_method_reader_label(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_reader_label(...args);
@@ -1689,12 +1835,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_clone_readerbuilder(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(...args);
 
     return result;
 
   },
+
+
+  uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args);
+
+    return result;
+
+  },
+
 
   uniffi_fixture_basic_fn_free_readerbuilder(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder(...args);
@@ -1703,12 +1867,22 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args);
+
+    return result;
+
+  },
+
+
   uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_fn_method_readerbuilder_build(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(...args);
@@ -1717,12 +1891,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args);
+
+    return normalizeHandle(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_clone_store(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_store(...args);
 
     return result;
 
   },
+
+
+  uniffi_fixture_basic_fn_clone_store_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_store_generic_abi(...args);
+
+    return result;
+
+  },
+
 
   uniffi_fixture_basic_fn_free_store(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_store(...args);
@@ -1731,12 +1923,22 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_free_store_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_store_generic_abi(...args);
+
+    return result;
+
+  },
+
+
   uniffi_fixture_basic_fn_constructor_store_new(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_store_new(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_fn_method_store_current(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_current(...args);
@@ -1745,12 +1947,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_method_store_current_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_current_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_method_store_fetch_async(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async(...args);
 
     return normalizeHandle(result);
 
   },
+
+
+  uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args);
+
+    return normalizeHandle(result);
+
+  },
+
 
   uniffi_fixture_basic_fn_method_store_flavor(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor(...args);
@@ -1759,12 +1979,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_method_store_inspect(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
+
+  uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
 
   uniffi_fixture_basic_fn_method_store_replace(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_replace(...args);
@@ -1773,12 +2011,30 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
+  uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_method_store_require_value(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
+
+  uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
 
   uniffi_fixture_basic_fn_func_echo_bytes(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_func_echo_bytes(...args);
@@ -1787,12 +2043,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_fn_func_echo_record(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_func_echo_record(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
 
   ffi_fixture_basic_rustbuffer_alloc(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_alloc(...args);
@@ -1801,12 +2059,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rustbuffer_from_bytes(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_from_bytes(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
 
   ffi_fixture_basic_rustbuffer_free(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_free(...args);
@@ -1815,12 +2075,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rustbuffer_reserve(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_reserve(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_u8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u8(...args);
@@ -1829,12 +2091,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_u8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u8(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_u8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u8(...args);
@@ -1843,12 +2107,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_u8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u8(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_i8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i8(...args);
@@ -1857,12 +2123,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_i8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i8(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_i8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i8(...args);
@@ -1871,12 +2139,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_i8(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i8(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_u16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u16(...args);
@@ -1885,12 +2155,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_u16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u16(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_u16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u16(...args);
@@ -1899,12 +2171,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_u16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u16(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_i16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i16(...args);
@@ -1913,12 +2187,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_i16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i16(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_i16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i16(...args);
@@ -1927,12 +2203,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_i16(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i16(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_u32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u32(...args);
@@ -1941,12 +2219,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_u32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u32(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_u32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u32(...args);
@@ -1955,12 +2235,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_u32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u32(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_i32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i32(...args);
@@ -1969,12 +2251,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_i32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i32(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_i32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i32(...args);
@@ -1983,12 +2267,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_i32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i32(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_u64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u64(...args);
@@ -1997,12 +2283,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_u64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u64(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_u64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u64(...args);
@@ -2011,12 +2299,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_u64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u64(...args);
 
     return normalizeUInt64(result);
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_i64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i64(...args);
@@ -2025,12 +2315,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_i64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i64(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_i64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i64(...args);
@@ -2039,12 +2331,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_i64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i64(...args);
 
     return normalizeInt64(result);
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_f32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_f32(...args);
@@ -2053,12 +2347,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_f32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_f32(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_f32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_f32(...args);
@@ -2067,12 +2363,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_f32(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_f32(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_f64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_f64(...args);
@@ -2081,12 +2379,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_f64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_f64(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_f64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_f64(...args);
@@ -2095,12 +2395,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_f64(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_f64(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_pointer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(...args);
@@ -2109,12 +2411,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_pointer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_pointer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_pointer(...args);
@@ -2123,12 +2427,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_pointer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_rust_buffer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_rust_buffer(...args);
@@ -2137,12 +2443,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_rust_buffer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_rust_buffer(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_rust_buffer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_rust_buffer(...args);
@@ -2151,12 +2459,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_rust_buffer(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_rust_buffer(...args);
 
     return normalizeRustBuffer(result);
 
   },
+
 
   ffi_fixture_basic_rust_future_poll_void(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_void(...args);
@@ -2165,12 +2475,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_cancel_void(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_void(...args);
 
     return result;
 
   },
+
 
   ffi_fixture_basic_rust_future_free_void(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_void(...args);
@@ -2179,12 +2491,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_rust_future_complete_void(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_void(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_bytes(...args);
@@ -2193,12 +2507,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_func_echo_record(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_method_config_value(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_config_value(...args);
@@ -2207,12 +2523,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_method_reader_label(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_reader_label(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_method_readerbuilder_build(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_readerbuilder_build(...args);
@@ -2221,12 +2539,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_method_store_current(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_current(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_method_store_fetch_async(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_fetch_async(...args);
@@ -2235,12 +2555,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_method_store_flavor(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_flavor(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_method_store_inspect(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_inspect(...args);
@@ -2249,12 +2571,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_method_store_replace(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_replace(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_method_store_require_value(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_require_value(...args);
@@ -2263,12 +2587,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_constructor_config_from_json(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(...args);
 
     return result;
 
   },
+
 
   uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args);
@@ -2277,6 +2603,7 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   uniffi_fixture_basic_checksum_constructor_store_new(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_store_new(...args);
 
@@ -2284,12 +2611,14 @@ export const ffiFunctions = Object.freeze({
 
   },
 
+
   ffi_fixture_basic_uniffi_contract_version(...args) {
     const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_uniffi_contract_version(...args);
 
     return result;
 
   },
+
 
 });
 
@@ -2299,9 +2628,21 @@ export function uniffi_fixture_basic_fn_clone_config(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_clone_config_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_config_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_free_config(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_free_config(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_free_config_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_config_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_constructor_config_from_json(...args) {
@@ -2309,9 +2650,16 @@ export function uniffi_fixture_basic_fn_constructor_config_from_json(...args) {
 }
 
 
+
 export function uniffi_fixture_basic_fn_method_config_value(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_method_config_value(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_method_config_value_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_config_value_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_clone_reader(...args) {
@@ -2319,9 +2667,21 @@ export function uniffi_fixture_basic_fn_clone_reader(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_clone_reader_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_reader_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_free_reader(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_free_reader(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_free_reader_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_reader_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_method_reader_label(...args) {
@@ -2329,9 +2689,21 @@ export function uniffi_fixture_basic_fn_method_reader_label(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_clone_readerbuilder(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_free_readerbuilder(...args) {
@@ -2339,9 +2711,16 @@ export function uniffi_fixture_basic_fn_free_readerbuilder(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args);
 }
+
 
 
 export function uniffi_fixture_basic_fn_method_readerbuilder_build(...args) {
@@ -2349,9 +2728,21 @@ export function uniffi_fixture_basic_fn_method_readerbuilder_build(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_clone_store(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_clone_store(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_clone_store_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_clone_store_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_free_store(...args) {
@@ -2359,9 +2750,16 @@ export function uniffi_fixture_basic_fn_free_store(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_free_store_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_free_store_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_constructor_store_new(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_constructor_store_new(...args);
 }
+
 
 
 export function uniffi_fixture_basic_fn_method_store_current(...args) {
@@ -2369,9 +2767,21 @@ export function uniffi_fixture_basic_fn_method_store_current(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_method_store_current_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_current_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_method_store_fetch_async(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_method_store_flavor(...args) {
@@ -2379,9 +2789,21 @@ export function uniffi_fixture_basic_fn_method_store_flavor(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_method_store_inspect(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_method_store_replace(...args) {
@@ -2389,9 +2811,21 @@ export function uniffi_fixture_basic_fn_method_store_replace(...args) {
 }
 
 
+export function uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_method_store_require_value(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value(...args);
 }
+
+
+export function uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args);
+}
+
 
 
 export function uniffi_fixture_basic_fn_func_echo_bytes(...args) {
@@ -2399,9 +2833,11 @@ export function uniffi_fixture_basic_fn_func_echo_bytes(...args) {
 }
 
 
+
 export function uniffi_fixture_basic_fn_func_echo_record(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_func_echo_record(...args);
 }
+
 
 
 export function ffi_fixture_basic_rustbuffer_alloc(...args) {
@@ -2409,9 +2845,11 @@ export function ffi_fixture_basic_rustbuffer_alloc(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rustbuffer_from_bytes(...args) {
   return ffiFunctions.ffi_fixture_basic_rustbuffer_from_bytes(...args);
 }
+
 
 
 export function ffi_fixture_basic_rustbuffer_free(...args) {
@@ -2419,9 +2857,11 @@ export function ffi_fixture_basic_rustbuffer_free(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rustbuffer_reserve(...args) {
   return ffiFunctions.ffi_fixture_basic_rustbuffer_reserve(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_u8(...args) {
@@ -2429,9 +2869,11 @@ export function ffi_fixture_basic_rust_future_poll_u8(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_u8(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_u8(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_u8(...args) {
@@ -2439,9 +2881,11 @@ export function ffi_fixture_basic_rust_future_free_u8(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_u8(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_u8(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_i8(...args) {
@@ -2449,9 +2893,11 @@ export function ffi_fixture_basic_rust_future_poll_i8(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_i8(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_i8(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_i8(...args) {
@@ -2459,9 +2905,11 @@ export function ffi_fixture_basic_rust_future_free_i8(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_i8(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_i8(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_u16(...args) {
@@ -2469,9 +2917,11 @@ export function ffi_fixture_basic_rust_future_poll_u16(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_u16(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_u16(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_u16(...args) {
@@ -2479,9 +2929,11 @@ export function ffi_fixture_basic_rust_future_free_u16(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_u16(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_u16(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_i16(...args) {
@@ -2489,9 +2941,11 @@ export function ffi_fixture_basic_rust_future_poll_i16(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_i16(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_i16(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_i16(...args) {
@@ -2499,9 +2953,11 @@ export function ffi_fixture_basic_rust_future_free_i16(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_i16(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_i16(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_u32(...args) {
@@ -2509,9 +2965,11 @@ export function ffi_fixture_basic_rust_future_poll_u32(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_u32(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_u32(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_u32(...args) {
@@ -2519,9 +2977,11 @@ export function ffi_fixture_basic_rust_future_free_u32(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_u32(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_u32(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_i32(...args) {
@@ -2529,9 +2989,11 @@ export function ffi_fixture_basic_rust_future_poll_i32(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_i32(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_i32(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_i32(...args) {
@@ -2539,9 +3001,11 @@ export function ffi_fixture_basic_rust_future_free_i32(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_i32(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_i32(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_u64(...args) {
@@ -2549,9 +3013,11 @@ export function ffi_fixture_basic_rust_future_poll_u64(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_u64(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_u64(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_u64(...args) {
@@ -2559,9 +3025,11 @@ export function ffi_fixture_basic_rust_future_free_u64(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_u64(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_u64(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_i64(...args) {
@@ -2569,9 +3037,11 @@ export function ffi_fixture_basic_rust_future_poll_i64(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_i64(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_i64(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_i64(...args) {
@@ -2579,9 +3049,11 @@ export function ffi_fixture_basic_rust_future_free_i64(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_i64(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_i64(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_f32(...args) {
@@ -2589,9 +3061,11 @@ export function ffi_fixture_basic_rust_future_poll_f32(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_f32(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_f32(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_f32(...args) {
@@ -2599,9 +3073,11 @@ export function ffi_fixture_basic_rust_future_free_f32(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_f32(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_f32(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_f64(...args) {
@@ -2609,9 +3085,11 @@ export function ffi_fixture_basic_rust_future_poll_f64(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_f64(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_f64(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_f64(...args) {
@@ -2619,9 +3097,11 @@ export function ffi_fixture_basic_rust_future_free_f64(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_f64(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_f64(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_pointer(...args) {
@@ -2629,9 +3109,11 @@ export function ffi_fixture_basic_rust_future_poll_pointer(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_pointer(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_pointer(...args) {
@@ -2639,9 +3121,11 @@ export function ffi_fixture_basic_rust_future_free_pointer(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_pointer(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_rust_buffer(...args) {
@@ -2649,9 +3133,11 @@ export function ffi_fixture_basic_rust_future_poll_rust_buffer(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_rust_buffer(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_rust_buffer(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_rust_buffer(...args) {
@@ -2659,9 +3145,11 @@ export function ffi_fixture_basic_rust_future_free_rust_buffer(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_rust_buffer(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_rust_buffer(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_poll_void(...args) {
@@ -2669,9 +3157,11 @@ export function ffi_fixture_basic_rust_future_poll_void(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_cancel_void(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_cancel_void(...args);
 }
+
 
 
 export function ffi_fixture_basic_rust_future_free_void(...args) {
@@ -2679,9 +3169,11 @@ export function ffi_fixture_basic_rust_future_free_void(...args) {
 }
 
 
+
 export function ffi_fixture_basic_rust_future_complete_void(...args) {
   return ffiFunctions.ffi_fixture_basic_rust_future_complete_void(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
@@ -2689,9 +3181,11 @@ export function uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
 }
 
 
+
 export function uniffi_fixture_basic_checksum_func_echo_record(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_method_config_value(...args) {
@@ -2699,9 +3193,11 @@ export function uniffi_fixture_basic_checksum_method_config_value(...args) {
 }
 
 
+
 export function uniffi_fixture_basic_checksum_method_reader_label(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_reader_label(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_method_readerbuilder_build(...args) {
@@ -2709,9 +3205,11 @@ export function uniffi_fixture_basic_checksum_method_readerbuilder_build(...args
 }
 
 
+
 export function uniffi_fixture_basic_checksum_method_store_current(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_store_current(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_method_store_fetch_async(...args) {
@@ -2719,9 +3217,11 @@ export function uniffi_fixture_basic_checksum_method_store_fetch_async(...args) 
 }
 
 
+
 export function uniffi_fixture_basic_checksum_method_store_flavor(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_store_flavor(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_method_store_inspect(...args) {
@@ -2729,9 +3229,11 @@ export function uniffi_fixture_basic_checksum_method_store_inspect(...args) {
 }
 
 
+
 export function uniffi_fixture_basic_checksum_method_store_replace(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_store_replace(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_method_store_require_value(...args) {
@@ -2739,9 +3241,11 @@ export function uniffi_fixture_basic_checksum_method_store_require_value(...args
 }
 
 
+
 export function uniffi_fixture_basic_checksum_constructor_config_from_json(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(...args);
 }
+
 
 
 export function uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args) {
@@ -2749,14 +3253,17 @@ export function uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...a
 }
 
 
+
 export function uniffi_fixture_basic_checksum_constructor_store_new(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_constructor_store_new(...args);
 }
 
 
+
 export function ffi_fixture_basic_uniffi_contract_version(...args) {
   return ffiFunctions.ffi_fixture_basic_uniffi_contract_version(...args);
 }
+
 
 
 === fixture-ffi.d.ts ===
@@ -5940,6 +6447,7 @@ import { UnexpectedNullPointer } from "./errors.js";
 import { isNullPointer, normalizeUInt64, pointerAddress } from "./ffi-types.js";
 
 const uniffiFinalizerTokenSymbol = Symbol("uniffi.finalizerToken");
+const uniffiObjectGenericAbiSymbol = Symbol("uniffi.objectGenericAbi");
 const uniffiRetypedHandleCleanupSymbol = Symbol("uniffi.retypedHandleCleanup");
 
 export const uniffiTypeNameSymbol = Symbol("uniffi.typeName");
@@ -6020,7 +6528,9 @@ export class UniffiObjectFactory {
     typeName = "UniFFI object",
     createInstance = () => Object.create(UniffiObjectBase.prototype),
     cloneHandle = undefined,
+    cloneHandleGeneric = undefined,
     freeHandle = undefined,
+    freeHandleGeneric = undefined,
     freeRetypedHandle = undefined,
     handleType = undefined,
     retypeHandle = undefined,
@@ -6030,7 +6540,9 @@ export class UniffiObjectFactory {
     this.typeName = typeName;
     this._createInstance = createInstance;
     this._cloneHandle = cloneHandle;
+    this._cloneHandleGeneric = cloneHandleGeneric;
     this._freeHandle = freeHandle;
+    this._freeHandleGeneric = freeHandleGeneric;
     this._freeRetypedHandle = freeRetypedHandle;
     this._handleType = handleType;
     this._retypeHandle = retypeHandle;
@@ -6038,12 +6550,24 @@ export class UniffiObjectFactory {
     this._deserializeHandle = deserializeHandle;
     this._registry =
       typeof FinalizationRegistry === "undefined"
-      || (typeof freeHandle !== "function" && typeof freeRetypedHandle !== "function")
+      || (
+        typeof freeHandle !== "function"
+        && typeof freeHandleGeneric !== "function"
+        && typeof freeRetypedHandle !== "function"
+      )
         ? null
         : new FinalizationRegistry((record) => {
             try {
-              if (typeof this._freeHandle === "function") {
-                this._freeHandle(this._coerceHandle(record.handle));
+              const freeHandle =
+                record.genericAbi === true
+                  ? this._freeHandleGeneric
+                  : this._freeHandle;
+              if (typeof freeHandle === "function") {
+                freeHandle(
+                  record.genericAbi === true
+                    ? record.handle
+                    : this._coerceHandle(record.handle),
+                );
               }
               if (typeof this._freeRetypedHandle === "function" && record.cleanupHandle != null) {
                 this._freeRetypedHandle(record.cleanupHandle);
@@ -6077,6 +6601,7 @@ export class UniffiObjectFactory {
     instance[uniffiObjectHandleSymbol] = null;
     instance[uniffiObjectDestroyedSymbol] = true;
     instance[uniffiFinalizerTokenSymbol] = null;
+    instance[uniffiObjectGenericAbiSymbol] = false;
     instance[uniffiRetypedHandleCleanupSymbol] = null;
   }
 
@@ -6108,6 +6633,7 @@ export class UniffiObjectFactory {
       this._normalizeHandle(handle),
       `${this.typeName} handle`,
     );
+    const genericAbi = options?.genericAbi === true;
     const cleanupHandle = this._normalizeHandle(options?.cleanupHandle);
     const target = requireObjectInstance(instance, this.typeName);
 
@@ -6135,6 +6661,11 @@ export class UniffiObjectFactory {
         value: false,
         writable: true,
       },
+      [uniffiObjectGenericAbiSymbol]: {
+        configurable: true,
+        value: genericAbi,
+        writable: true,
+      },
       [uniffiRetypedHandleCleanupSymbol]: {
         configurable: true,
         value: cleanupHandle,
@@ -6148,6 +6679,7 @@ export class UniffiObjectFactory {
     });
 
     this._registerFinalizer(target, {
+      genericAbi,
       cleanupHandle,
       handle: normalizedHandle,
     });
@@ -6163,16 +6695,9 @@ export class UniffiObjectFactory {
   }
 
   createRetyped(handle) {
-    const retyped =
-      typeof this._retypeHandle === "function"
-        ? this._retypeHandle(handle)
-        : handle;
-    if (typeof retyped === "object" && retyped != null && "handle" in retyped) {
-      return this.attach(this._createInstance(), retyped.handle, {
-        cleanupHandle: retyped.adoptedHandle ?? null,
-      });
-    }
-    return this.create(retyped);
+    return this.attach(this._createInstance(), handle, {
+      genericAbi: true,
+    });
   }
 
   handle(value) {
@@ -6183,7 +6708,9 @@ export class UniffiObjectFactory {
       this._normalizeHandle(storedHandle(value)),
       `${this.typeName} handle`,
     );
-    return this._coerceHandle(rawHandle);
+    return this.usesGenericAbi(value)
+      ? rawHandle
+      : this._coerceHandle(rawHandle);
   }
 
   peekHandle(value) {
@@ -6195,10 +6722,14 @@ export class UniffiObjectFactory {
 
   cloneHandle(value) {
     const handle = this.handle(value);
-    if (typeof this._cloneHandle !== "function") {
+    const cloneHandle =
+      this.usesGenericAbi(value)
+        ? this._cloneHandleGeneric
+        : this._cloneHandle;
+    if (typeof cloneHandle !== "function") {
       return handle;
     }
-    return requireHandle(this._cloneHandle(handle, value), `${this.typeName} cloned handle`);
+    return requireHandle(cloneHandle(handle, value), `${this.typeName} cloned handle`);
   }
 
   destroy(value) {
@@ -6207,13 +6738,18 @@ export class UniffiObjectFactory {
     }
 
     const handle = this.handle(value);
+    const genericAbi = this.usesGenericAbi(value);
+    const cleanupHandle = value[uniffiRetypedHandleCleanupSymbol];
     this._unregisterFinalizer(value);
     this._markDestroyed(value);
 
-    if (typeof this._freeHandle === "function") {
-      this._freeHandle(handle, value);
+    const freeHandle =
+      genericAbi
+        ? this._freeHandleGeneric
+        : this._freeHandle;
+    if (typeof freeHandle === "function") {
+      freeHandle(handle, value);
     }
-    const cleanupHandle = value[uniffiRetypedHandleCleanupSymbol];
     if (typeof this._freeRetypedHandle === "function" && cleanupHandle != null) {
       this._freeRetypedHandle(cleanupHandle, value);
     }
@@ -6227,6 +6763,10 @@ export class UniffiObjectFactory {
   isDestroyed(value) {
     return this.isInstance(value)
       && (value[uniffiObjectDestroyedSymbol] === true || storedHandle(value) == null);
+  }
+
+  usesGenericAbi(value) {
+    return this.isInstance(value) && value[uniffiObjectGenericAbiSymbol] === true;
   }
 
   serializeHandle(value) {
@@ -6301,7 +6841,9 @@ export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase>
   typeName?: string;
   createInstance?: () => T;
   cloneHandle?: ((handle: unknown, value: T) => unknown) | null;
+  cloneHandleGeneric?: ((handle: unknown, value: T) => unknown) | null;
   freeHandle?: ((handle: unknown, value?: T) => void) | null;
+  freeHandleGeneric?: ((handle: unknown, value?: T) => void) | null;
   freeRetypedHandle?: ((handle: unknown, value?: T) => void) | null;
   handleType?: unknown | (() => unknown) | null;
   retypeHandle?: ((handle: unknown) => unknown) | null;

@@ -1927,46 +1927,12 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
         "  handleType: () => getFfiBindings().ffiTypes.{},",
         ffi_opaque_identifier(&object.name)
     ));
-    lines.push("  retypeHandle(handle) {".to_string());
-    lines.push("    const bindings = getFfiBindings();".to_string());
-    lines.push("    const genericCloneHandle = bindings.library.func(".to_string());
+    lines.push(format!("  cloneHandleGeneric(handle) {{"));
+    lines.push("    return uniffiRustCaller.rustCall(".to_string());
     lines.push(format!(
-        "      {},",
-        json_string_literal(&object.ffi_object_clone_identifier)?
+        "      (status) => ffiFunctions.{}_generic_abi(handle, status),",
+        object.ffi_object_clone_identifier
     ));
-    lines.push(format!(
-        "      bindings.ffiTypes.{},",
-        ffi_opaque_identifier(&object.name)
-    ));
-    lines.push(
-        "      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
-            .to_string(),
-    );
-    lines.push("    );".to_string());
-    lines.push("    const clonedHandle = uniffiRustCaller.rustCall(".to_string());
-    lines.push("      (status) => genericCloneHandle(handle, status),".to_string());
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("    return {".to_string());
-    lines.push("      adoptedHandle: handle,".to_string());
-    lines.push("      handle: clonedHandle,".to_string());
-    lines.push("    };".to_string());
-    lines.push("  },".to_string());
-    lines.push("  freeRetypedHandle(handle) {".to_string());
-    lines.push("    const bindings = getFfiBindings();".to_string());
-    lines.push("    const genericFreeHandle = bindings.library.func(".to_string());
-    lines.push(format!(
-        "      {},",
-        json_string_literal(&object.ffi_object_free_identifier)?
-    ));
-    lines.push("      \"void\",".to_string());
-    lines.push(
-        "      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
-            .to_string(),
-    );
-    lines.push("    );".to_string());
-    lines.push("    uniffiRustCaller.rustCall(".to_string());
-    lines.push("      (status) => genericFreeHandle(handle, status),".to_string());
     lines.push("      uniffiRustCallOptions(),".to_string());
     lines.push("    );".to_string());
     lines.push("  },".to_string());
@@ -1975,6 +1941,15 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
     lines.push(format!(
         "      (status) => ffiFunctions.{}(handle, status),",
         object.ffi_object_clone_identifier
+    ));
+    lines.push("      uniffiRustCallOptions(),".to_string());
+    lines.push("    );".to_string());
+    lines.push("  },".to_string());
+    lines.push("  freeHandleGeneric(handle) {".to_string());
+    lines.push("    uniffiRustCaller.rustCall(".to_string());
+    lines.push(format!(
+        "      (status) => ffiFunctions.{}_generic_abi(handle, status),",
+        object.ffi_object_free_identifier
     ));
     lines.push("      uniffiRustCallOptions(),".to_string());
     lines.push("    );".to_string());
@@ -2194,6 +2169,16 @@ fn render_js_sync_method_body(
         "    const loweredSelf = {}.cloneHandle(this);",
         factory_name
     )];
+    lines.push("    const ffiMethod =".to_string());
+    lines.push(format!("      {}.usesGenericAbi(this)", factory_name));
+    lines.push(format!(
+        "        ? ffiFunctions.{}_generic_abi",
+        method.ffi_func_identifier
+    ));
+    lines.push(format!(
+        "        : ffiFunctions.{};",
+        method.ffi_func_identifier
+    ));
     lines.extend(render_js_argument_lowering(&method.arguments)?);
     let call_args = render_js_ffi_call_args_with_leading(
         &[String::from("loweredSelf")],
@@ -2203,10 +2188,7 @@ fn render_js_sync_method_body(
 
     if let Some(return_type) = method.return_type.as_ref() {
         lines.push("    const uniffiResult = uniffiRustCaller.rustCall(".to_string());
-        lines.push(format!(
-            "      (status) => ffiFunctions.{}({}),",
-            method.ffi_func_identifier, call_args
-        ));
+        lines.push(format!("      (status) => ffiMethod({}),", call_args));
         lines.push(format!(
             "      {},",
             render_js_rust_call_options_expression(method.throws_type.as_ref())?
@@ -2218,10 +2200,7 @@ fn render_js_sync_method_body(
         ));
     } else {
         lines.push("    uniffiRustCaller.rustCall(".to_string());
-        lines.push(format!(
-            "      (status) => ffiFunctions.{}({}),",
-            method.ffi_func_identifier, call_args
-        ));
+        lines.push(format!("      (status) => ffiMethod({}),", call_args));
         lines.push(format!(
             "      {},",
             render_js_rust_call_options_expression(method.throws_type.as_ref())?
@@ -2247,6 +2226,16 @@ fn render_js_async_method_body(
         "    const loweredSelf = {}.cloneHandle(this);",
         factory_name
     )];
+    lines.push("    const ffiMethod =".to_string());
+    lines.push(format!("      {}.usesGenericAbi(this)", factory_name));
+    lines.push(format!(
+        "        ? ffiFunctions.{}_generic_abi",
+        method.ffi_func_identifier
+    ));
+    lines.push(format!(
+        "        : ffiFunctions.{};",
+        method.ffi_func_identifier
+    ));
     lines.extend(render_js_argument_lowering(&method.arguments)?);
     let start_args = render_js_ffi_call_args_with_leading(
         &[String::from("loweredSelf")],
@@ -2256,8 +2245,8 @@ fn render_js_async_method_body(
 
     lines.push("    return rustCallAsync({".to_string());
     lines.push(format!(
-        "      rustFutureFunc: () => ffiFunctions.{}({}),",
-        method.ffi_func_identifier, start_args
+        "      rustFutureFunc: () => ffiMethod({}),",
+        start_args
     ));
     lines.push(format!(
         "      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",

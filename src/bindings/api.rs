@@ -666,6 +666,7 @@ pub(crate) struct AsyncCallbackMethodModel {
     pub complete_identifier: String,
     pub result_struct_identifier: String,
     pub result_struct_has_return_value: bool,
+    pub default_error_return_value_expression: Option<String>,
 }
 
 impl AsyncCallbackMethodModel {
@@ -682,6 +683,9 @@ impl AsyncCallbackMethodModel {
                     .fields()
                     .iter()
                     .any(|field| field.name() == "return_value"),
+                default_error_return_value_expression: method
+                    .return_type()
+                    .map(render_js_default_async_callback_return_value_expression),
             }
         })
     }
@@ -2242,6 +2246,35 @@ fn render_js_koffi_type_expression(type_: &Type, ffi_bindings_expr: &str) -> Res
     }
 }
 
+fn render_js_default_async_callback_return_value_expression(type_: &Type) -> String {
+    match type_ {
+        Type::UInt8
+        | Type::Int8
+        | Type::UInt16
+        | Type::Int16
+        | Type::UInt32
+        | Type::Int32
+        | Type::UInt64
+        | Type::Int64
+        | Type::Float32
+        | Type::Float64
+        | Type::Boolean => "0".to_string(),
+        Type::String
+        | Type::Bytes
+        | Type::Record { .. }
+        | Type::Enum { .. }
+        | Type::Optional { .. }
+        | Type::Sequence { .. }
+        | Type::Map { .. }
+        | Type::Timestamp
+        | Type::Duration => "EMPTY_RUST_BUFFER".to_string(),
+        Type::Object { .. } | Type::CallbackInterface { .. } => "0n".to_string(),
+        Type::Custom { name, .. } => {
+            unreachable!("custom type '{name}' should have been rejected before codegen")
+        }
+    }
+}
+
 fn render_dts_params(arguments: &[ArgumentModel]) -> Result<String> {
     arguments
         .iter()
@@ -2837,6 +2870,41 @@ mod tests {
             "ForeignFutureStructRustBuffer"
         );
         assert!(async_callback_ffi.result_struct_has_return_value);
+        assert_eq!(
+            async_callback_ffi.default_error_return_value_expression.as_deref(),
+            Some("EMPTY_RUST_BUFFER")
+        );
+    }
+
+    #[test]
+    fn render_js_default_async_callback_return_value_expression_maps_ffi_families() {
+        assert_eq!(
+            render_js_default_async_callback_return_value_expression(&Type::Int32),
+            "0"
+        );
+        assert_eq!(
+            render_js_default_async_callback_return_value_expression(&Type::UInt64),
+            "0"
+        );
+        assert_eq!(
+            render_js_default_async_callback_return_value_expression(&Type::Bytes),
+            "EMPTY_RUST_BUFFER"
+        );
+        assert_eq!(
+            render_js_default_async_callback_return_value_expression(&Type::Object {
+                name: "Store".to_string(),
+                module_path: "fixture_crate".to_string(),
+                imp: uniffi_bindgen::interface::ObjectImpl::Struct,
+            }),
+            "0n"
+        );
+        assert_eq!(
+            render_js_default_async_callback_return_value_expression(&Type::CallbackInterface {
+                name: "Logger".to_string(),
+                module_path: "fixture_crate".to_string(),
+            }),
+            "0n"
+        );
     }
 
     #[test]

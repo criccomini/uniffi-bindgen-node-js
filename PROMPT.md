@@ -1,35 +1,68 @@
-# Remove SlateDB From Integration Tests
+# Support Async Callback-Interface Methods
 
 ## Summary
 
-- Delete the SlateDB-only integration path entirely rather than hiding it behind an env var.
-- Keep integration coverage fully repo-owned: basic continues covering package loading, bundled/manual-load behavior, Buffer handling, and async calls; callbacks expands to
-  cover callback runtime plus the richer object and bytes surface that SlateDB was exercising.
-- Limit this cleanup to integration tests and integration support code.
+- Implement UniFFI 0.29 async callback-interface support through ForeignFuture, not the Rust-future polling path.
+- Remove the current v1 diagnostic rejecting async callback-interface methods.
+- Keep generated Node callback interface typings strict: async methods return Promise<T> / Promise<void>.
+- Apply the change to both explicit callback interfaces and object-backed foreign traits, since this generator already models both through the same callback-interface path.
 
-## Key Changes
+## Public API / Interface Changes
 
-- Remove tests/slatedb_build_tests.rs, tests/slatedb_package_generation.rs, and tests/slatedb_node_smoke_tests.rs.
-- Remove SlateDB-specific helpers and structs from tests/support/mod.rs so the harness only builds and packages repo fixtures.
-- Expand the callbacks fixture UDL and Rust implementation to include generic replacements for the removed SlateDB smoke surface: LogLevel, LogRecord, LogCollector,
-  Settings.default(), Settings.set(string key, string value_json), Settings.to_json_string(), WriteBatch.new(), WriteBatch.put(bytes, bytes), WriteBatch.delete(bytes),
-  WriteBatch.operation_count(), and init_logging(LogLevel, LogCollector?).
-- Update the mock koffi runtime in tests/npm-fixtures/koffi/index.js to implement fixture_callbacks end to end and delete all slatedb_uniffi symbol dispatch and behavior.
-- Extend the existing package, smoke, and TypeScript integration suites to exercise the richer callback fixture instead of having dedicated SlateDB test files.
-- Regenerate the callback snapshot in tests/snapshots/codegen_snapshots__callback_fixture_generated_output.snap to preserve generator regression coverage after the fixture
-  expansion.
+- Generated .d.ts callback interfaces render async methods as method(...): Promise<T> / Promise<void>.
+- Generated JS proxy classes render corresponding lifted callback methods as async.
+- No new public Node callback API parameters are added; cancellation remains internal via UniFFI foreign-future free(handle).
+
+## Implementation Changes
+
+- Generator/model:
+    - Remove the unsupported-feature validation for async callback-interface methods.
+    - Extend callback-method metadata with async foreign-future completion identifiers, result-struct shape, and a default lowered return value for async error completion.
+    - Render callback proxy methods with the existing async object-method path when method.is_async.
+    - Split callback vtable generation into sync and async branches.
+- Async callback vtable generation:
+    - Emit Koffi callback signatures as handle, args..., futureCallback, callbackData, outReturn for async callback methods.
+    - In the async branch, synchronously allocate and write a ForeignFuture into outReturn, then complete it later through the supplied UniFFI completion callback.
+    - Build completion payloads with the existing ForeignFutureStruct* FFI types for the method’s return family.
+- Runtime:
+    - Add async callback helpers to templates/runtime/callbacks.js.j2 and declarations to templates/runtime/callbacks.d.ts.j2.
+    - Maintain a pending foreign-future handle map holding promise lifecycle state, completion callback data, and cancellation state.
+    - Reuse the existing callback error lowering rules for rejected promises: typed error -> CALL_ERROR; other rejection -> CALL_UNEXPECTED_ERROR with lowered string message.
+    - Suppress late completion after free(handle) or runtime unload.
+    - Expose a handle-count helper for tests, mirroring the existing rust-future runtime test hook.
+- FFI defaults:
+    - Add generator-side rendering for default lowered return values required by ForeignFutureResult<T> on error paths for non-void async callback methods.
+    - Use zero/empty defaults appropriate to the UniFFI 0.29 FFI family used here: numeric 0, handles/pointers 0n, and buffers EMPTY_RUST_BUFFER.
+- Fixtures and mocks:
+    - Extend the callback fixture with async callback-interface coverage for success, typed error, unexpected error, void, and cancellation.
+    - Extend the mock koffi runtime to simulate async callback invocation, ForeignFuture completion callbacks, and cancellation cleanup.
 
 ## Test Plan
 
-- Run the updated package, smoke, Buffer, and TypeScript integration tests through cargo test.
-- Regenerate and review the callback snapshot diff to ensure the new fixture output is intentional.
-- Confirm rg -n "slatedb|SlateDB" tests returns no matches in integration tests, support code, or the mock koffi fixture.
+- Rust unit tests:
+    - async callback interfaces no longer fail validation,
+    - callback interface DTS renders Promise<...> methods,
+    - public API JS renders async proxy methods for async callback interfaces,
+    - FFI JS renders async callback signatures with ForeignFutureComplete* and ForeignFutureStruct*.
+- Snapshot tests:
+    - regenerate callback fixture snapshots for component JS, DTS, and FFI output.
+- Node smoke tests:
+    - async callback success with return value,
+    - async callback void completion,
+    - typed rejection mapped back to the generated typed Rust error,
+    - unexpected rejection mapped to the unexpected callback error path,
+    - cancellation where Rust drops the foreign future before the JS promise settles,
+    - handle-count cleanup after success, error, and cancellation.
+- TypeScript tests:
+    - strict Promise<...> callback interface typing,
+    - callback implementations typecheck for the async fixture surface.
 
 ## Assumptions
 
-- SlateDB-specific integration coverage should be removed outright, not made opt-in.
-- Existing non-integration unit tests that use “SlateDB” only as illustrative naming remain out of scope.
-- Expanding the existing callbacks fixture is preferred to adding a third repo-owned fixture.
+- Generated Node callback interfaces require Promise<T> / Promise<void> for async methods.
+- Cancellation is internal only; no new public AbortSignal or options object is added to generated callback method signatures.
+- Promise settlement after cancellation or unload is ignored.
+- This work targets the repo’s pinned UniFFI 0.29.5 ABI.
 
 ## Instructions
 
@@ -44,17 +77,22 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 
 ## TODO
 
-- [x] Delete the three SlateDB integration test files.
-- [x] Remove BuiltSlateDbCdylib, GeneratedSlateDbPackage, build_slatedb_cdylib(), and generate_slatedb_package() from the integration support module, along with any remaining shared-support references to the deleted SlateDB path.
-- [x] Extend fixtures/callback-fixture/src/callbacks_fixture.udl with generic callback, record, enum, and object APIs that replace the removed SlateDB smoke surface.
-- [x] Implement the new callback fixture APIs in fixtures/callback-fixture/src/lib.rs with simple deterministic in-memory behavior suitable for tests.
-- [x] Teach the fixture lookup helpers in the test harness and snapshot generator about the expanded callbacks fixture shape without introducing any new external dependency.
-- [x] Replace the SlateDB-specific mock runtime in tests/npm-fixtures/koffi/index.js with a fixture_callbacks runtime that handles callback registration, object handles, byte
-  arguments, JSON-string settings updates, and emitted log records.
-- [x] Add a callback package-generation test to the existing package suite that verifies emitted files and local koffi installation for a compiled callback fixture package.
-- [x] Add a callback smoke test to the existing smoke suite that covers emit, last_message, Settings.default/set/to_json_string, WriteBatch.put/delete/operation_count, and in
-  it_logging(LogLevel.Info, collector) plus the undefined callback path.
-- [x] Add a callback TypeScript test to the existing TS suite that typechecks Settings, WriteBatch, LogLevel, LogRecord, LogCollector, emit, last_message, and init_logging.
-- [x] Update the callback snapshot to match the expanded generated API and runtime hook registration output.
-- [x] Verify there are no remaining SlateDB references in integration tests or integration support code.
-✅
+- [x] Remove the async callback-interface unsupported-feature validation from component model building.
+- [ ] Extend callback method metadata to capture foreign-future completion identifiers and async result-struct requirements.
+- [ ] Add generator support for default lowered FFI return values used in async callback error completion structs.
+- [ ] Render callback proxy methods as async when the callback-interface method is async.
+- [ ] Split callback vtable registration code into synchronous and asynchronous callback generation paths.
+- [ ] Generate async callback Koffi callback signatures with futureCallback, callbackData, and outReturn ForeignFuture.
+- [ ] Add runtime helpers for pending foreign futures in templates/runtime/callbacks.js.j2.
+- [ ] Add runtime type declarations for async callback helpers in templates/runtime/callbacks.d.ts.j2.
+- [ ] Implement async callback invocation that writes ForeignFuture immediately and completes later from promise settlement.
+- [ ] Reuse existing callback error lowering for typed and unexpected promise rejections.
+- [ ] Ignore late async callback completions after foreign-future free or runtime unload.
+- [ ] Add a test-only foreign-future handle-count helper for async callback runtime state.
+- [ ] Extend the callback fixture with async callback-interface methods covering success, error, void, and cancellation cases.
+- [ ] Extend the mock Koffi runtime to emulate async callback invocation, completion callbacks, and cancellation cleanup.
+- [ ] Add Rust unit tests for async callback model validation and rendered public API output.
+- [ ] Update snapshot tests for generated callback fixture output.
+- [ ] Add Node smoke tests for async callback success, typed error, unexpected error, void completion, and cancellation.
+- [ ] Add TypeScript tests that enforce Promise<...> async callback interface method typing.
+- [ ] Run the full relevant test suite after implementation.

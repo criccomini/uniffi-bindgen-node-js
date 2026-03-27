@@ -40,7 +40,6 @@ fn write_bindings_reports_all_unsupported_uniffi_features() {
     unsupported UniFFI features for Node bindings v1:
     - external types are not supported in v1: ExternalThing
     - custom types are not supported in v1: Url
-    - async callback-interface methods are not supported in v1: Logger
     "#
     );
 }

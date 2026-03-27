@@ -754,28 +754,6 @@ fn validate_supported_features(ci: &ComponentInterface) -> Result<()> {
         ));
     }
 
-    let async_callback_interfaces = ci
-        .callback_interface_definitions()
-        .iter()
-        .filter(|callback| callback.has_async_method())
-        .map(|callback| callback.name().to_string())
-        .chain(
-            ci.object_definitions()
-                .iter()
-                .filter(|object| object.has_callback_interface() && object.has_async_method())
-                .map(|object| object.name().to_string()),
-        )
-        .collect::<BTreeSet<_>>();
-    if !async_callback_interfaces.is_empty() {
-        unsupported.push(format!(
-            "async callback-interface methods are not supported in v1: {}",
-            async_callback_interfaces
-                .into_iter()
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    }
-
     if unsupported.is_empty() {
         return Ok(());
     }
@@ -2768,7 +2746,7 @@ mod tests {
     }
 
     #[test]
-    fn component_model_rejects_async_callback_interfaces() {
+    fn component_model_accepts_async_callback_interfaces() {
         let ci = ComponentInterface::from_webidl(
             r#"
             namespace example {};
@@ -2781,15 +2759,10 @@ mod tests {
         )
         .expect("UDL should parse");
 
-        let error =
-            ComponentModel::from_ci(&ci).expect_err("async callback interfaces should fail");
+        let model = ComponentModel::from_ci(&ci).expect("async callback interfaces should build");
 
-        assert!(
-            error
-                .to_string()
-                .contains("async callback-interface methods are not supported"),
-            "unexpected error: {error}"
-        );
+        assert_eq!(model.callback_interfaces.len(), 1);
+        assert!(model.callback_interfaces[0].methods[0].is_async);
     }
 
     #[test]

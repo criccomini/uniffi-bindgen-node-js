@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -337,11 +338,12 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write;
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf, loweredMessage),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
-      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+      completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
       liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
       ...uniffiRustCallOptions(),
@@ -355,11 +357,12 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_fallible_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_fallible;
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf, loweredMessage),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
-      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+      completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
       liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
       ...uniffiRustCallOptions(FfiConverterAsyncLogError),
@@ -372,11 +375,12 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
       uniffiAsyncLogSinkFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_flush_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_flush;
+    const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf),
       pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(rustFuture),
-      completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status),
+      completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(rustFuture),
       liftFunc: (_uniffiResult) => undefined,
       ...uniffiRustCallOptions(),
@@ -850,11 +854,12 @@ export function emit(sink, message) {
 export async function emit_async(sink, message) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+  const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async(loweredSink, loweredMessage),
     pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
-    completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+    completeFunc,
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
     liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
     ...uniffiRustCallOptions(),
@@ -864,11 +869,12 @@ export async function emit_async(sink, message) {
 export async function emit_async_fallible(sink, message) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
     const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+  const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async_fallible(loweredSink, loweredMessage),
     pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_rust_buffer(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
-    completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status),
+    completeFunc,
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
     liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
     ...uniffiRustCallOptions(FfiConverterAsyncLogError),
@@ -877,11 +883,12 @@ export async function emit_async_fallible(sink, message) {
 
 export async function flush_async(sink) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
+  const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_flush_async(loweredSink),
     pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.ffi_fixture_callbacks_rust_future_poll_void(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_void(rustFuture),
-    completeFunc: (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_void(rustFuture, status),
+    completeFunc,
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_void(rustFuture),
     liftFunc: (_uniffiResult) => undefined,
     ...uniffiRustCallOptions(),

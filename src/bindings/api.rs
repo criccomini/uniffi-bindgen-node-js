@@ -2251,6 +2251,11 @@ fn render_js_async_method_body(
         &method.arguments,
         None,
     );
+    lines.extend(render_js_async_complete_setup(
+        method.return_type.as_ref(),
+        &async_ffi.complete_identifier,
+        "    ",
+    )?);
 
     lines.push("    return rustCallAsync({".to_string());
     lines.push(format!(
@@ -2265,10 +2270,7 @@ fn render_js_async_method_body(
         "      cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
         async_ffi.cancel_identifier
     ));
-    lines.push(format!(
-        "      completeFunc: (rustFuture, status) => ffiFunctions.{}(rustFuture, status),",
-        async_ffi.complete_identifier
-    ));
+    lines.push("      completeFunc,".to_string());
     lines.push(format!(
         "      freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
         async_ffi.free_identifier
@@ -2375,7 +2377,7 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
 fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
     match return_type {
         Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(format!(
-            "(uniffiResult) => {}.createRetyped(uniffiResult)",
+            "(uniffiResult) => {}.create(uniffiResult)",
             object_factory_name(name)
         )),
         Some(return_type) => Ok(format!(
@@ -2383,6 +2385,36 @@ fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
             render_js_lift_expression(return_type, "uniffiResult")?
         )),
         None => Ok("(_uniffiResult) => undefined".to_string()),
+    }
+}
+
+fn render_js_async_complete_setup(
+    return_type: Option<&Type>,
+    complete_identifier: &str,
+    indent: &str,
+) -> Result<Vec<String>> {
+    match return_type {
+        Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(vec![
+            format!("{indent}const completeFunc = (() => {{"),
+            format!("{indent}  const bindings = getFfiBindings();"),
+            format!("{indent}  const completePointer = bindings.library.func("),
+            format!("{indent}    {},", json_string_literal(complete_identifier)?),
+            format!(
+                "{indent}    bindings.ffiTypes.{},",
+                ffi_opaque_identifier(name)
+            ),
+            format!(
+                "{indent}    [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+            ),
+            format!("{indent}  );"),
+            format!(
+                "{indent}  return (rustFuture, status) => completePointer(rustFuture, status);"
+            ),
+            format!("{indent}}})();"),
+        ]),
+        _ => Ok(vec![format!(
+            "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
+        )]),
     }
 }
 
@@ -2869,6 +2901,11 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
     })?;
     let mut lines = render_js_argument_lowering(&function.arguments)?;
     let start_args = render_js_ffi_call_args(&function.arguments, None);
+    lines.extend(render_js_async_complete_setup(
+        function.return_type.as_ref(),
+        &async_ffi.complete_identifier,
+        "  ",
+    )?);
 
     lines.push("  return rustCallAsync({".to_string());
     lines.push(format!(
@@ -2883,10 +2920,7 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
         "    cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
         async_ffi.cancel_identifier
     ));
-    lines.push(format!(
-        "    completeFunc: (rustFuture, status) => ffiFunctions.{}(rustFuture, status),",
-        async_ffi.complete_identifier
-    ));
+    lines.push("    completeFunc,".to_string());
     lines.push(format!(
         "    freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
         async_ffi.free_identifier
@@ -3785,7 +3819,7 @@ mod tests {
         );
         assert!(
             rendered.js.contains(
-                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.createRetyped(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.create(uniffiResult),"
             ),
             "unexpected JS output: {}",
             rendered.js

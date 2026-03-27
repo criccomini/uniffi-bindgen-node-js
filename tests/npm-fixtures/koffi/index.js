@@ -60,6 +60,15 @@ function wrapPointerValue(value, type) {
   };
 }
 
+function wrapPointerCast(value, type) {
+  return {
+    __addr: normalizeBigInt(value.__addr),
+    __koffiPointerCast: true,
+    __pointer: value,
+    __type: type,
+  };
+}
+
 function pointerTypeName(type) {
   return type?.name ?? "pointer";
 }
@@ -69,7 +78,18 @@ function validatePointerArgument(value, expectedType) {
     return;
   }
 
-  if (typeof value === "bigint" || typeof value === "number") {
+  if (value?.__koffiPointerCast === true) {
+    const actualType = value.__type;
+    if (!isPointerType(actualType)) {
+      throw new TypeError(
+        `Unexpected ${typeof value} value, expected ${pointerTypeName(expectedType)} *`,
+      );
+    }
+    if (expectedType.name != null && actualType.name !== expectedType.name) {
+      throw new TypeError(
+        `Unexpected ${pointerTypeName(actualType)} * value, expected ${expectedType.name}`,
+      );
+    }
     return;
   }
 
@@ -1781,14 +1801,22 @@ const koffi = {
   },
   as(value, type) {
     if (isOpaquePointerType(type)) {
-      if (typeof value === "object" && value != null && value.__koffiPointer === true) {
-        return wrapPointerValue(value, value.__type);
+      if (typeof value === "object" && value != null && value.__koffiPointerCast === true) {
+        return wrapPointerCast(value.__pointer, type);
       }
-      return wrapPointerValue(value, type);
+      if (typeof value === "object" && value != null && value.__koffiPointer === true) {
+        return wrapPointerCast(value, type);
+      }
+      throw new TypeError("Invalid argument");
     }
     return normalizeBigInt(value);
   },
   address(pointer) {
+    if (typeof pointer === "object" && pointer != null && pointer.__koffiPointerCast === true) {
+      throw new TypeError(
+        `Unexpected ${pointerTypeName(pointer.__type)} value for ptr, expected external pointer`,
+      );
+    }
     if (typeof pointer === "object" && pointer != null && pointer.__koffiPointer === true) {
       return normalizeBigInt(pointer.__addr);
     }

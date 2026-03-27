@@ -1173,11 +1173,11 @@ mod tests {
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
-            objects_js.contains("return koffi.as(normalizedHandle, handleType);"),
+            objects_js.contains("return koffi.as(this._normalizeHandle(handle), handleType);"),
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
-            objects_js.contains("this._coerceHandle(normalizedHandle)"),
+            objects_js.contains("const rawHandle = requireHandle("),
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(

@@ -10,7 +10,7 @@ use self::support::{
 use uniffi_bindgen::BindingGenerator;
 
 #[test]
-fn runtime_object_factory_retypes_generic_pointer_handles_before_clone() {
+fn runtime_object_factory_keeps_generic_pointer_handles_until_clone() {
     let settings = generation_settings("runtime-object-factory-generic-pointer");
     let output_dir = settings.out_dir.clone();
 
@@ -65,8 +65,12 @@ const koffi = {
     };
   },
   as(value, type) {
+    if (typeof value !== "object" || value == null || typeof value.__addr !== "bigint") {
+      throw new TypeError("Invalid argument");
+    }
     return {
       __addr: normalizePointerAddress(value),
+      __pointer: value,
       __type: type,
     };
   },
@@ -103,14 +107,19 @@ const resourceFactory = createObjectFactory({
   handleType: () => resourceHandleType,
   cloneHandle(handle) {
     assert.equal(handle.__type?.name, "RustArcPtrResource");
-    return handle;
+    return handle.__pointer;
   },
 });
 
-const resource = resourceFactory.create(koffi.as(42n, genericHandleType));
+const rawHandle = {
+  __addr: 42n,
+  __type: genericHandleType,
+};
+
+const resource = resourceFactory.create(rawHandle);
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
-assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResource");
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
 "#,
     );
 
@@ -118,7 +127,7 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResou
 }
 
 #[test]
-fn runtime_object_factory_create_retyped_keeps_handles_for_follow_up_calls() {
+fn runtime_object_factory_keeps_raw_handles_for_follow_up_calls() {
     let settings = generation_settings("runtime-object-factory-retyped-handles");
     let output_dir = settings.out_dir.clone();
 
@@ -173,16 +182,13 @@ const koffi = {
     };
   },
   as(value, type) {
-    if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
-      return {
-        __addr: value.__addr,
-        __retagged: true,
-        __type: type,
-      };
+    if (typeof value !== "object" || value == null || typeof value.__addr !== "bigint") {
+      throw new TypeError("Invalid argument");
     }
     return {
-      __addr: normalizePointerAddress(value),
-      __retagged: false,
+      __addr: value.__addr,
+      __pointer: value,
+      __retagged: true,
       __type: type,
     };
   },
@@ -225,14 +231,20 @@ const resourceFactory = createObjectFactory({
   cloneHandle(handle) {
     assert.equal(handle.__type?.name, "RustArcPtrResource");
     assert.equal(handle.__addr, 42n);
-    return handle;
+    assert.equal(handle.__retagged, true);
+    return handle.__pointer;
   },
 });
 
-const resource = resourceFactory.createRetyped(koffi.as(42n, genericHandleType));
+const rawHandle = {
+  __addr: 42n,
+  __type: genericHandleType,
+};
+
+const resource = resourceFactory.createRetyped(rawHandle);
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
-assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResource");
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
 "#,
     );
 

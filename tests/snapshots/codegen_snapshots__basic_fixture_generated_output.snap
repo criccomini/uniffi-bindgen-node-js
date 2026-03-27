@@ -5924,7 +5924,7 @@ export class UniffiObjectFactory {
         ? null
         : new FinalizationRegistry((handle) => {
             try {
-              this._freeHandle(handle);
+              this._freeHandle(this._coerceHandle(handle));
             } catch {
               // Finalizers must not surface user-visible errors.
             }
@@ -5956,48 +5956,32 @@ export class UniffiObjectFactory {
     instance[uniffiFinalizerTokenSymbol] = null;
   }
 
+  _normalizeHandle(handle) {
+    if (handle == null) {
+      return handle;
+    }
+
+    if (typeof handle === "bigint" || typeof handle === "number") {
+      return normalizeUInt64(handle);
+    }
+    return handle;
+  }
+
   _coerceHandle(handle) {
     if (handle == null) {
       return handle;
     }
 
     const handleType = resolveHandleType(this._handleType);
-    if (typeof handle === "bigint" || typeof handle === "number") {
-      const normalizedHandle = normalizeUInt64(handle);
-      if (handleType == null) {
-        return normalizedHandle;
-      }
-      return koffi.as(normalizedHandle, handleType);
-    }
     if (handleType == null) {
-      return handle;
+      return this._normalizeHandle(handle);
     }
-    const typedHandle = koffi.as(handle, handleType);
-    try {
-      pointerAddress(typedHandle);
-      return typedHandle;
-    } catch {
-      return handle;
-    }
+    return koffi.as(this._normalizeHandle(handle), handleType);
   }
 
-  _coerceHandleFromAddress(handle) {
-    if (handle == null) {
-      return handle;
-    }
-
-    const handleType = resolveHandleType(this._handleType);
-    if (handleType == null) {
-      return this._coerceHandle(handle);
-    }
-    return koffi.as(pointerAddress(handle), handleType);
-  }
-
-  attach(instance, handle, options = undefined) {
+  attach(instance, handle) {
     const normalizedHandle = requireHandle(
-      options?.retypeFromAddress === true
-        ? this._coerceHandleFromAddress(handle)
-        : this._coerceHandle(handle),
+      this._normalizeHandle(handle),
       `${this.typeName} handle`,
     );
     const target = requireObjectInstance(instance, this.typeName);
@@ -6046,19 +6030,18 @@ export class UniffiObjectFactory {
   }
 
   createRetyped(handle) {
-    return this.attach(this._createInstance(), handle, {
-      retypeFromAddress: true,
-    });
+    return this.create(handle);
   }
 
   handle(value) {
     if (!this.isInstance(value)) {
       throw new TypeError(`${this.typeName} expected an instance created by this factory.`);
     }
-    return requireHandle(
-      this._coerceHandle(storedHandle(value)),
+    const rawHandle = requireHandle(
+      this._normalizeHandle(storedHandle(value)),
       `${this.typeName} handle`,
     );
+    return this._coerceHandle(rawHandle);
   }
 
   peekHandle(value) {
@@ -6101,23 +6084,26 @@ export class UniffiObjectFactory {
   }
 
   serializeHandle(value) {
-    const handle = this.handle(value);
+    const rawHandle = requireHandle(
+      this._normalizeHandle(storedHandle(value)),
+      `${this.typeName} handle`,
+    );
     if (typeof this._serializeHandle === "function") {
-      return normalizeUInt64(this._serializeHandle(handle, value));
+      return normalizeUInt64(this._serializeHandle(this.handle(value), value));
     }
-    return pointerAddress(handle);
+    return pointerAddress(rawHandle);
   }
 
   deserializeHandle(serialized) {
     const normalizedHandle = normalizeUInt64(serialized);
     if (typeof this._deserializeHandle === "function") {
       return requireHandle(
-        this._deserializeHandle(normalizedHandle),
+        this._normalizeHandle(this._deserializeHandle(normalizedHandle)),
         `${this.typeName} handle`,
       );
     }
     return requireHandle(
-      this._coerceHandle(normalizedHandle),
+      this._normalizeHandle(normalizedHandle),
       `${this.typeName} handle`,
     );
   }

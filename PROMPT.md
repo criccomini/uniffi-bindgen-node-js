@@ -94,5 +94,5 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add Rust unit tests for async callback model validation and rendered public API output.
 - [x] Update snapshot tests for generated callback fixture output.
 - [x] Add Node smoke tests for async callback success, typed error, unexpected error, void completion, and cancellation.
-- [ ] Add TypeScript tests that enforce Promise<...> async callback interface method typing.
+- [x] Add TypeScript tests that enforce Promise<...> async callback interface method typing.
 - [ ] Run the full relevant test suite after implementation.

@@ -63,12 +63,17 @@ fn typechecks_generated_callback_fixture_package_declarations() {
         "smoke.ts",
         r#"
 import {
+  AsyncLogErrorRejected,
   LogLevel,
   Settings,
   WriteBatch,
   emit,
+  emit_async,
+  emit_async_fallible,
+  flush_async,
   init_logging,
   last_message,
+  type AsyncLogSink,
   type LogCollector,
   type LogRecord,
 } from "./index.js";
@@ -111,16 +116,44 @@ const sink = {
   },
 };
 
+const asyncSink: AsyncLogSink = {
+  write(message: string): Promise<string> {
+    return Promise.resolve(message);
+  },
+  write_fallible(message: string): Promise<string> {
+    return Promise.reject(new AsyncLogErrorRejected(message));
+  },
+  flush(): Promise<void> {
+    return Promise.resolve();
+  },
+};
+
+const asyncWrite: (message: string) => Promise<string> = asyncSink.write;
+const asyncWriteFallible: (message: string) => Promise<string> = asyncSink.write_fallible;
+const asyncFlush: () => Promise<void> = asyncSink.flush;
+
 emit(sink, "hello");
 const latestMessage: string | undefined = last_message(sink);
 const missingMessage: string | undefined = last_message(undefined);
 init_logging(level, collector);
 init_logging(LogLevel.Info, undefined);
+const emittedAsyncMessage: Promise<string> = emit_async(asyncSink, "async hello");
+const emittedAsyncFallibleMessage: Promise<string> = emit_async_fallible(
+  asyncSink,
+  "async hello",
+);
+const flushedAsyncSink: Promise<void> = flush_async(asyncSink);
 
 void settingsJson;
 void operationCount;
 void latestMessage;
 void missingMessage;
+void asyncWrite;
+void asyncWriteFallible;
+void asyncFlush;
+void emittedAsyncMessage;
+void emittedAsyncFallibleMessage;
+void flushedAsyncSink;
 void records;
 "#,
     );

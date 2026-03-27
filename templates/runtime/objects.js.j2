@@ -147,12 +147,32 @@ export class UniffiObjectFactory {
     if (handleType == null) {
       return handle;
     }
+    const typedHandle = koffi.as(handle, handleType);
+    try {
+      pointerAddress(typedHandle);
+      return typedHandle;
+    } catch {
+      return handle;
+    }
+  }
+
+  _coerceHandleFromAddress(handle) {
+    if (handle == null) {
+      return handle;
+    }
+
+    const handleType = resolveHandleType(this._handleType);
+    if (handleType == null) {
+      return this._coerceHandle(handle);
+    }
     return koffi.as(pointerAddress(handle), handleType);
   }
 
-  attach(instance, handle) {
+  attach(instance, handle, options = undefined) {
     const normalizedHandle = requireHandle(
-      this._coerceHandle(handle),
+      options?.retypeFromAddress === true
+        ? this._coerceHandleFromAddress(handle)
+        : this._coerceHandle(handle),
       `${this.typeName} handle`,
     );
     const target = requireObjectInstance(instance, this.typeName);
@@ -198,6 +218,12 @@ export class UniffiObjectFactory {
 
   create(handle) {
     return this.attach(this._createInstance(), handle);
+  }
+
+  createRetyped(handle) {
+    return this.attach(this._createInstance(), handle, {
+      retypeFromAddress: true,
+    });
   }
 
   handle(value) {

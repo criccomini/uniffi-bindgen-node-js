@@ -118,7 +118,7 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResou
 }
 
 #[test]
-fn runtime_object_factory_keeps_retyped_handles_for_follow_up_calls() {
+fn runtime_object_factory_create_retyped_keeps_handles_for_follow_up_calls() {
     let settings = generation_settings("runtime-object-factory-retyped-handles");
     let output_dir = settings.out_dir.clone();
 
@@ -229,7 +229,7 @@ const resourceFactory = createObjectFactory({
   },
 });
 
-const resource = resourceFactory.create(koffi.as(42n, genericHandleType));
+const resource = resourceFactory.createRetyped(koffi.as(42n, genericHandleType));
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
 assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtrResource");

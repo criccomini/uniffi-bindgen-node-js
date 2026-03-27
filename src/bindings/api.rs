@@ -2333,6 +2333,10 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
 
 fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
     match return_type {
+        Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(format!(
+            "(uniffiResult) => {}.createRetyped(uniffiResult)",
+            object_factory_name(name)
+        )),
         Some(return_type) => Ok(format!(
             "(uniffiResult) => {}",
             render_js_lift_expression(return_type, "uniffiResult")?
@@ -3740,7 +3744,7 @@ mod tests {
         );
         assert!(
             rendered.js.contains(
-                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.create(uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiStoreObjectFactory.createRetyped(uniffiResult),"
             ),
             "unexpected JS output: {}",
             rendered.js

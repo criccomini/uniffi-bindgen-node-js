@@ -32,6 +32,7 @@ export declare class UniffiObjectFactory<T extends object = UniffiObjectBase> {
   attach(instance: T, handle: unknown): T;
   bless(instance: T, handle: unknown): T;
   create(handle: unknown): T;
+  createRetyped(handle: unknown): T;
   handle(value: T): unknown;
   peekHandle(value: unknown): unknown;
   cloneHandle(value: T): unknown;

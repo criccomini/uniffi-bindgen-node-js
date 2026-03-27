@@ -60,6 +60,13 @@ function wrapPointerValue(value, type) {
   };
 }
 
+function wrapExternalPointerValue(value) {
+  return {
+    __addr: normalizeBigInt(value),
+    __koffiExternalPointer: true,
+  };
+}
+
 function wrapPointerCast(value, type) {
   return {
     __addr: normalizeBigInt(value.__addr),
@@ -79,6 +86,25 @@ function validatePointerArgument(value, expectedType) {
   }
 
   if (expectedType.name === "RustArcPtr") {
+    if (typeof value !== "object" || value == null || typeof value.__addr !== "bigint") {
+      throw new TypeError(
+        `Unexpected ${typeof value} value, expected ${pointerTypeName(expectedType)} *`,
+      );
+    }
+    const actualType = value.__type;
+    if (actualType == null) {
+      return;
+    }
+    if (!isPointerType(actualType)) {
+      throw new TypeError(
+        `Unexpected ${typeof value} value, expected ${pointerTypeName(expectedType)} *`,
+      );
+    }
+    if (actualType.name !== expectedType.name) {
+      throw new TypeError(
+        `Unexpected ${pointerTypeName(actualType)} * value, expected ${expectedType.name}`,
+      );
+    }
     return;
   }
 
@@ -115,7 +141,7 @@ function wrapReturnValue(value, returnType) {
     return value;
   }
   if (returnType.name === "RustArcPtr") {
-    return wrapPointerValue(value, anonymousPointerType());
+    return wrapExternalPointerValue(value);
   }
   return wrapPointerValue(value, returnType);
 }

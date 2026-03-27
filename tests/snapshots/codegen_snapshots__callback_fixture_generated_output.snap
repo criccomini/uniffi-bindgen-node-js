@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -954,8 +953,14 @@ const uniffiSettingsObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Settings.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrSettings,
   cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_callbacks_fn_clone_settings",
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
     return uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_settings_generic_abi(handle, status),
+      (status) => genericCloneHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -1036,8 +1041,14 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
   createInstance: () => Object.create(WriteBatch.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrWriteBatch,
   cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_callbacks_fn_clone_writebatch",
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
     return uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_callbacks_fn_clone_writebatch_generic_abi(handle, status),
+      (status) => genericCloneHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },

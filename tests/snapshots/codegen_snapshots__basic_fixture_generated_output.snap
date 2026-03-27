@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -467,8 +466,14 @@ const uniffiConfigObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Config.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrConfig,
   cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_config",
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
     return uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_config_generic_abi(handle, status),
+      (status) => genericCloneHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -518,8 +523,14 @@ const uniffiReaderObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Reader.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrReader,
   cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_reader",
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
     return uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_reader_generic_abi(handle, status),
+      (status) => genericCloneHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -578,8 +589,14 @@ const uniffiReaderBuilderObjectFactory = createObjectFactory({
   createInstance: () => Object.create(ReaderBuilder.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrReaderBuilder,
   cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_readerbuilder",
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
     return uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(handle, status),
+      (status) => genericCloneHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },
@@ -707,8 +724,14 @@ const uniffiStoreObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Store.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrStore,
   cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      "uniffi_fixture_basic_fn_clone_store",
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
     return uniffiRustCaller.rustCall(
-      (status) => ffiFunctions.uniffi_fixture_basic_fn_clone_store_generic_abi(handle, status),
+      (status) => genericCloneHandle(handle, status),
       uniffiRustCallOptions(),
     );
   },

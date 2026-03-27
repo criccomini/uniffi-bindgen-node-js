@@ -95,4 +95,5 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Update snapshot tests for generated callback fixture output.
 - [x] Add Node smoke tests for async callback success, typed error, unexpected error, void completion, and cancellation.
 - [x] Add TypeScript tests that enforce Promise<...> async callback interface method typing.
-- [ ] Run the full relevant test suite after implementation.
+- [x] Run the full relevant test suite after implementation.
+✅

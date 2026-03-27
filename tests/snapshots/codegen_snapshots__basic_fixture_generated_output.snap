@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -14,7 +15,11 @@ import {
   getFfiBindings,
   load as loadFfi,
 } from "./fixture-ffi.js";
-import { createForeignBytes, RustBufferValue } from "./runtime/ffi-types.js";
+import {
+  createForeignBytes,
+  EMPTY_RUST_BUFFER,
+  RustBufferValue,
+} from "./runtime/ffi-types.js";
 import {
   AbstractFfiConverterByteArray,
   FfiConverterArray,
@@ -39,7 +44,10 @@ import {
 import { UnexpectedEnumCase } from "./runtime/errors.js";
 import { rustCallAsync } from "./runtime/async-rust-call.js";
 import {
+  clearPendingForeignFutures,
   createCallbackRegistry,
+  freePendingForeignFuture,
+  invokeAsyncCallbackMethod,
   invokeCallbackMethod,
 } from "./runtime/callbacks.js";
 import {
@@ -71,17 +79,21 @@ function uniffiNotImplemented(member) {
   throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);
 }
 
+function uniffiLiftString(bytes) {
+  return FfiConverterString.lift(bytes);
+}
+
 function uniffiFreeRustBuffer(buffer) {
   return defaultRustCaller.rustCall(
     (status) => ffiFunctions.ffi_fixture_basic_rustbuffer_free(buffer, status),
-    { liftString: FfiConverterString.lift },
+    { liftString: uniffiLiftString },
   );
 }
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   const options = {
     freeRustBuffer: uniffiFreeRustBuffer,
-    liftString: FfiConverterString.lift,
+    liftString: uniffiLiftString,
   };
   if (errorConverter != null) {
     options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);
@@ -4746,6 +4758,8 @@ import {
   createRustCallStatus,
 } from "./rust-call.js";
 
+const PENDING_FOREIGN_FUTURES = new UniffiHandleMap();
+
 function requireCallbackImplementation(value, interfaceName = "callback interface") {
   if ((typeof value !== "object" && typeof value !== "function") || value == null) {
     throw new TypeError(`${interfaceName} implementations must be objects with callable methods.`);
@@ -4812,6 +4826,139 @@ export function writeCallbackError(status, error, options = {}) {
   return lowered.error;
 }
 
+export function createPendingForeignFuture({
+  callbackData = undefined,
+  complete = undefined,
+} = {}) {
+  const pending = {
+    callbackData,
+    cancelled: false,
+    complete,
+    handle: 0n,
+    settled: false,
+  };
+  pending.handle = PENDING_FOREIGN_FUTURES.insert(pending);
+  return pending;
+}
+
+export function takePendingForeignFuture(handle) {
+  const pending = PENDING_FOREIGN_FUTURES.remove(handle);
+  if (pending == null) {
+    return undefined;
+  }
+  pending.settled = true;
+  return pending;
+}
+
+export function freePendingForeignFuture(handle) {
+  const pending = takePendingForeignFuture(handle);
+  if (pending == null) {
+    return undefined;
+  }
+  pending.cancelled = true;
+  return pending;
+}
+
+export function clearPendingForeignFutures() {
+  for (const pending of PENDING_FOREIGN_FUTURES.values()) {
+    pending.cancelled = true;
+  }
+  PENDING_FOREIGN_FUTURES.clear();
+}
+
+export function foreignFutureHandleCount() {
+  return PENDING_FOREIGN_FUTURES.size;
+}
+
+function createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue) {
+  const completion = {
+    call_status: callStatus,
+  };
+  if (hasReturnValue) {
+    completion.return_value = returnValue;
+  }
+  return completion;
+}
+
+function takeCompletablePendingForeignFuture(handle) {
+  const pending = takePendingForeignFuture(handle);
+  if (pending == null || pending.cancelled || typeof pending.complete !== "function") {
+    return undefined;
+  }
+  return pending;
+}
+
+function createAsyncCallbackFailureCompletion(error, options = {}) {
+  const {
+    defaultReturnValue = undefined,
+    hasReturnValue = false,
+    interfaceName = "callback interface",
+    lowerError,
+    lowerString,
+    methodName = "callback",
+  } = options;
+  const callStatus = createRustCallStatus();
+  writeCallbackError(callStatus, error, {
+    lowerError,
+    lowerString,
+    defaultMessage: `${interfaceName}.${String(methodName)}() failed.`,
+  });
+  return createAsyncCallbackCompletion(callStatus, defaultReturnValue, hasReturnValue);
+}
+
+function completeAsyncCallbackFailure(handle, error, options = {}) {
+  const pending = takeCompletablePendingForeignFuture(handle);
+  if (pending == null) {
+    return;
+  }
+
+  pending.complete(
+    pending.callbackData,
+    createAsyncCallbackFailureCompletion(error, options),
+  );
+}
+
+function completeAsyncCallbackSuccess(handle, result, options = {}) {
+  const pending = takeCompletablePendingForeignFuture(handle);
+  if (pending == null) {
+    return;
+  }
+
+  const {
+    defaultReturnValue = undefined,
+    hasReturnValue = false,
+    interfaceName = "callback interface",
+    lowerError,
+    lowerReturn = undefined,
+    lowerString,
+    methodName = "callback",
+  } = options;
+
+  try {
+    const callStatus = resetCallbackCallStatus(createRustCallStatus());
+    const returnValue =
+      typeof lowerReturn === "function"
+        ? lowerReturn(result)
+        : result;
+    pending.complete(
+      pending.callbackData,
+      createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue),
+    );
+  } catch (error) {
+    pending.complete(
+      pending.callbackData,
+      createAsyncCallbackFailureCompletion(error, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerString,
+        methodName,
+      }),
+    );
+  }
+}
+
 export function invokeCallbackMethod({
   registry,
   handle,
@@ -4842,6 +4989,63 @@ export function invokeCallbackMethod({
     });
     return defaultReturnValue;
   }
+}
+
+export function invokeAsyncCallbackMethod({
+  registry,
+  handle,
+  methodName,
+  args = [],
+  callbackData = undefined,
+  complete = undefined,
+  defaultReturnValue = undefined,
+  interfaceName = registry?.interfaceName ?? "callback interface",
+  lowerError,
+  lowerReturn = undefined,
+  lowerString,
+}) {
+  const pending = createPendingForeignFuture({
+    callbackData,
+    complete,
+  });
+  const hasReturnValue =
+    typeof lowerReturn === "function"
+    || defaultReturnValue !== undefined;
+
+  let promise;
+  try {
+    const implementation = registry.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, interfaceName);
+    promise = Promise.resolve(method.apply(implementation, Array.from(args)));
+  } catch (error) {
+    promise = Promise.reject(error);
+  }
+
+  void promise.then(
+    (result) => {
+      completeAsyncCallbackSuccess(pending.handle, result, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerReturn,
+        lowerString,
+        methodName,
+      });
+    },
+    (error) => {
+      completeAsyncCallbackFailure(pending.handle, error, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerString,
+        methodName,
+      });
+    },
+  );
+
+  return pending.handle;
 }
 
 export class UniffiCallbackRegistry {
@@ -4935,6 +5139,30 @@ export interface CallbackErrorOptions<E extends Error = Error> {
   defaultMessage?: string;
 }
 
+export interface PendingForeignFuture<Result = unknown> {
+  callbackData: bigint | number | undefined;
+  cancelled: boolean;
+  complete: ((
+    callbackData: bigint | number | undefined,
+    result: Result,
+  ) => void) | undefined;
+  handle: bigint;
+  settled: boolean;
+}
+
+export interface PendingForeignFutureOptions<Result = unknown> {
+  callbackData?: bigint | number;
+  complete?: ((
+    callbackData: bigint | number | undefined,
+    result: Result,
+  ) => void) | null;
+}
+
+export interface AsyncCallbackCompletion<Lowered = unknown> {
+  call_status: RustCallStatusStruct;
+  return_value?: Lowered;
+}
+
 export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Error>
   extends CallbackErrorOptions<E>
 {
@@ -4942,6 +5170,23 @@ export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Erro
   defaultReturnValue?: T;
   interfaceName?: string;
   status?: RustCallStatusStruct | null;
+}
+
+export interface InvokeAsyncCallbackMethodOptions<
+  Result = unknown,
+  Lowered = Result,
+  E extends Error = Error,
+> extends CallbackErrorOptions<E>
+{
+  args?: readonly unknown[];
+  callbackData?: bigint | number;
+  complete?: ((
+    callbackData: bigint | number | undefined,
+    result: AsyncCallbackCompletion<Lowered>,
+  ) => void) | null;
+  defaultReturnValue?: Lowered;
+  interfaceName?: string;
+  lowerReturn?: ((value: Result) => Lowered) | null;
 }
 
 export declare function resetCallbackCallStatus(
@@ -4952,11 +5197,31 @@ export declare function writeCallbackError<E extends Error = Error>(
   error: unknown,
   options?: CallbackErrorOptions<E>,
 ): E;
+export declare function createPendingForeignFuture<Result = unknown>(
+  options?: PendingForeignFutureOptions<Result>,
+): PendingForeignFuture<Result>;
+export declare function takePendingForeignFuture<Result = unknown>(
+  handle: bigint | number,
+): PendingForeignFuture<Result> | undefined;
+export declare function freePendingForeignFuture<Result = unknown>(
+  handle: bigint | number,
+): PendingForeignFuture<Result> | undefined;
+export declare function clearPendingForeignFutures(): void;
+export declare function foreignFutureHandleCount(): number;
 export declare function invokeCallbackMethod<T = unknown, E extends Error = Error>(params: {
   registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
   handle: bigint | number;
   methodName: string;
 } & InvokeCallbackMethodOptions<T, E>): T;
+export declare function invokeAsyncCallbackMethod<
+  Result = unknown,
+  Lowered = Result,
+  E extends Error = Error,
+>(params: {
+  registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
+  handle: bigint | number;
+  methodName: string;
+} & InvokeAsyncCallbackMethodOptions<Result, Lowered, E>): bigint;
 
 export declare class UniffiCallbackRegistry<T extends object = Record<string, unknown>> {
   readonly interfaceName: string;

@@ -8,6 +8,8 @@ import {
   createRustCallStatus,
 } from "./rust-call.js";
 
+const PENDING_FOREIGN_FUTURES = new UniffiHandleMap();
+
 function requireCallbackImplementation(value, interfaceName = "callback interface") {
   if ((typeof value !== "object" && typeof value !== "function") || value == null) {
     throw new TypeError(`${interfaceName} implementations must be objects with callable methods.`);
@@ -72,6 +74,46 @@ export function writeCallbackError(status, error, options = {}) {
   callbackStatus.code = lowered.code;
   callbackStatus.error_buf = lowered.error_buf ?? EMPTY_RUST_BUFFER;
   return lowered.error;
+}
+
+export function createPendingForeignFuture({
+  callbackData = undefined,
+  complete = undefined,
+} = {}) {
+  const pending = {
+    callbackData,
+    cancelled: false,
+    complete,
+    handle: 0n,
+    settled: false,
+  };
+  pending.handle = PENDING_FOREIGN_FUTURES.insert(pending);
+  return pending;
+}
+
+export function takePendingForeignFuture(handle) {
+  const pending = PENDING_FOREIGN_FUTURES.remove(handle);
+  if (pending == null) {
+    return undefined;
+  }
+  pending.settled = true;
+  return pending;
+}
+
+export function freePendingForeignFuture(handle) {
+  const pending = takePendingForeignFuture(handle);
+  if (pending == null) {
+    return undefined;
+  }
+  pending.cancelled = true;
+  return pending;
+}
+
+export function clearPendingForeignFutures() {
+  for (const pending of PENDING_FOREIGN_FUTURES.values()) {
+    pending.cancelled = true;
+  }
+  PENDING_FOREIGN_FUTURES.clear();
 }
 
 export function invokeCallbackMethod({

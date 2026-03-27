@@ -83,7 +83,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Render callback proxy methods as async when the callback-interface method is async.
 - [x] Split callback vtable registration code into synchronous and asynchronous callback generation paths.
 - [x] Generate async callback Koffi callback signatures with futureCallback, callbackData, and outReturn ForeignFuture.
-- [ ] Add runtime helpers for pending foreign futures in templates/runtime/callbacks.js.j2.
+- [x] Add runtime helpers for pending foreign futures in templates/runtime/callbacks.js.j2.
 - [ ] Add runtime type declarations for async callback helpers in templates/runtime/callbacks.d.ts.j2.
 - [ ] Implement async callback invocation that writes ForeignFuture immediately and completes later from promise settlement.
 - [ ] Reuse existing callback error lowering for typed and unexpected promise rejections.

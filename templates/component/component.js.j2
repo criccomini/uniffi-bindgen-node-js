@@ -30,7 +30,10 @@ import {
 import { UnexpectedEnumCase } from "./runtime/errors.js";
 import { rustCallAsync } from "./runtime/async-rust-call.js";
 import {
+  clearPendingForeignFutures,
   createCallbackRegistry,
+  freePendingForeignFuture,
+  invokeAsyncCallbackMethod,
   invokeCallbackMethod,
 } from "./runtime/callbacks.js";
 import {

@@ -33,6 +33,11 @@ export interface PendingForeignFutureOptions<Result = unknown> {
   ) => void) | null;
 }
 
+export interface AsyncCallbackCompletion<Lowered = unknown> {
+  call_status: RustCallStatusStruct;
+  return_value?: Lowered;
+}
+
 export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Error>
   extends CallbackErrorOptions<E>
 {
@@ -40,6 +45,23 @@ export interface InvokeCallbackMethodOptions<T = unknown, E extends Error = Erro
   defaultReturnValue?: T;
   interfaceName?: string;
   status?: RustCallStatusStruct | null;
+}
+
+export interface InvokeAsyncCallbackMethodOptions<
+  Result = unknown,
+  Lowered = Result,
+  E extends Error = Error,
+> extends CallbackErrorOptions<E>
+{
+  args?: readonly unknown[];
+  callbackData?: bigint | number;
+  complete?: ((
+    callbackData: bigint | number | undefined,
+    result: AsyncCallbackCompletion<Lowered>,
+  ) => void) | null;
+  defaultReturnValue?: Lowered;
+  interfaceName?: string;
+  lowerReturn?: ((value: Result) => Lowered) | null;
 }
 
 export declare function resetCallbackCallStatus(
@@ -65,6 +87,15 @@ export declare function invokeCallbackMethod<T = unknown, E extends Error = Erro
   handle: bigint | number;
   methodName: string;
 } & InvokeCallbackMethodOptions<T, E>): T;
+export declare function invokeAsyncCallbackMethod<
+  Result = unknown,
+  Lowered = Result,
+  E extends Error = Error,
+>(params: {
+  registry: Pick<UniffiCallbackRegistry, "get"> & { interfaceName?: string };
+  handle: bigint | number;
+  methodName: string;
+} & InvokeAsyncCallbackMethodOptions<Result, Lowered, E>): bigint;
 
 export declare class UniffiCallbackRegistry<T extends object = Record<string, unknown>> {
   readonly interfaceName: string;

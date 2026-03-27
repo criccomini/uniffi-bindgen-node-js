@@ -1201,7 +1201,7 @@ fn render_js_sync_callback_vtable_registration(
 fn render_js_async_callback_vtable_registration(
     callback_interface: &CallbackInterfaceModel,
     method: &MethodModel,
-    _registry_name: &str,
+    registry_name: &str,
 ) -> Result<Vec<String>> {
     let callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
         format!(
@@ -1209,10 +1209,18 @@ fn render_js_async_callback_vtable_registration(
             callback_interface.name, method.name
         )
     })?;
+    let async_callback_ffi = method.async_callback_ffi.as_ref().with_context(|| {
+        format!(
+            "async callback interface {}.{} is missing ForeignFuture metadata",
+            callback_interface.name, method.name
+        )
+    })?;
     let method_identifier = js_identifier(&method.name);
     let future_free_identifier = format!("{method_identifier}FutureFree");
     let mut lines = vec![format!("  const {} = koffi.register(", future_free_identifier)];
-    lines.push("    () => {},".to_string());
+    lines.push("    (uniffiFutureHandle) => {".to_string());
+    lines.push("      freePendingForeignFuture(uniffiFutureHandle);".to_string());
+    lines.push("    },".to_string());
     lines.push("    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),".to_string());
     lines.push("  );".to_string());
     lines.push(format!(
@@ -1241,8 +1249,65 @@ fn render_js_async_callback_vtable_registration(
                 .join(", ")
             + ") => {",
     );
+    lines.push("      const uniffiFutureHandle = invokeAsyncCallbackMethod({".to_string());
+    lines.push(format!("        registry: {},", registry_name));
+    lines.push("        handle: uniffiHandle,".to_string());
+    lines.push(format!(
+        "        methodName: {},",
+        json_string_literal(&method.name)?
+    ));
+    lines.push("        args: [".to_string());
+    for argument in &method.arguments {
+        lines.push(format!(
+            "          {},",
+            render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))?
+        ));
+    }
+    lines.push("        ],".to_string());
+    lines.push(
+        "        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),"
+            .to_string(),
+    );
+    lines.push("        callbackData: uniffiCallbackData,".to_string());
+    if let Some(throws_type) = method.throws_type.as_ref() {
+        lines.push(format!(
+            "        lowerError: (error) => error instanceof {} ? uniffiLowerIntoRustBuffer({}, error) : null,",
+            render_public_type(throws_type)?,
+            render_js_type_converter_expression(throws_type)?
+        ));
+    }
+    if async_callback_ffi.result_struct_has_return_value {
+        let return_type = method.return_type.as_ref().with_context(|| {
+            format!(
+                "async callback interface {}.{} is missing a return type",
+                callback_interface.name, method.name
+            )
+        })?;
+        lines.push(format!(
+            "        lowerReturn: (value) => {},",
+            render_js_lower_expression(return_type, "value")?
+        ));
+        let default_return_value = async_callback_ffi
+            .default_error_return_value_expression
+            .as_deref()
+            .with_context(|| {
+                format!(
+                    "async callback interface {}.{} is missing a default error return value",
+                    callback_interface.name, method.name
+                )
+            })?;
+        lines.push(format!(
+            "        defaultReturnValue: {},",
+            default_return_value
+        ));
+    }
+    lines.push(
+        "        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),"
+            .to_string(),
+    );
+    lines.push("      });".to_string());
     lines.push("      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {".to_string());
-    lines.push("        handle: 0n,".to_string());
+    lines.push("        handle: uniffiFutureHandle,".to_string());
     lines.push(format!("        free: {},", future_free_identifier));
     lines.push("      });".to_string());
     lines.push("    },".to_string());
@@ -2287,6 +2352,7 @@ fn render_js_callback_runtime_hooks(
     lines.push("}".to_string());
     lines.push(String::new());
     lines.push("function uniffiUnregisterCallbackVtables() {".to_string());
+    lines.push("  clearPendingForeignFutures();".to_string());
     for callback_interface in callback_interfaces {
         lines.push(format!(
             "  {}.clear();",

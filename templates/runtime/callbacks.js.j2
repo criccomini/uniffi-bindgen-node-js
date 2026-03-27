@@ -116,6 +116,95 @@ export function clearPendingForeignFutures() {
   PENDING_FOREIGN_FUTURES.clear();
 }
 
+function createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue) {
+  const completion = {
+    call_status: callStatus,
+  };
+  if (hasReturnValue) {
+    completion.return_value = returnValue;
+  }
+  return completion;
+}
+
+function takeCompletablePendingForeignFuture(handle) {
+  const pending = takePendingForeignFuture(handle);
+  if (pending == null || pending.cancelled || typeof pending.complete !== "function") {
+    return undefined;
+  }
+  return pending;
+}
+
+function createAsyncCallbackFailureCompletion(error, options = {}) {
+  const {
+    defaultReturnValue = undefined,
+    hasReturnValue = false,
+    interfaceName = "callback interface",
+    lowerError,
+    lowerString,
+    methodName = "callback",
+  } = options;
+  const callStatus = createRustCallStatus();
+  writeCallbackError(callStatus, error, {
+    lowerError,
+    lowerString,
+    defaultMessage: `${interfaceName}.${String(methodName)}() failed.`,
+  });
+  return createAsyncCallbackCompletion(callStatus, defaultReturnValue, hasReturnValue);
+}
+
+function completeAsyncCallbackFailure(handle, error, options = {}) {
+  const pending = takeCompletablePendingForeignFuture(handle);
+  if (pending == null) {
+    return;
+  }
+
+  pending.complete(
+    pending.callbackData,
+    createAsyncCallbackFailureCompletion(error, options),
+  );
+}
+
+function completeAsyncCallbackSuccess(handle, result, options = {}) {
+  const pending = takeCompletablePendingForeignFuture(handle);
+  if (pending == null) {
+    return;
+  }
+
+  const {
+    defaultReturnValue = undefined,
+    hasReturnValue = false,
+    interfaceName = "callback interface",
+    lowerError,
+    lowerReturn = undefined,
+    lowerString,
+    methodName = "callback",
+  } = options;
+
+  try {
+    const callStatus = resetCallbackCallStatus(createRustCallStatus());
+    const returnValue =
+      typeof lowerReturn === "function"
+        ? lowerReturn(result)
+        : result;
+    pending.complete(
+      pending.callbackData,
+      createAsyncCallbackCompletion(callStatus, returnValue, hasReturnValue),
+    );
+  } catch (error) {
+    pending.complete(
+      pending.callbackData,
+      createAsyncCallbackFailureCompletion(error, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerString,
+        methodName,
+      }),
+    );
+  }
+}
+
 export function invokeCallbackMethod({
   registry,
   handle,
@@ -146,6 +235,63 @@ export function invokeCallbackMethod({
     });
     return defaultReturnValue;
   }
+}
+
+export function invokeAsyncCallbackMethod({
+  registry,
+  handle,
+  methodName,
+  args = [],
+  callbackData = undefined,
+  complete = undefined,
+  defaultReturnValue = undefined,
+  interfaceName = registry?.interfaceName ?? "callback interface",
+  lowerError,
+  lowerReturn = undefined,
+  lowerString,
+}) {
+  const pending = createPendingForeignFuture({
+    callbackData,
+    complete,
+  });
+  const hasReturnValue =
+    typeof lowerReturn === "function"
+    || defaultReturnValue !== undefined;
+
+  let promise;
+  try {
+    const implementation = registry.get(handle);
+    const method = requireCallbackMethod(implementation, methodName, interfaceName);
+    promise = Promise.resolve(method.apply(implementation, Array.from(args)));
+  } catch (error) {
+    promise = Promise.reject(error);
+  }
+
+  void promise.then(
+    (result) => {
+      completeAsyncCallbackSuccess(pending.handle, result, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerReturn,
+        lowerString,
+        methodName,
+      });
+    },
+    (error) => {
+      completeAsyncCallbackFailure(pending.handle, error, {
+        defaultReturnValue,
+        hasReturnValue,
+        interfaceName,
+        lowerError,
+        lowerString,
+        methodName,
+      });
+    },
+  );
+
+  return pending.handle;
 }
 
 export class UniffiCallbackRegistry {

@@ -85,9 +85,9 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Generate async callback Koffi callback signatures with futureCallback, callbackData, and outReturn ForeignFuture.
 - [x] Add runtime helpers for pending foreign futures in templates/runtime/callbacks.js.j2.
 - [x] Add runtime type declarations for async callback helpers in templates/runtime/callbacks.d.ts.j2.
-- [ ] Implement async callback invocation that writes ForeignFuture immediately and completes later from promise settlement.
-- [ ] Reuse existing callback error lowering for typed and unexpected promise rejections.
-- [ ] Ignore late async callback completions after foreign-future free or runtime unload.
+- [x] Implement async callback invocation that writes ForeignFuture immediately and completes later from promise settlement.
+- [x] Reuse existing callback error lowering for typed and unexpected promise rejections.
+- [x] Ignore late async callback completions after foreign-future free or runtime unload.
 - [ ] Add a test-only foreign-future handle-count helper for async callback runtime state.
 - [ ] Extend the callback fixture with async callback-interface methods covering success, error, void, and cancellation cases.
 - [ ] Extend the mock Koffi runtime to emulate async callback invocation, completion callbacks, and cancellation cleanup.

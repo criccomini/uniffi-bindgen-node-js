@@ -1,72 +1,69 @@
-# Support Async Callback-Interface Methods
+# Hybrid Askama Refactor For Public API Codegen
 
 ## Summary
 
-- Implement UniFFI 0.29 async callback-interface support through ForeignFuture, not the Rust-future polling path.
-- Remove the current v1 diagnostic rejecting async callback-interface methods.
-- Keep generated Node callback interface typings strict: async methods return Promise<T> / Promise<void>.
-- Apply the change to both explicit callback interfaces and object-backed foreign traits, since this generator already models both through the same callback-interface path.
+Keep the Node-specific adapter/model layer and Rust-side validation/expression logic, but move the large public API JS and .d.ts string emitters behind Askama templates.
+Preserve render_public_api() and keep generated output behaviorally identical.
 
-## Public API / Interface Changes
+## Interfaces
 
-- Generated .d.ts callback interfaces render async methods as method(...): Promise<T> / Promise<void>.
-- Generated JS proxy classes render corresponding lifted callback methods as async.
-- No new public Node callback API parameters are added; cancellation remains internal via UniFFI foreign-future free(handle).
+- Keep ComponentModel::from_ci(...).render_public_api() as the entrypoint.
+- Keep RenderedComponentApi { js, dts, requires_async_rust_future_hooks } unchanged.
+- Keep src/bindings/mod.rs consuming public_api_js / public_api_dts unchanged.
+- Add only internal rendering types and Askama templates. No public API or config changes.
 
 ## Implementation Changes
 
-- Generator/model:
-    - Remove the unsupported-feature validation for async callback-interface methods.
-    - Extend callback-method metadata with async foreign-future completion identifiers, result-struct shape, and a default lowered return value for async error completion.
-    - Render callback proxy methods with the existing async object-method path when method.is_async.
-    - Split callback vtable generation into sync and async branches.
-- Async callback vtable generation:
-    - Emit Koffi callback signatures as handle, args..., futureCallback, callbackData, outReturn for async callback methods.
-    - In the async branch, synchronously allocate and write a ForeignFuture into outReturn, then complete it later through the supplied UniFFI completion callback.
-    - Build completion payloads with the existing ForeignFutureStruct* FFI types for the method’s return family.
-- Runtime:
-    - Add async callback helpers to templates/runtime/callbacks.js.j2 and declarations to templates/runtime/callbacks.d.ts.j2.
-    - Maintain a pending foreign-future handle map holding promise lifecycle state, completion callback data, and cancellation state.
-    - Reuse the existing callback error lowering rules for rejected promises: typed error -> CALL_ERROR; other rejection -> CALL_UNEXPECTED_ERROR with lowered string message.
-    - Suppress late completion after free(handle) or runtime unload.
-    - Expose a handle-count helper for tests, mirroring the existing rust-future runtime test hook.
-- FFI defaults:
-    - Add generator-side rendering for default lowered return values required by ForeignFutureResult<T> on error paths for non-void async callback methods.
-    - Use zero/empty defaults appropriate to the UniFFI 0.29 FFI family used here: numeric 0, handles/pointers 0n, and buffers EMPTY_RUST_BUFFER.
-- Fixtures and mocks:
-    - Extend the callback fixture with async callback-interface coverage for success, typed error, unexpected error, void, and cancellation.
-    - Extend the mock koffi runtime to simulate async callback invocation, ForeignFuture completion callbacks, and cancellation cleanup.
+- Split the current src/bindings/api.rs responsibilities into three internal layers under src/bindings/api/: model construction, render support, and template rendering.
+- Keep the model layer responsible for all Node-specific normalization from UniFFI into ComponentModel: enum/error partitioning, callback-interface extraction, object
+  filtering, FFI symbol capture, async scaffolding capture, and renderability validation.
+- Move pure helper logic into the support layer: public type rendering, JS identifier and symbol sanitization, string literal quoting, converter naming, object/callback
+  helper naming, lower/lift expression rendering, Koffi type rendering, allocation-size helpers, property-access helpers, and async-complete helper selection.
+- Add a render layer that owns Askama integration only. It should expose a small renderer/view API to templates instead of passing raw ComponentInterface or relying on
+  templates to call low-level helper functions directly.
+- Make render_public_api() construct a renderer from &ComponentModel, compute requires_async_rust_future_hooks, render the DTS template, render the JS template, and return
+  RenderedComponentApi. It should stop manually assembling Vec<String> sections once the migration is complete.
+- Use ComponentModel as the template context boundary. Do not pass raw UniFFI types into the new templates.
+- Introduce renderer/view structs for the major template loops so templates can stay structural rather than algorithmic. At minimum, expose typed views for functions,
+  objects, methods, constructors, records, enums, errors, callback interfaces, and callback methods.
+- Put all non-trivial Type-matching logic behind renderer/view methods. Templates should ask for things like params, return types, lower/lift expressions, converter
+  expressions, allocation-size expressions, callback symbol names, or async helper names, rather than reconstructing those decisions inline.
+- Treat templates as owners of declaration structure and formatting. They should own section ordering, declaration shells, statement ordering, if/for layout, punctuation,
+  and blank-line placement.
+- Treat Rust helpers as owners of leaf expressions and branch-heavy computation. They should own any logic that depends on Type, async FFI metadata, object-vs-callback
+  distinctions, generic ABI symbol selection, or generated identifier rules.
+- Add two top-level body templates under templates/api/: one for JS and one for DTS. These templates should replace the current high-level section assembly performed in
+  render_public_api().
+- Add fragment templates grouped by output kind rather than by file: DTS fragments for records, callback interfaces, enums, errors, functions, and objects; JS fragments for
+  functions, objects, enums, errors, converters, callback registration, runtime helpers, and runtime hooks.
+- Keep the JS top-level template responsible for the existing section order: unimplemented helper, runtime helpers, async rust-future helpers, type declarations/converters,
+  runtime hooks, functions, then objects. Preserve the current conditional inclusion rules for each section.
+- Keep the DTS top-level template responsible for the existing declaration order: records, flat enums, tagged enums, errors, callback interfaces, functions, then objects.
+- Migrate DTS first because it is mostly declarative and will validate the template/view boundary with low risk.
+- After DTS is stable, migrate JS functions and objects next. These are the most readable wins and will prove that templates can own method/class structure while Rust still
+  owns lower/lift and async scaffolding expressions.
+- Migrate converters after functions/objects. Keep converter internals template-backed, but keep allocation-size math, property access, and converter expression generation
+  in Rust helper methods.
+- Migrate callback vtable registration and runtime hooks last. These are the most branch-heavy pieces and should use the same renderer/view boundary established by earlier
+  phases.
+- Do not change src/bindings/ffi.rs, the package templates, or the runtime templates in this refactor. The goal is only to restructure public API body generation.
+- Delete old string-builder functions only after the equivalent template path is wired, covered by the existing tests, and producing stable output.
 
 ## Test Plan
 
-- Rust unit tests:
-    - async callback interfaces no longer fail validation,
-    - callback interface DTS renders Promise<...> methods,
-    - public API JS renders async proxy methods for async callback interfaces,
-    - FFI JS renders async callback signatures with ForeignFutureComplete* and ForeignFutureStruct*.
-- Snapshot tests:
-    - regenerate callback fixture snapshots for component JS, DTS, and FFI output.
-- Node smoke tests:
-    - async callback success with return value,
-    - async callback void completion,
-    - typed rejection mapped back to the generated typed Rust error,
-    - unexpected rejection mapped to the unexpected callback error path,
-    - cancellation where Rust drops the foreign future before the JS promise settles,
-    - handle-count cleanup after success, error, and cancellation.
-- TypeScript tests:
-    - strict Promise<...> callback interface typing,
-    - callback implementations typecheck for the async fixture surface.
+- Keep current assertions and snapshots as the acceptance contract.
+- Treat whitespace-only drift as a template formatting issue; fix templates rather than changing expected output.
+- Run the existing bindings::api tests, package generator tests, snapshot tests, and ffi_initialization_codegen as the final verification pass.
 
 ## Assumptions
 
-- Generated Node callback interfaces require Promise<T> / Promise<void> for async methods.
-- Cancellation is internal only; no new public AbortSignal or options object is added to generated callback method signatures.
-- Promise settlement after cancellation or unload is ignored.
-- This work targets the repo’s pinned UniFFI 0.29.5 ABI.
+- This is a structural refactor only; emitted API shape and generated file contents should remain effectively identical.
+- ComponentModel, not raw ComponentInterface, remains the boundary passed into the public API renderer.
+- The outer component templates remain responsible only for the package shell and interpolation of the rendered public API body.
 
 ## Instructions
 
-You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO` section below.
+You are in a Ralph Wiggum loop. You are making progress on the plan defined above. Work through the first few TODOs in the `## TODO` section below.
 
 - update PROMPT.md with an updated TODO list after each change
 - never ever change any PROMPT.md text _except_ the items in the `## TODO` section
@@ -77,23 +74,26 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 
 ## TODO
 
-- [x] Remove the async callback-interface unsupported-feature validation from component model building.
-- [x] Extend callback method metadata to capture foreign-future completion identifiers and async result-struct requirements.
-- [x] Add generator support for default lowered FFI return values used in async callback error completion structs.
-- [x] Render callback proxy methods as async when the callback-interface method is async.
-- [x] Split callback vtable registration code into synchronous and asynchronous callback generation paths.
-- [x] Generate async callback Koffi callback signatures with futureCallback, callbackData, and outReturn ForeignFuture.
-- [x] Add runtime helpers for pending foreign futures in templates/runtime/callbacks.js.j2.
-- [x] Add runtime type declarations for async callback helpers in templates/runtime/callbacks.d.ts.j2.
-- [x] Implement async callback invocation that writes ForeignFuture immediately and completes later from promise settlement.
-- [x] Reuse existing callback error lowering for typed and unexpected promise rejections.
-- [x] Ignore late async callback completions after foreign-future free or runtime unload.
-- [x] Add a test-only foreign-future handle-count helper for async callback runtime state.
-- [x] Extend the callback fixture with async callback-interface methods covering success, error, void, and cancellation cases.
-- [x] Extend the mock Koffi runtime to emulate async callback invocation, completion callbacks, and cancellation cleanup.
-- [x] Add Rust unit tests for async callback model validation and rendered public API output.
-- [x] Update snapshot tests for generated callback fixture output.
-- [x] Add Node smoke tests for async callback success, typed error, unexpected error, void completion, and cancellation.
-- [x] Add TypeScript tests that enforce Promise<...> async callback interface method typing.
-- [x] Run the full relevant test suite after implementation.
-✅
+- [x] Create src/bindings/api/ and introduce internal model, support, and render modules while preserving the current public module surface.
+- [ ] Move ComponentModel, RenderedComponentApi, and the existing *Model adapter structs into the new model module without changing behavior.
+- [ ] Move validation helpers, identifier helpers, naming helpers, and expression-rendering helpers into the support module without changing call sites yet.
+- [ ] Add Askama template wrapper types for public API JS and DTS rendering and keep render_public_api() as the stable orchestration entrypoint.
+- [ ] Create templates/api/public-api.d.ts.j2 as the top-level DTS body template.
+- [ ] Extract DTS record rendering into a template fragment and wire it through the new DTS template wrapper.
+- [ ] Extract DTS callback-interface rendering into a template fragment and wire it through the new DTS template wrapper.
+- [ ] Extract DTS enum and error rendering into template fragments and wire them through the new DTS template wrapper.
+- [ ] Extract DTS function and object rendering into template fragments and wire them through the new DTS template wrapper.
+- [ ] Remove the old DTS render_* string builders once the DTS template path is passing existing tests unchanged.
+- [ ] Create templates/api/public-api.js.j2 as the top-level JS body template, preserving the current section ordering.
+- [ ] Extract JS function rendering into a template fragment and keep body-level expressions delegated to Rust helper methods.
+- [ ] Extract JS object/class and constructor rendering into template fragments and keep async/sync body logic delegated to Rust helper methods.
+- [ ] Extract JS record, flat enum, tagged enum, and error rendering into template fragments.
+- [ ] Extract JS converter rendering for records, enums, errors, and callback interfaces into template fragments while keeping allocation-size math and converter-expression
+  generation in Rust.
+- [ ] Extract JS callback vtable registration fragments and keep sync/async branching plus symbol lookup in Rust support methods.
+- [ ] Extract JS runtime helper and runtime hook fragments into templates without changing their emitted contents.
+- [ ] Remove the obsolete JS Vec<String> emitter functions after all JS fragments are template-backed and snapshot-stable.
+- [ ] Run cargo test bindings::api::tests and fix any regressions without changing intended output.
+- [ ] Run cargo test bindings::tests and fix any generator-level regressions.
+- [ ] Run cargo test --test codegen_snapshots and resolve any whitespace/control-flow drift in templates.
+- [ ] Run cargo test --test ffi_initialization_codegen as the final regression check around adjacent codegen behavior.

@@ -2,9 +2,10 @@ use anyhow::Result;
 use askama::Template;
 
 use super::{
-    ComponentModel, FieldModel, RecordModel, quoted_property_name, render_dts_callback_interface,
-    render_dts_error, render_dts_flat_enum, render_dts_function, render_dts_object,
-    render_dts_tagged_enum, render_public_type,
+    CallbackInterfaceModel, ComponentModel, FieldModel, MethodModel, RecordModel,
+    js_member_identifier, quoted_property_name, render_dts_error, render_dts_flat_enum,
+    render_dts_function, render_dts_object, render_dts_params, render_dts_tagged_enum,
+    render_public_type, render_return_type,
 };
 
 pub(crate) struct PublicApiRenderer<'a> {
@@ -68,7 +69,7 @@ impl DtsRenderer {
             callback_interfaces: model
                 .callback_interfaces
                 .iter()
-                .map(render_dts_callback_interface)
+                .map(render_dts_callback_interface_fragment)
                 .collect::<Result<_>>()?,
             functions: model
                 .functions
@@ -163,6 +164,51 @@ fn render_dts_record_fragment(record: &RecordModel) -> Result<String> {
     .to_string())
 }
 
+struct CallbackInterfaceDtsView {
+    name: String,
+    methods: Vec<CallbackMethodDtsView>,
+}
+
+impl CallbackInterfaceDtsView {
+    fn from_callback_interface(callback_interface: &CallbackInterfaceModel) -> Result<Self> {
+        Ok(Self {
+            name: callback_interface.name.clone(),
+            methods: callback_interface
+                .methods
+                .iter()
+                .map(CallbackMethodDtsView::from_method)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct CallbackMethodDtsView {
+    name: String,
+    params: String,
+    return_type: String,
+}
+
+impl CallbackMethodDtsView {
+    fn from_method(method: &MethodModel) -> Result<Self> {
+        Ok(Self {
+            name: js_member_identifier(&method.name),
+            params: render_dts_params(&method.arguments)?,
+            return_type: render_return_type(method.return_type.as_ref(), method.is_async)?,
+        })
+    }
+}
+
+fn render_dts_callback_interface_fragment(
+    callback_interface: &CallbackInterfaceModel,
+) -> Result<String> {
+    Ok(DtsCallbackInterfaceTemplate {
+        callback_interface: CallbackInterfaceDtsView::from_callback_interface(callback_interface)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
 #[derive(Template)]
 #[template(source = "{{ contents }}", ext = "txt", escape = "none")]
 struct PublicApiJsTemplate {
@@ -179,4 +225,10 @@ struct PublicApiDtsTemplate {
 #[template(path = "api/dts/record.d.ts.j2", escape = "none")]
 struct DtsRecordTemplate {
     record: RecordDtsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/dts/callback-interface.d.ts.j2", escape = "none")]
+struct DtsCallbackInterfaceTemplate {
+    callback_interface: CallbackInterfaceDtsView,
 }

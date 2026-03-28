@@ -1,0 +1,5 @@
+export interface {{ callback_interface.name }} {
+{% for method in callback_interface.methods %}
+  {{ method.name }}({{ method.params }}): {{ method.return_type }};
+{% endfor %}
+}

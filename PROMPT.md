@@ -80,7 +80,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add Askama template wrapper types for public API JS and DTS rendering and keep render_public_api() as the stable orchestration entrypoint.
 - [x] Create templates/api/public-api.d.ts.j2 as the top-level DTS body template.
 - [x] Extract DTS record rendering into a template fragment and wire it through the new DTS template wrapper.
-- [ ] Extract DTS callback-interface rendering into a template fragment and wire it through the new DTS template wrapper.
+- [x] Extract DTS callback-interface rendering into a template fragment and wire it through the new DTS template wrapper.
 - [ ] Extract DTS enum and error rendering into template fragments and wire them through the new DTS template wrapper.
 - [ ] Extract DTS function and object rendering into template fragments and wire them through the new DTS template wrapper.
 - [ ] Remove the old DTS render_* string builders once the DTS template path is passing existing tests unchanged.

@@ -3,7 +3,6 @@ mod render;
 mod support;
 
 use anyhow::{Context, Result};
-use uniffi_bindgen::interface::Type;
 
 pub(crate) use self::model::{
     ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
@@ -575,6 +574,7 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uniffi_bindgen::interface::Type;
     use uniffi_bindgen::interface::AsType;
     use uniffi_bindgen::interface::ComponentInterface;
 

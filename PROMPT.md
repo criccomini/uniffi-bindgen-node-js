@@ -94,6 +94,6 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Extract JS runtime helper and runtime hook fragments into templates without changing their emitted contents.
 - [x] Remove the obsolete JS Vec<String> emitter functions after all JS fragments are template-backed and snapshot-stable.
 - [x] Run cargo test bindings::api::tests and fix any regressions without changing intended output.
-- [ ] Run cargo test bindings::tests and fix any generator-level regressions.
+- [x] Run cargo test bindings::tests and fix any generator-level regressions.
 - [ ] Run cargo test --test codegen_snapshots and resolve any whitespace/control-flow drift in templates.
 - [ ] Run cargo test --test ffi_initialization_codegen as the final regression check around adjacent codegen behavior.

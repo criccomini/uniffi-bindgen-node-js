@@ -83,7 +83,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Extract DTS callback-interface rendering into a template fragment and wire it through the new DTS template wrapper.
 - [x] Extract DTS enum and error rendering into template fragments and wire them through the new DTS template wrapper.
 - [x] Extract DTS function and object rendering into template fragments and wire them through the new DTS template wrapper.
-- [ ] Remove the old DTS render_* string builders once the DTS template path is passing existing tests unchanged.
+- [x] Remove the old DTS render_* string builders once the DTS template path is passing existing tests unchanged.
 - [ ] Create templates/api/public-api.js.j2 as the top-level JS body template, preserving the current section ordering.
 - [ ] Extract JS function rendering into a template fragment and keep body-level expressions delegated to Rust helper methods.
 - [ ] Extract JS object/class and constructor rendering into template fragments and keep async/sync body logic delegated to Rust helper methods.

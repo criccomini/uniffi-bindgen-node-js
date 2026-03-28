@@ -283,44 +283,6 @@ fn render_js_function(function: &FunctionModel) -> Result<String> {
     Ok(lines.join("\n"))
 }
 
-fn render_dts_function(function: &FunctionModel) -> Result<String> {
-    Ok(format!(
-        "export declare function {}({}): {};",
-        js_identifier(&function.name),
-        render_dts_params(&function.arguments)?,
-        render_return_type(function.return_type.as_ref(), function.is_async)?
-    ))
-}
-
-fn render_dts_record(record: &RecordModel) -> Result<String> {
-    let mut lines = vec![format!("export interface {} {{", record.name)];
-    for field in &record.fields {
-        lines.push(format!(
-            "  {}: {};",
-            quoted_property_name(&field.name)?,
-            render_public_type(&field.type_)?
-        ));
-    }
-    lines.push("}".to_string());
-    Ok(lines.join("\n"))
-}
-
-fn render_dts_callback_interface(callback_interface: &CallbackInterfaceModel) -> Result<String> {
-    let mut lines = vec![format!("export interface {} {{", callback_interface.name)];
-
-    for method in &callback_interface.methods {
-        lines.push(format!(
-            "  {}({}): {};",
-            js_member_identifier(&method.name),
-            render_dts_params(&method.arguments)?,
-            render_return_type(method.return_type.as_ref(), method.is_async)?
-        ));
-    }
-
-    lines.push("}".to_string());
-    Ok(lines.join("\n"))
-}
-
 fn render_js_record_converter(record: &RecordModel) -> Result<String> {
     let converter_name = type_converter_name(&record.name);
     let record_type_name = json_string_literal(&record.name)?;
@@ -829,26 +791,6 @@ fn render_js_flat_enum_converter(enum_def: &EnumModel) -> Result<String> {
     Ok(lines.join("\n"))
 }
 
-fn render_dts_flat_enum(enum_def: &EnumModel) -> Result<String> {
-    let mut lines = vec![format!(
-        "export declare const {}: Readonly<{{",
-        enum_def.name
-    )];
-    for variant in &enum_def.variants {
-        lines.push(format!(
-            "  {}: {};",
-            quoted_property_name(&variant.name)?,
-            json_string_literal(&variant.name)?
-        ));
-    }
-    lines.push("}>;".to_string());
-    lines.push(format!(
-        "export type {} = (typeof {})[keyof typeof {}];",
-        enum_def.name, enum_def.name, enum_def.name
-    ));
-    Ok(lines.join("\n"))
-}
-
 fn render_js_tagged_enum(enum_def: &EnumModel) -> Result<String> {
     let mut lines = vec![format!("export const {} = Object.freeze({{", enum_def.name)];
     for variant in &enum_def.variants {
@@ -981,48 +923,6 @@ fn render_js_tagged_enum_converter(enum_def: &EnumModel) -> Result<String> {
     lines.push("    }".to_string());
     lines.push("  }".to_string());
     lines.push("})();".to_string());
-    Ok(lines.join("\n"))
-}
-
-fn render_dts_tagged_enum(enum_def: &EnumModel) -> Result<String> {
-    let mut lines = Vec::new();
-    let mut variant_types = Vec::new();
-
-    for variant in &enum_def.variants {
-        let variant_type_name = variant_type_name(&enum_def.name, &variant.name);
-        variant_types.push(variant_type_name.clone());
-        lines.push(format!("export interface {} {{", variant_type_name));
-        lines.push(format!("  tag: {};", json_string_literal(&variant.name)?));
-        for field in &variant.fields {
-            lines.push(format!(
-                "  {}: {};",
-                quoted_property_name(&field.name)?,
-                render_public_type(&field.type_)?
-            ));
-        }
-        lines.push("}".to_string());
-        lines.push(String::new());
-    }
-
-    lines.push(format!(
-        "export type {} = {};",
-        enum_def.name,
-        variant_types.join(" | ")
-    ));
-    lines.push(format!(
-        "export declare const {}: Readonly<{{",
-        enum_def.name
-    ));
-    for variant in &enum_def.variants {
-        lines.push(format!(
-            "  {}({}): {};",
-            js_member_identifier(&variant.name),
-            render_dts_fields_as_params(&variant.fields)?,
-            variant_type_name(&enum_def.name, &variant.name)
-        ));
-    }
-    lines.push("}>;".to_string());
-
     Ok(lines.join("\n"))
 }
 
@@ -1203,49 +1103,6 @@ fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
     Ok(lines.join("\n"))
 }
 
-fn render_dts_error(error: &ErrorModel) -> Result<String> {
-    let mut lines = vec![
-        format!(
-            "export declare class {} extends globalThis.Error {{",
-            error.name
-        ),
-        "  readonly tag: string;".to_string(),
-        "  protected constructor(tag: string, message?: string);".to_string(),
-        "}".to_string(),
-    ];
-
-    for variant in &error.variants {
-        lines.push(String::new());
-        let variant_class_name = variant_type_name(&error.name, &variant.name);
-        lines.push(format!(
-            "export declare class {} extends {} {{",
-            variant_class_name, error.name
-        ));
-        lines.push(format!(
-            "  readonly tag: {};",
-            json_string_literal(&variant.name)?
-        ));
-        for field in &variant.fields {
-            lines.push(format!(
-                "  readonly {}: {};",
-                quoted_property_name(&field.name)?,
-                render_public_type(&field.type_)?
-            ));
-        }
-        if error.is_flat {
-            lines.push("  constructor(message?: string);".to_string());
-        } else {
-            lines.push(format!(
-                "  constructor({});",
-                render_dts_fields_as_params(&variant.fields)?
-            ));
-        }
-        lines.push("}".to_string());
-    }
-
-    Ok(lines.join("\n"))
-}
-
 fn render_js_object(object: &ObjectModel) -> Result<String> {
     let factory_name = object_factory_name(&object.name);
     let converter_name = object_converter_name(&object.name);
@@ -1423,50 +1280,6 @@ fn render_js_object(object: &ObjectModel) -> Result<String> {
         "const {} = createObjectConverter({});",
         converter_name, factory_name
     ));
-    Ok(lines.join("\n"))
-}
-
-fn render_dts_object(object: &ObjectModel) -> Result<String> {
-    let mut lines = vec![format!(
-        "export declare class {} extends UniffiObjectBase {{",
-        object.name
-    )];
-
-    if let Some(primary_constructor) = object
-        .constructors
-        .iter()
-        .find(|constructor| constructor.is_primary && !constructor.is_async)
-    {
-        lines.push(format!(
-            "  constructor({});",
-            render_dts_params(&primary_constructor.arguments)?
-        ));
-    } else {
-        lines.push("  protected constructor();".to_string());
-    }
-
-    for constructor in &object.constructors {
-        if constructor.is_primary && !constructor.is_async {
-            continue;
-        }
-        lines.push(format!(
-            "  static {}({}): {};",
-            js_member_identifier(&constructor.name),
-            render_dts_params(&constructor.arguments)?,
-            render_named_return_type(&object.name, constructor.is_async)
-        ));
-    }
-
-    for method in &object.methods {
-        lines.push(format!(
-            "  {}({}): {};",
-            js_member_identifier(&method.name),
-            render_dts_params(&method.arguments)?,
-            render_return_type(method.return_type.as_ref(), method.is_async)?
-        ));
-    }
-
-    lines.push("}".to_string());
     Ok(lines.join("\n"))
 }
 

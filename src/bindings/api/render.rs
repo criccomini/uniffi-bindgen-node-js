@@ -338,7 +338,6 @@ fn render_dts_tagged_enum_fragment(enum_def: &EnumModel) -> Result<String> {
 
 struct ErrorDtsView {
     name: String,
-    is_flat: bool,
     variants: Vec<ErrorVariantDtsView>,
 }
 
@@ -346,7 +345,6 @@ impl ErrorDtsView {
     fn from_error(error: &ErrorModel) -> Result<Self> {
         Ok(Self {
             name: error.name.clone(),
-            is_flat: error.is_flat,
             variants: error
                 .variants
                 .iter()

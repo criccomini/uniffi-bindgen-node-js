@@ -1,0 +1,17 @@
+{% for variant in enum_def.variants %}
+export interface {{ variant.type_name }} {
+  tag: {{ variant.tag_literal }};
+{% for field in variant.fields %}
+  {{ field.property_name }}: {{ field.type_name }};
+{% endfor %}
+}
+{% if !loop.last %}
+
+{% endif %}
+{% endfor %}
+export type {{ enum_def.name }} = {{ enum_def.variant_types }};
+export declare const {{ enum_def.name }}: Readonly<{
+{% for variant in enum_def.variants %}
+  {{ variant.constructor_name }}({{ variant.constructor_params }}): {{ variant.type_name }};
+{% endfor %}
+}>;

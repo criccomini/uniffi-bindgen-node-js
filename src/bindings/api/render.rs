@@ -1,11 +1,12 @@
 use anyhow::Result;
 use askama::Template;
 
+use super::model::VariantModel;
 use super::{
-    CallbackInterfaceModel, ComponentModel, FieldModel, MethodModel, RecordModel,
-    js_member_identifier, quoted_property_name, render_dts_error, render_dts_flat_enum,
-    render_dts_function, render_dts_object, render_dts_params, render_dts_tagged_enum,
-    render_public_type, render_return_type,
+    CallbackInterfaceModel, ComponentModel, EnumModel, ErrorModel, FieldModel, MethodModel,
+    RecordModel, js_member_identifier, json_string_literal, quoted_property_name,
+    render_dts_fields_as_params, render_dts_function, render_dts_object, render_dts_params,
+    render_public_type, render_return_type, variant_type_name,
 };
 
 pub(crate) struct PublicApiRenderer<'a> {
@@ -54,17 +55,17 @@ impl DtsRenderer {
             flat_enums: model
                 .flat_enums
                 .iter()
-                .map(render_dts_flat_enum)
+                .map(render_dts_flat_enum_fragment)
                 .collect::<Result<_>>()?,
             tagged_enums: model
                 .tagged_enums
                 .iter()
-                .map(render_dts_tagged_enum)
+                .map(render_dts_tagged_enum_fragment)
                 .collect::<Result<_>>()?,
             errors: model
                 .errors
                 .iter()
-                .map(render_dts_error)
+                .map(render_dts_error_fragment)
                 .collect::<Result<_>>()?,
             callback_interfaces: model
                 .callback_interfaces
@@ -209,6 +210,162 @@ fn render_dts_callback_interface_fragment(
     .to_string())
 }
 
+struct FlatEnumDtsView {
+    name: String,
+    variants: Vec<FlatEnumVariantDtsView>,
+}
+
+impl FlatEnumDtsView {
+    fn from_enum(enum_def: &EnumModel) -> Result<Self> {
+        Ok(Self {
+            name: enum_def.name.clone(),
+            variants: enum_def
+                .variants
+                .iter()
+                .map(FlatEnumVariantDtsView::from_variant)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct FlatEnumVariantDtsView {
+    property_name: String,
+    value_literal: String,
+}
+
+impl FlatEnumVariantDtsView {
+    fn from_variant(variant: &VariantModel) -> Result<Self> {
+        Ok(Self {
+            property_name: quoted_property_name(&variant.name)?,
+            value_literal: json_string_literal(&variant.name)?,
+        })
+    }
+}
+
+fn render_dts_flat_enum_fragment(enum_def: &EnumModel) -> Result<String> {
+    Ok(DtsFlatEnumTemplate {
+        enum_def: FlatEnumDtsView::from_enum(enum_def)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct TaggedEnumDtsView {
+    name: String,
+    variant_types: String,
+    variants: Vec<TaggedEnumVariantDtsView>,
+}
+
+impl TaggedEnumDtsView {
+    fn from_enum(enum_def: &EnumModel) -> Result<Self> {
+        let variants = enum_def
+            .variants
+            .iter()
+            .map(|variant| TaggedEnumVariantDtsView::from_variant(&enum_def.name, variant))
+            .collect::<Result<Vec<_>>>()?;
+        let variant_types = variants
+            .iter()
+            .map(|variant| variant.type_name.clone())
+            .collect::<Vec<_>>()
+            .join(" | ");
+
+        Ok(Self {
+            name: enum_def.name.clone(),
+            variant_types,
+            variants,
+        })
+    }
+}
+
+struct TaggedEnumVariantDtsView {
+    type_name: String,
+    tag_literal: String,
+    fields: Vec<FieldDtsView>,
+    constructor_name: String,
+    constructor_params: String,
+}
+
+impl TaggedEnumVariantDtsView {
+    fn from_variant(enum_name: &str, variant: &VariantModel) -> Result<Self> {
+        Ok(Self {
+            type_name: variant_type_name(enum_name, &variant.name),
+            tag_literal: json_string_literal(&variant.name)?,
+            fields: variant
+                .fields
+                .iter()
+                .map(FieldDtsView::from_field)
+                .collect::<Result<_>>()?,
+            constructor_name: js_member_identifier(&variant.name),
+            constructor_params: render_dts_fields_as_params(&variant.fields)?,
+        })
+    }
+}
+
+fn render_dts_tagged_enum_fragment(enum_def: &EnumModel) -> Result<String> {
+    Ok(DtsTaggedEnumTemplate {
+        enum_def: TaggedEnumDtsView::from_enum(enum_def)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct ErrorDtsView {
+    name: String,
+    is_flat: bool,
+    variants: Vec<ErrorVariantDtsView>,
+}
+
+impl ErrorDtsView {
+    fn from_error(error: &ErrorModel) -> Result<Self> {
+        Ok(Self {
+            name: error.name.clone(),
+            is_flat: error.is_flat,
+            variants: error
+                .variants
+                .iter()
+                .map(|variant| ErrorVariantDtsView::from_variant(error, variant))
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct ErrorVariantDtsView {
+    class_name: String,
+    tag_literal: String,
+    fields: Vec<FieldDtsView>,
+    constructor_params: String,
+}
+
+impl ErrorVariantDtsView {
+    fn from_variant(error: &ErrorModel, variant: &VariantModel) -> Result<Self> {
+        Ok(Self {
+            class_name: variant_type_name(&error.name, &variant.name),
+            tag_literal: json_string_literal(&variant.name)?,
+            fields: variant
+                .fields
+                .iter()
+                .map(FieldDtsView::from_field)
+                .collect::<Result<_>>()?,
+            constructor_params: if error.is_flat {
+                "message?: string".to_string()
+            } else {
+                render_dts_fields_as_params(&variant.fields)?
+            },
+        })
+    }
+}
+
+fn render_dts_error_fragment(error: &ErrorModel) -> Result<String> {
+    Ok(DtsErrorTemplate {
+        error: ErrorDtsView::from_error(error)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
 #[derive(Template)]
 #[template(source = "{{ contents }}", ext = "txt", escape = "none")]
 struct PublicApiJsTemplate {
@@ -231,4 +388,22 @@ struct DtsRecordTemplate {
 #[template(path = "api/dts/callback-interface.d.ts.j2", escape = "none")]
 struct DtsCallbackInterfaceTemplate {
     callback_interface: CallbackInterfaceDtsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/dts/flat-enum.d.ts.j2", escape = "none")]
+struct DtsFlatEnumTemplate {
+    enum_def: FlatEnumDtsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/dts/tagged-enum.d.ts.j2", escape = "none")]
+struct DtsTaggedEnumTemplate {
+    enum_def: TaggedEnumDtsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/dts/error.d.ts.j2", escape = "none")]
+struct DtsErrorTemplate {
+    error: ErrorDtsView,
 }

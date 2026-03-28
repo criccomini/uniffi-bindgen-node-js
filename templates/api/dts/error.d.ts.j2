@@ -1,0 +1,14 @@
+export declare class {{ error.name }} extends globalThis.Error {
+  readonly tag: string;
+  protected constructor(tag: string, message?: string);
+}
+{% for variant in error.variants %}
+
+export declare class {{ variant.class_name }} extends {{ error.name }} {
+  readonly tag: {{ variant.tag_literal }};
+{% for field in variant.fields %}
+  readonly {{ field.property_name }}: {{ field.type_name }};
+{% endfor %}
+  constructor({{ variant.constructor_params }});
+}
+{% endfor %}

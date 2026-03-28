@@ -10,10 +10,12 @@ pub(crate) use self::model::{
     ErrorModel, FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel,
     RenderedComponentApi,
 };
+use self::render::PublicApiRenderer;
 pub(crate) use self::support::*;
 
 impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
+        let renderer = PublicApiRenderer::new(self);
         let mut js_sections = Vec::new();
         let mut dts_sections = Vec::new();
         let requires_async_rust_future_hooks = self.requires_async_rust_future_hooks();
@@ -153,8 +155,8 @@ impl ComponentModel {
         }
 
         Ok(RenderedComponentApi {
-            js: js_sections.join("\n\n"),
-            dts: dts_sections.join("\n\n"),
+            js: renderer.render_js(&js_sections)?,
+            dts: renderer.render_dts(&dts_sections)?,
             requires_async_rust_future_hooks,
         })
     }

@@ -7,17 +7,15 @@ export class {{ object.name }} extends UniffiObjectBase {
     super();
     return uniffiNotImplemented({{ object.unimplemented_constructor_member }});
   }
-{% endif %}{% for constructor in object.constructors %}
-
+{% endif -%}{% for constructor in object.constructors %}
   static {% if constructor.is_async %}async {% endif %}{{ constructor.name }}({{ constructor.params }}) {
 {% for line in constructor.body_lines %}{{ line }}
 {% endfor %}  }
 {% endfor %}{% for method in object.methods %}
-
   {% if method.is_async %}async {% endif %}{{ method.name }}({{ method.params }}) {
 {% for line in method.body_lines %}{{ line }}
 {% endfor %}  }
-{% endfor %}
+{% endfor -%}
 }
 
 const {{ object.factory_name }} = createObjectFactory({

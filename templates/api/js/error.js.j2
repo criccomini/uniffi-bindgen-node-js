@@ -5,7 +5,7 @@ export class {{ error.name }} extends globalThis.Error {
     this.tag = tag;
   }
 }
-{% for variant in error.variants %}
+{%- for variant in error.variants %}
 
 export class {{ variant.class_name }} extends {{ error.name }} {
   constructor({{ variant.constructor_params }}) {
@@ -16,4 +16,4 @@ export class {{ variant.class_name }} extends {{ error.name }} {
 {% else %}{% for field in variant.field_assignments %}    this[{{ field.property_name }}] = {{ field.value_expr }};
 {% endfor %}{% endif %}  }
 }
-{% endfor %}
+{%- endfor %}

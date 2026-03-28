@@ -1,5 +1,3 @@
 export interface {{ record.name }} {
-{% for field in record.fields %}
-  {{ field.property_name }}: {{ field.type_name }};
-{% endfor %}
-}
+{% for field in record.fields %}  {{ field.property_name }}: {{ field.type_name }};
+{% endfor %}}

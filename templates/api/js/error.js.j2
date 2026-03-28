@@ -1,0 +1,19 @@
+export class {{ error.name }} extends globalThis.Error {
+  constructor(tag, message = tag) {
+    super(message);
+    this.name = {{ error.name_literal }};
+    this.tag = tag;
+  }
+}
+{% for variant in error.variants %}
+
+export class {{ variant.class_name }} extends {{ error.name }} {
+  constructor({{ variant.constructor_params }}) {
+{% if error.is_flat %}    super({{ variant.tag_literal }}, message ?? {{ variant.tag_literal }});
+{% else %}    super({{ variant.tag_literal }});
+{% endif %}    this.name = {{ variant.class_name_literal }};
+{% if error.is_flat %}    this.message = message ?? {{ variant.tag_literal }};
+{% else %}{% for field in variant.field_assignments %}    this[{{ field.property_name }}] = {{ field.value_expr }};
+{% endfor %}{% endif %}  }
+}
+{% endfor %}

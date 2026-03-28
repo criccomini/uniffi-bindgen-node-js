@@ -10,7 +10,8 @@ pub(crate) use self::model::{
     FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
 };
 use self::render::{
-    JsRenderSections, PublicApiRenderer, render_js_function_fragment, render_js_object_fragment,
+    JsRenderSections, PublicApiRenderer, render_js_error_fragment, render_js_flat_enum_fragment,
+    render_js_function_fragment, render_js_object_fragment, render_js_tagged_enum_fragment,
 };
 pub(crate) use self::support::*;
 
@@ -40,19 +41,19 @@ impl ComponentModel {
         js_sections.flat_enums = self
             .flat_enums
             .iter()
-            .map(render_js_flat_enum)
+            .map(render_js_flat_enum_fragment)
             .collect::<Result<_>>()?;
 
         js_sections.tagged_enums = self
             .tagged_enums
             .iter()
-            .map(render_js_tagged_enum)
+            .map(render_js_tagged_enum_fragment)
             .collect::<Result<_>>()?;
 
         js_sections.errors = self
             .errors
             .iter()
-            .map(render_js_error)
+            .map(render_js_error_fragment)
             .collect::<Result<_>>()?;
 
         if self.has_placeholder_converters() {

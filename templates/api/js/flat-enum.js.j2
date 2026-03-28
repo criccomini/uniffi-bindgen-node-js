@@ -1,0 +1,3 @@
+export const {{ enum_def.name }} = Object.freeze({
+{% for variant in enum_def.variants %}  {{ variant.property_name }}: {{ variant.value_literal }},
+{% endfor %}});

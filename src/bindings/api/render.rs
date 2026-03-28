@@ -7,9 +7,10 @@ use super::{
     FunctionModel, MethodModel, ObjectModel, RecordModel, ffi_opaque_identifier, js_identifier,
     js_member_identifier, json_string_literal, object_converter_name, object_factory_name,
     quoted_property_name, render_dts_fields_as_params, render_dts_params,
-    render_js_function_body_lines, render_js_object_constructor_body_lines,
-    render_js_object_method_body_lines, render_js_params, render_js_primary_constructor_body_lines,
-    render_named_return_type, render_public_type, render_return_type, variant_type_name,
+    render_js_fields_as_params, render_js_function_body_lines,
+    render_js_object_constructor_body_lines, render_js_object_method_body_lines, render_js_params,
+    render_js_primary_constructor_body_lines, render_named_return_type, render_public_type,
+    render_return_type, variant_type_name,
 };
 
 #[derive(Default)]
@@ -368,6 +369,185 @@ impl ObjectMethodJsView {
 pub(crate) fn render_js_object_fragment(object: &ObjectModel) -> Result<String> {
     Ok(JsObjectTemplate {
         object: ObjectJsView::from_object(object)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct FlatEnumJsView {
+    name: String,
+    variants: Vec<FlatEnumVariantJsView>,
+}
+
+impl FlatEnumJsView {
+    fn from_enum(enum_def: &EnumModel) -> Result<Self> {
+        Ok(Self {
+            name: enum_def.name.clone(),
+            variants: enum_def
+                .variants
+                .iter()
+                .map(FlatEnumVariantJsView::from_variant)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct FlatEnumVariantJsView {
+    property_name: String,
+    value_literal: String,
+}
+
+impl FlatEnumVariantJsView {
+    fn from_variant(variant: &VariantModel) -> Result<Self> {
+        Ok(Self {
+            property_name: quoted_property_name(&variant.name)?,
+            value_literal: json_string_literal(&variant.name)?,
+        })
+    }
+}
+
+pub(crate) fn render_js_flat_enum_fragment(enum_def: &EnumModel) -> Result<String> {
+    Ok(JsFlatEnumTemplate {
+        enum_def: FlatEnumJsView::from_enum(enum_def)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct TaggedEnumJsView {
+    name: String,
+    variants: Vec<TaggedEnumVariantJsView>,
+}
+
+impl TaggedEnumJsView {
+    fn from_enum(enum_def: &EnumModel) -> Result<Self> {
+        Ok(Self {
+            name: enum_def.name.clone(),
+            variants: enum_def
+                .variants
+                .iter()
+                .map(TaggedEnumVariantJsView::from_variant)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct TaggedEnumVariantJsView {
+    constructor_name: String,
+    params: String,
+    tag_literal: String,
+    fields: Vec<TaggedEnumFieldJsView>,
+}
+
+impl TaggedEnumVariantJsView {
+    fn from_variant(variant: &VariantModel) -> Result<Self> {
+        Ok(Self {
+            constructor_name: js_member_identifier(&variant.name),
+            params: render_js_fields_as_params(&variant.fields),
+            tag_literal: json_string_literal(&variant.name)?,
+            fields: variant
+                .fields
+                .iter()
+                .map(TaggedEnumFieldJsView::from_field)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct TaggedEnumFieldJsView {
+    property_name: String,
+    value_expr: String,
+}
+
+impl TaggedEnumFieldJsView {
+    fn from_field(field: &FieldModel) -> Result<Self> {
+        Ok(Self {
+            property_name: quoted_property_name(&field.name)?,
+            value_expr: js_identifier(&field.name),
+        })
+    }
+}
+
+pub(crate) fn render_js_tagged_enum_fragment(enum_def: &EnumModel) -> Result<String> {
+    Ok(JsTaggedEnumTemplate {
+        enum_def: TaggedEnumJsView::from_enum(enum_def)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct ErrorJsView {
+    name: String,
+    name_literal: String,
+    is_flat: bool,
+    variants: Vec<ErrorVariantJsView>,
+}
+
+impl ErrorJsView {
+    fn from_error(error: &ErrorModel) -> Result<Self> {
+        Ok(Self {
+            name: error.name.clone(),
+            name_literal: json_string_literal(&error.name)?,
+            is_flat: error.is_flat,
+            variants: error
+                .variants
+                .iter()
+                .map(|variant| ErrorVariantJsView::from_variant(error, variant))
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct ErrorVariantJsView {
+    class_name: String,
+    class_name_literal: String,
+    tag_literal: String,
+    constructor_params: String,
+    field_assignments: Vec<ErrorFieldAssignmentJsView>,
+}
+
+impl ErrorVariantJsView {
+    fn from_variant(error: &ErrorModel, variant: &VariantModel) -> Result<Self> {
+        let class_name = variant_type_name(&error.name, &variant.name);
+
+        Ok(Self {
+            class_name_literal: json_string_literal(&class_name)?,
+            class_name,
+            tag_literal: json_string_literal(&variant.name)?,
+            constructor_params: if error.is_flat {
+                "message = undefined".to_string()
+            } else {
+                render_js_fields_as_params(&variant.fields)
+            },
+            field_assignments: variant
+                .fields
+                .iter()
+                .map(ErrorFieldAssignmentJsView::from_field)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct ErrorFieldAssignmentJsView {
+    property_name: String,
+    value_expr: String,
+}
+
+impl ErrorFieldAssignmentJsView {
+    fn from_field(field: &FieldModel) -> Result<Self> {
+        Ok(Self {
+            property_name: json_string_literal(&field.name)?,
+            value_expr: js_identifier(&field.name),
+        })
+    }
+}
+
+pub(crate) fn render_js_error_fragment(error: &ErrorModel) -> Result<String> {
+    Ok(JsErrorTemplate {
+        error: ErrorJsView::from_error(error)?,
     }
     .render()?
     .trim_end()
@@ -733,6 +913,24 @@ struct JsFunctionTemplate {
 #[template(path = "api/js/object.js.j2", escape = "none")]
 struct JsObjectTemplate {
     object: ObjectJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/flat-enum.js.j2", escape = "none")]
+struct JsFlatEnumTemplate {
+    enum_def: FlatEnumJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/tagged-enum.js.j2", escape = "none")]
+struct JsTaggedEnumTemplate {
+    enum_def: TaggedEnumJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/error.js.j2", escape = "none")]
+struct JsErrorTemplate {
+    error: ErrorJsView,
 }
 
 #[derive(Template)]

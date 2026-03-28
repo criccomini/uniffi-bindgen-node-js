@@ -78,7 +78,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Move ComponentModel, RenderedComponentApi, and the existing *Model adapter structs into the new model module without changing behavior.
 - [x] Move validation helpers, identifier helpers, naming helpers, and expression-rendering helpers into the support module without changing call sites yet.
 - [x] Add Askama template wrapper types for public API JS and DTS rendering and keep render_public_api() as the stable orchestration entrypoint.
-- [ ] Create templates/api/public-api.d.ts.j2 as the top-level DTS body template.
+- [x] Create templates/api/public-api.d.ts.j2 as the top-level DTS body template.
 - [ ] Extract DTS record rendering into a template fragment and wire it through the new DTS template wrapper.
 - [ ] Extract DTS callback-interface rendering into a template fragment and wire it through the new DTS template wrapper.
 - [ ] Extract DTS enum and error rendering into template fragments and wire them through the new DTS template wrapper.

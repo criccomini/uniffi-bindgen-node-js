@@ -36,7 +36,7 @@ struct PublicApiJsTemplate {
 }
 
 #[derive(Template)]
-#[template(source = "{{ contents }}", ext = "txt", escape = "none")]
+#[template(path = "api/public-api.d.ts.j2", escape = "none")]
 struct PublicApiDtsTemplate {
     contents: String,
 }

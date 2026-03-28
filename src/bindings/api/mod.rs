@@ -9,96 +9,75 @@ pub(crate) use self::model::{
     ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
     FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
 };
-use self::render::PublicApiRenderer;
+use self::render::{JsRenderSections, PublicApiRenderer};
 pub(crate) use self::support::*;
 
 impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
         let renderer = PublicApiRenderer::new(self);
-        let mut js_sections = Vec::new();
+        let mut js_sections = JsRenderSections::default();
         let requires_async_rust_future_hooks = self.requires_async_rust_future_hooks();
 
         if !self.functions.is_empty() || !self.objects.is_empty() {
-            js_sections.push(
+            js_sections.unimplemented_helper =
                 "function uniffiNotImplemented(member) {\n  throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);\n}"
-                    .to_string(),
-            );
+                    .to_string();
         }
 
         if !self.objects.is_empty() || self.has_placeholder_converters() {
-            js_sections.push(render_js_runtime_helpers(
+            js_sections.runtime_helpers = render_js_runtime_helpers(
                 &self.ffi_rustbuffer_from_bytes_identifier,
                 &self.ffi_rustbuffer_free_identifier,
-            ));
+            );
         }
 
         if requires_async_rust_future_hooks {
-            js_sections.push(render_js_async_rust_future_helpers());
+            js_sections.async_rust_future_helpers = render_js_async_rust_future_helpers();
         }
 
-        if !self.flat_enums.is_empty() {
-            let flat_enum_js = self
-                .flat_enums
-                .iter()
-                .map(render_js_flat_enum)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
-            js_sections.push(flat_enum_js);
-        }
+        js_sections.flat_enums = self
+            .flat_enums
+            .iter()
+            .map(render_js_flat_enum)
+            .collect::<Result<_>>()?;
 
-        if !self.tagged_enums.is_empty() {
-            let tagged_enum_js = self
-                .tagged_enums
-                .iter()
-                .map(render_js_tagged_enum)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
-            js_sections.push(tagged_enum_js);
-        }
+        js_sections.tagged_enums = self
+            .tagged_enums
+            .iter()
+            .map(render_js_tagged_enum)
+            .collect::<Result<_>>()?;
 
-        if !self.errors.is_empty() {
-            let error_js = self
-                .errors
-                .iter()
-                .map(render_js_error)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
-            js_sections.push(error_js);
-        }
+        js_sections.errors = self
+            .errors
+            .iter()
+            .map(render_js_error)
+            .collect::<Result<_>>()?;
 
         if self.has_placeholder_converters() {
-            js_sections.push(self.render_js_placeholder_converters()?);
+            js_sections.placeholder_converters = self.render_js_placeholder_converters()?;
         }
 
         if !self.callback_interfaces.is_empty() || requires_async_rust_future_hooks {
-            js_sections.push(render_js_runtime_hooks(
+            js_sections.runtime_hooks = render_js_runtime_hooks(
                 &self.callback_interfaces,
                 requires_async_rust_future_hooks,
-            )?);
+            )?;
         }
 
-        if !self.functions.is_empty() {
-            let functions_js = self
-                .functions
-                .iter()
-                .map(render_js_function)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
-            js_sections.push(functions_js);
-        }
+        js_sections.functions = self
+            .functions
+            .iter()
+            .map(render_js_function)
+            .collect::<Result<_>>()?;
 
-        if !self.objects.is_empty() {
-            let objects_js = self
-                .objects
-                .iter()
-                .map(render_js_object)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
-            js_sections.push(objects_js);
-        }
+        js_sections.objects = self
+            .objects
+            .iter()
+            .map(render_js_object)
+            .collect::<Result<_>>()?;
 
         Ok(RenderedComponentApi {
-            js: renderer.render_js(&js_sections)?,
+            js: renderer.render_js(js_sections)?,
             dts: renderer.render_dts()?,
             requires_async_rust_future_hooks,
         })

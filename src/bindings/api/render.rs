@@ -9,6 +9,111 @@ use super::{
     render_named_return_type, render_public_type, render_return_type, variant_type_name,
 };
 
+#[derive(Default)]
+pub(crate) struct JsRenderSections {
+    pub(crate) unimplemented_helper: String,
+    pub(crate) runtime_helpers: String,
+    pub(crate) async_rust_future_helpers: String,
+    pub(crate) flat_enums: Vec<String>,
+    pub(crate) tagged_enums: Vec<String>,
+    pub(crate) errors: Vec<String>,
+    pub(crate) placeholder_converters: String,
+    pub(crate) runtime_hooks: String,
+    pub(crate) functions: Vec<String>,
+    pub(crate) objects: Vec<String>,
+}
+
+impl JsRenderSections {
+    fn has_unimplemented_helper(&self) -> bool {
+        !self.unimplemented_helper.is_empty()
+    }
+
+    fn has_runtime_helpers(&self) -> bool {
+        !self.runtime_helpers.is_empty()
+    }
+
+    fn has_async_rust_future_helpers(&self) -> bool {
+        !self.async_rust_future_helpers.is_empty()
+    }
+
+    fn has_placeholder_converters(&self) -> bool {
+        !self.placeholder_converters.is_empty()
+    }
+
+    fn has_runtime_hooks(&self) -> bool {
+        !self.runtime_hooks.is_empty()
+    }
+
+    fn has_sections_after_unimplemented_helper(&self) -> bool {
+        self.has_runtime_helpers()
+            || self.has_async_rust_future_helpers()
+            || !self.flat_enums.is_empty()
+            || !self.tagged_enums.is_empty()
+            || !self.errors.is_empty()
+            || self.has_placeholder_converters()
+            || self.has_runtime_hooks()
+            || !self.functions.is_empty()
+            || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_runtime_helpers(&self) -> bool {
+        self.has_async_rust_future_helpers()
+            || !self.flat_enums.is_empty()
+            || !self.tagged_enums.is_empty()
+            || !self.errors.is_empty()
+            || self.has_placeholder_converters()
+            || self.has_runtime_hooks()
+            || !self.functions.is_empty()
+            || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_async_rust_future_helpers(&self) -> bool {
+        !self.flat_enums.is_empty()
+            || !self.tagged_enums.is_empty()
+            || !self.errors.is_empty()
+            || self.has_placeholder_converters()
+            || self.has_runtime_hooks()
+            || !self.functions.is_empty()
+            || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_flat_enums(&self) -> bool {
+        !self.tagged_enums.is_empty()
+            || !self.errors.is_empty()
+            || self.has_placeholder_converters()
+            || self.has_runtime_hooks()
+            || !self.functions.is_empty()
+            || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_tagged_enums(&self) -> bool {
+        !self.errors.is_empty()
+            || self.has_placeholder_converters()
+            || self.has_runtime_hooks()
+            || !self.functions.is_empty()
+            || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_errors(&self) -> bool {
+        self.has_placeholder_converters()
+            || self.has_runtime_hooks()
+            || !self.functions.is_empty()
+            || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_placeholder_converters(&self) -> bool {
+        self.has_runtime_hooks() || !self.functions.is_empty() || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_runtime_hooks(&self) -> bool {
+        !self.functions.is_empty() || !self.objects.is_empty()
+    }
+
+    fn has_sections_after_functions(&self) -> bool {
+        !self.objects.is_empty()
+    }
+}
+
 pub(crate) struct PublicApiRenderer<'a> {
     model: &'a ComponentModel,
 }
@@ -18,12 +123,9 @@ impl<'a> PublicApiRenderer<'a> {
         Self { model }
     }
 
-    pub(crate) fn render_js(&self, sections: &[String]) -> Result<String> {
+    pub(crate) fn render_js(&self, sections: JsRenderSections) -> Result<String> {
         let _ = self.model;
-        Ok(PublicApiJsTemplate {
-            contents: sections.join("\n\n"),
-        }
-        .render()?)
+        Ok(PublicApiJsTemplate { renderer: sections }.render()?)
     }
 
     pub(crate) fn render_dts(&self) -> Result<String> {
@@ -468,9 +570,9 @@ fn render_dts_object_fragment(object: &ObjectModel) -> Result<String> {
 }
 
 #[derive(Template)]
-#[template(source = "{{ contents }}", ext = "txt", escape = "none")]
+#[template(path = "api/public-api.js.j2", escape = "none")]
 struct PublicApiJsTemplate {
-    contents: String,
+    renderer: JsRenderSections,
 }
 
 #[derive(Template)]

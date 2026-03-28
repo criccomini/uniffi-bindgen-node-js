@@ -1,0 +1,50 @@
+{%- if renderer.has_unimplemented_helper() -%}
+{{ renderer.unimplemented_helper }}{% if renderer.has_sections_after_unimplemented_helper() %}
+
+{% endif -%}
+{%- endif -%}
+{%- if renderer.has_runtime_helpers() -%}
+{{ renderer.runtime_helpers }}{% if renderer.has_sections_after_runtime_helpers() %}
+
+{% endif -%}
+{%- endif -%}
+{%- if renderer.has_async_rust_future_helpers() -%}
+{{ renderer.async_rust_future_helpers }}{% if renderer.has_sections_after_async_rust_future_helpers() %}
+
+{% endif -%}
+{%- endif -%}
+{%- for flat_enum in renderer.flat_enums -%}
+{{ flat_enum }}{% if !loop.last || renderer.has_sections_after_flat_enums() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for tagged_enum in renderer.tagged_enums -%}
+{{ tagged_enum }}{% if !loop.last || renderer.has_sections_after_tagged_enums() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for error in renderer.errors -%}
+{{ error }}{% if !loop.last || renderer.has_sections_after_errors() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- if renderer.has_placeholder_converters() -%}
+{{ renderer.placeholder_converters }}{% if renderer.has_sections_after_placeholder_converters() %}
+
+{% endif -%}
+{%- endif -%}
+{%- if renderer.has_runtime_hooks() -%}
+{{ renderer.runtime_hooks }}{% if renderer.has_sections_after_runtime_hooks() %}
+
+{% endif -%}
+{%- endif -%}
+{%- for function in renderer.functions -%}
+{{ function }}{% if !loop.last || renderer.has_sections_after_functions() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for object in renderer.objects -%}
+{{ object }}{% if !loop.last %}
+
+{% endif -%}
+{%- endfor -%}

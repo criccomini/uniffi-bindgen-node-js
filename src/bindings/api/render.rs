@@ -3,10 +3,10 @@ use askama::Template;
 
 use super::model::VariantModel;
 use super::{
-    CallbackInterfaceModel, ComponentModel, EnumModel, ErrorModel, FieldModel, MethodModel,
-    RecordModel, js_member_identifier, json_string_literal, quoted_property_name,
-    render_dts_fields_as_params, render_dts_function, render_dts_object, render_dts_params,
-    render_public_type, render_return_type, variant_type_name,
+    CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel, FieldModel,
+    FunctionModel, MethodModel, ObjectModel, RecordModel, js_member_identifier,
+    json_string_literal, quoted_property_name, render_dts_fields_as_params, render_dts_params,
+    render_named_return_type, render_public_type, render_return_type, variant_type_name,
 };
 
 pub(crate) struct PublicApiRenderer<'a> {
@@ -75,12 +75,12 @@ impl DtsRenderer {
             functions: model
                 .functions
                 .iter()
-                .map(render_dts_function)
+                .map(render_dts_function_fragment)
                 .collect::<Result<_>>()?,
             objects: model
                 .objects
                 .iter()
-                .map(render_dts_object)
+                .map(render_dts_object_fragment)
                 .collect::<Result<_>>()?,
         })
     }
@@ -204,6 +204,31 @@ fn render_dts_callback_interface_fragment(
 ) -> Result<String> {
     Ok(DtsCallbackInterfaceTemplate {
         callback_interface: CallbackInterfaceDtsView::from_callback_interface(callback_interface)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct FunctionDtsView {
+    name: String,
+    params: String,
+    return_type: String,
+}
+
+impl FunctionDtsView {
+    fn from_function(function: &FunctionModel) -> Result<Self> {
+        Ok(Self {
+            name: js_member_identifier(&function.name),
+            params: render_dts_params(&function.arguments)?,
+            return_type: render_return_type(function.return_type.as_ref(), function.is_async)?,
+        })
+    }
+}
+
+fn render_dts_function_fragment(function: &FunctionModel) -> Result<String> {
+    Ok(DtsFunctionTemplate {
+        function: FunctionDtsView::from_function(function)?,
     }
     .render()?
     .trim_end()
@@ -366,6 +391,84 @@ fn render_dts_error_fragment(error: &ErrorModel) -> Result<String> {
     .to_string())
 }
 
+struct ObjectDtsView {
+    name: String,
+    has_primary_constructor: bool,
+    primary_constructor_params: String,
+    constructors: Vec<ConstructorDtsView>,
+    methods: Vec<ObjectMethodDtsView>,
+}
+
+impl ObjectDtsView {
+    fn from_object(object: &ObjectModel) -> Result<Self> {
+        let primary_constructor = object
+            .constructors
+            .iter()
+            .find(|constructor| constructor.is_primary && !constructor.is_async);
+
+        Ok(Self {
+            name: object.name.clone(),
+            has_primary_constructor: primary_constructor.is_some(),
+            primary_constructor_params: primary_constructor
+                .map(|constructor| render_dts_params(&constructor.arguments))
+                .transpose()?
+                .unwrap_or_default(),
+            constructors: object
+                .constructors
+                .iter()
+                .filter(|constructor| !(constructor.is_primary && !constructor.is_async))
+                .map(|constructor| ConstructorDtsView::from_constructor(&object.name, constructor))
+                .collect::<Result<_>>()?,
+            methods: object
+                .methods
+                .iter()
+                .map(ObjectMethodDtsView::from_method)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct ConstructorDtsView {
+    name: String,
+    params: String,
+    return_type: String,
+}
+
+impl ConstructorDtsView {
+    fn from_constructor(object_name: &str, constructor: &ConstructorModel) -> Result<Self> {
+        Ok(Self {
+            name: js_member_identifier(&constructor.name),
+            params: render_dts_params(&constructor.arguments)?,
+            return_type: render_named_return_type(object_name, constructor.is_async),
+        })
+    }
+}
+
+struct ObjectMethodDtsView {
+    name: String,
+    params: String,
+    return_type: String,
+}
+
+impl ObjectMethodDtsView {
+    fn from_method(method: &MethodModel) -> Result<Self> {
+        Ok(Self {
+            name: js_member_identifier(&method.name),
+            params: render_dts_params(&method.arguments)?,
+            return_type: render_return_type(method.return_type.as_ref(), method.is_async)?,
+        })
+    }
+}
+
+fn render_dts_object_fragment(object: &ObjectModel) -> Result<String> {
+    Ok(DtsObjectTemplate {
+        object: ObjectDtsView::from_object(object)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
 #[derive(Template)]
 #[template(source = "{{ contents }}", ext = "txt", escape = "none")]
 struct PublicApiJsTemplate {
@@ -406,4 +509,16 @@ struct DtsTaggedEnumTemplate {
 #[template(path = "api/dts/error.d.ts.j2", escape = "none")]
 struct DtsErrorTemplate {
     error: ErrorDtsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/dts/function.d.ts.j2", escape = "none")]
+struct DtsFunctionTemplate {
+    function: FunctionDtsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/dts/object.d.ts.j2", escape = "none")]
+struct DtsObjectTemplate {
+    object: ObjectDtsView,
 }

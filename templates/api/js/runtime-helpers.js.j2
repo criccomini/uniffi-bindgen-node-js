@@ -1,0 +1,123 @@
+const uniffiTextEncoder = new TextEncoder();
+const uniffiTextDecoder = new TextDecoder();
+
+function uniffiLiftString(bytes) {
+  return uniffiTextDecoder.decode(bytes);
+}
+
+function uniffiDecodeRustCallStatus(status) {
+  return status == null
+    ? createRustCallStatus()
+    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);
+}
+
+function uniffiWriteRustCallStatus(status, value) {
+  if (status != null) {
+    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);
+  }
+  return status;
+}
+
+const uniffiRustCaller = new UniffiRustCaller({
+  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),
+  readStatus: uniffiDecodeRustCallStatus,
+  writeStatus: uniffiWriteRustCallStatus,
+  liftString: uniffiLiftString,
+});
+
+function uniffiFreeRustBuffer(buffer) {
+  return uniffiRustCaller.rustCall(
+    (status) => ffiFunctions.{{ helpers.ffi_rustbuffer_free_identifier }}(buffer, status),
+    { liftString: uniffiLiftString },
+  );
+}
+
+function uniffiRustCallOptions(errorConverter = undefined) {
+  const options = {
+    freeRustBuffer: uniffiFreeRustBuffer,
+    liftString: uniffiLiftString,
+    rustCaller: uniffiRustCaller,
+  };
+  if (errorConverter != null) {
+    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);
+  }
+  return options;
+}
+
+function uniffiCopyIntoRustBuffer(bytes) {
+  return uniffiRustCaller.rustCall(
+    (status) => ffiFunctions.{{ helpers.ffi_rustbuffer_from_bytes_identifier }}(createForeignBytes(bytes), status),
+    uniffiRustCallOptions(),
+  );
+}
+
+function uniffiLowerString(value) {
+  return uniffiCopyIntoRustBuffer(uniffiTextEncoder.encode(value));
+}
+
+function uniffiLiftStringFromRustBuffer(value) {
+  return uniffiLiftString(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));
+}
+
+function uniffiLowerBytes(value) {
+  return uniffiCopyIntoRustBuffer(value);
+}
+
+function uniffiLiftBytesFromRustBuffer(value) {
+  return new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer);
+}
+
+function uniffiLowerIntoRustBuffer(converter, value) {
+  return uniffiCopyIntoRustBuffer(converter.lower(value));
+}
+
+function uniffiLiftFromRustBuffer(converter, value) {
+  return converter.lift(uniffiLiftBytesFromRustBuffer(value));
+}
+
+function uniffiRequireRecordObject(typeName, value) {
+  if (typeof value !== "object" || value == null) {
+    throw new TypeError(`${typeName} values must be non-null objects.`);
+  }
+  return value;
+}
+
+function uniffiRequireFlatEnumValue(enumValues, typeName, value) {
+  for (const enumValue of Object.values(enumValues)) {
+    if (enumValue === value) {
+      return enumValue;
+    }
+  }
+  throw new TypeError(`${typeName} values must be one of ${Object.values(enumValues).map((item) => JSON.stringify(item)).join(", ")}.`);
+}
+
+function uniffiRequireTaggedEnumValue(typeName, value) {
+  const enumValue = uniffiRequireRecordObject(typeName, value);
+  if (typeof enumValue.tag !== "string") {
+    throw new TypeError(`${typeName} values must be tagged objects with a string tag field.`);
+  }
+  return enumValue;
+}
+
+function uniffiNotImplementedConverter(typeName) {
+  const fail = (member) => {
+    throw new Error(`${typeName} converter ${member} is not implemented yet.`);
+  };
+  return Object.freeze({
+    lower() {
+      return fail("lower");
+    },
+    lift() {
+      return fail("lift");
+    },
+    write() {
+      return fail("write");
+    },
+    read() {
+      return fail("read");
+    },
+    allocationSize() {
+      return fail("allocationSize");
+    },
+  });
+}

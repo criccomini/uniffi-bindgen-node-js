@@ -1,0 +1,29 @@
+const uniffiRegisteredCallbackPointers = [];
+const uniffiRegisteredCallbackVtables = [];
+
+function uniffiRegisterCallbackVtables(bindings) {
+{% for register_name in hooks.callback_register_names %}  {{ register_name }}(bindings, uniffiRegisteredCallbackPointers, uniffiRegisteredCallbackVtables);
+{% endfor %}}
+
+function uniffiUnregisterCallbackVtables() {
+  clearPendingForeignFutures();
+{% for registry_name in hooks.callback_registry_names %}  {{ registry_name }}.clear();
+{% endfor %}  while (uniffiRegisteredCallbackPointers.length > 0) {
+    koffi.unregister(uniffiRegisteredCallbackPointers.pop());
+  }
+  uniffiRegisteredCallbackVtables.length = 0;
+}
+
+configureRuntimeHooks({
+  onLoad(bindings) {
+{% if hooks.has_callback_interfaces %}    uniffiRegisterCallbackVtables(bindings);
+{% else %}    void bindings;
+{% endif %}  },
+  onUnload() {
+{% if hooks.needs_async_rust_future_hooks %}    if (uniffiRustFutureContinuationPointer != null) {
+      koffi.unregister(uniffiRustFutureContinuationPointer);
+      uniffiRustFutureContinuationPointer = null;
+    }
+{% endif %}    uniffiUnregisterCallbackVtables();
+  },
+});

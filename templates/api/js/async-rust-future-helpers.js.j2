@@ -1,0 +1,12 @@
+let uniffiRustFutureContinuationPointer = null;
+
+function uniffiGetRustFutureContinuationPointer() {
+  if (uniffiRustFutureContinuationPointer == null) {
+    const bindings = getFfiBindings();
+    uniffiRustFutureContinuationPointer = koffi.register(
+      rustFutureContinuationCallback,
+      koffi.pointer(bindings.ffiCallbacks.RustFutureContinuationCallback),
+    );
+  }
+  return uniffiRustFutureContinuationPointer;
+}

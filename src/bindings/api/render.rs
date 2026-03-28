@@ -980,6 +980,72 @@ pub(crate) fn render_js_callback_interface_converter_fragment(
     .to_string())
 }
 
+struct RuntimeHelpersJsView {
+    ffi_rustbuffer_from_bytes_identifier: String,
+    ffi_rustbuffer_free_identifier: String,
+}
+
+pub(crate) fn render_js_runtime_helpers_fragment(
+    ffi_rustbuffer_from_bytes_identifier: &str,
+    ffi_rustbuffer_free_identifier: &str,
+) -> Result<String> {
+    Ok(JsRuntimeHelpersTemplate {
+        helpers: RuntimeHelpersJsView {
+            ffi_rustbuffer_from_bytes_identifier: ffi_rustbuffer_from_bytes_identifier.to_string(),
+            ffi_rustbuffer_free_identifier: ffi_rustbuffer_free_identifier.to_string(),
+        },
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+pub(crate) fn render_js_async_rust_future_helpers_fragment() -> Result<String> {
+    Ok(JsAsyncRustFutureHelpersTemplate.render()?.trim_end().to_string())
+}
+
+struct RuntimeHooksJsView {
+    callback_register_names: Vec<String>,
+    callback_registry_names: Vec<String>,
+    has_callback_interfaces: bool,
+    needs_async_rust_future_hooks: bool,
+}
+
+impl RuntimeHooksJsView {
+    fn from_callback_interfaces(
+        callback_interfaces: &[CallbackInterfaceModel],
+        needs_async_rust_future_hooks: bool,
+    ) -> Self {
+        Self {
+            callback_register_names: callback_interfaces
+                .iter()
+                .map(|callback_interface| callback_interface_register_name(&callback_interface.name))
+                .collect(),
+            callback_registry_names: callback_interfaces
+                .iter()
+                .map(|callback_interface| callback_interface_registry_name(&callback_interface.name))
+                .collect(),
+            has_callback_interfaces: !callback_interfaces.is_empty(),
+            needs_async_rust_future_hooks,
+        }
+    }
+}
+
+pub(crate) fn render_js_runtime_hooks_fragment(
+    callback_interfaces: &[CallbackInterfaceModel],
+    needs_async_rust_future_hooks: bool,
+) -> Result<String> {
+    Ok(JsRuntimeHooksTemplate {
+        hooks: RuntimeHooksJsView::from_callback_interfaces(
+            callback_interfaces,
+            needs_async_rust_future_hooks,
+        ),
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
 struct SyncCallbackVtableRegistrationJsView {
     callback_name: String,
     callback_params: String,
@@ -1607,6 +1673,22 @@ struct JsErrorConverterTemplate {
 #[template(path = "api/js/callback-interface-converter.js.j2", escape = "none")]
 struct JsCallbackInterfaceConverterTemplate {
     converter: CallbackInterfaceConverterJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/runtime-helpers.js.j2", escape = "none")]
+struct JsRuntimeHelpersTemplate {
+    helpers: RuntimeHelpersJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/async-rust-future-helpers.js.j2", escape = "none")]
+struct JsAsyncRustFutureHelpersTemplate;
+
+#[derive(Template)]
+#[template(path = "api/js/runtime-hooks.js.j2", escape = "none")]
+struct JsRuntimeHooksTemplate {
+    hooks: RuntimeHooksJsView,
 }
 
 #[derive(Template)]

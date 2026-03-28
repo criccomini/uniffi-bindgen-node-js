@@ -91,8 +91,8 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Extract JS converter rendering for records, enums, errors, and callback interfaces into template fragments while keeping allocation-size math and converter-expression
   generation in Rust.
 - [x] Extract JS callback vtable registration fragments and keep sync/async branching plus symbol lookup in Rust support methods.
-- [ ] Extract JS runtime helper and runtime hook fragments into templates without changing their emitted contents.
-- [ ] Remove the obsolete JS Vec<String> emitter functions after all JS fragments are template-backed and snapshot-stable.
+- [x] Extract JS runtime helper and runtime hook fragments into templates without changing their emitted contents.
+- [x] Remove the obsolete JS Vec<String> emitter functions after all JS fragments are template-backed and snapshot-stable.
 - [x] Run cargo test bindings::api::tests and fix any regressions without changing intended output.
 - [ ] Run cargo test bindings::tests and fix any generator-level regressions.
 - [ ] Run cargo test --test codegen_snapshots and resolve any whitespace/control-flow drift in templates.

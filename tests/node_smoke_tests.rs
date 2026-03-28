@@ -351,6 +351,10 @@ class Resource {
 const rawHandle = {
   __addr: 42n,
 };
+const adoptedHandle = {
+  __addr: 84n,
+};
+const freedHandles = [];
 
 const resourceFactory = createObjectFactory({
   typeName: "Resource",
@@ -360,29 +364,32 @@ const resourceFactory = createObjectFactory({
     throw new Error("typed clone should not be used for raw external handles");
   },
   cloneHandleRawExternal(handle) {
-    assert.equal(handle.__addr, 42n);
     assert.equal(handle.__retagged, undefined);
-    return handle;
+    return handle === rawHandle
+      ? adoptedHandle
+      : handle;
   },
   freeHandle() {
     throw new Error("typed free should not be used for raw external handles");
   },
   freeHandleRawExternal(handle) {
-    assert.equal(handle.__addr, 42n);
     assert.equal(handle.__retagged, undefined);
+    freedHandles.push(handle.__addr);
   },
 });
 
 const resource = resourceFactory.createRawExternal(rawHandle);
 assert.equal(typeof resource.ping, "function");
+assert.deepEqual(freedHandles, [42n]);
 const cloned = resource.ping();
 assert.equal(cloned.__retagged, true);
 assert.equal(cloned.__type?.name, "RustArcPtrResource");
-assert.equal(cloned.__pointer, rawHandle);
+assert.equal(cloned.__pointer, adoptedHandle);
 assert.equal(resourceFactory.handle(resource).__type?.name, "RustArcPtrResource");
-assert.strictEqual(resourceFactory.peekHandle(resource), rawHandle);
+assert.strictEqual(resourceFactory.peekHandle(resource), adoptedHandle);
 assert.equal(resourceFactory.usesRawExternal(resource), true);
 assert.equal(resourceFactory.destroy(resource), true);
+assert.deepEqual(freedHandles, [42n, 84n]);
 "#,
     );
 

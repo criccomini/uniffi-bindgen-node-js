@@ -276,7 +276,24 @@ export class UniffiObjectFactory {
   }
 
   createRawExternal(handle) {
-    return this.attach(this._createInstance(), handle, {
+    const rawHandle = requireHandle(
+      this._normalizeHandle(handle),
+      `${this.typeName} handle`,
+    );
+    const adoptedHandle =
+      typeof this._cloneHandleRawExternal === "function"
+        ? requireHandle(
+            this._cloneHandleRawExternal(rawHandle),
+            `${this.typeName} adopted handle`,
+          )
+        : rawHandle;
+    if (
+      adoptedHandle !== rawHandle
+      && typeof this._freeHandleRawExternal === "function"
+    ) {
+      this._freeHandleRawExternal(rawHandle);
+    }
+    return this.attach(this._createInstance(), adoptedHandle, {
       rawExternal: true,
     });
   }

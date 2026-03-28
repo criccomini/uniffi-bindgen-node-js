@@ -1,0 +1,27 @@
+const {{ converter.converter_name }} = new (class extends AbstractFfiConverterByteArray {
+  allocationSize(value) {
+    uniffiRequireFlatEnumValue({{ converter.enum_name }}, {{ converter.enum_type_name }}, value);
+    return 4;
+  }
+
+  write(value, writer) {
+    const enumValue = uniffiRequireFlatEnumValue({{ converter.enum_name }}, {{ converter.enum_type_name }}, value);
+    switch (enumValue) {
+{% for variant in converter.variants %}      case {{ variant.case_value_expr }}:
+        writer.writeInt32({{ variant.tag_index }});
+        return;
+{% endfor %}      default:
+        throw new UnexpectedEnumCase(`Unexpected {{ converter.enum_name }} case ${String(enumValue)}.`);
+    }
+  }
+
+  read(reader) {
+    const enumTag = reader.readInt32();
+    switch (enumTag) {
+{% for variant in converter.variants %}      case {{ variant.tag_index }}:
+        return {{ variant.case_value_expr }};
+{% endfor %}      default:
+        throw new UnexpectedEnumCase(`Unexpected {{ converter.enum_name }} case ${String(enumTag)}.`);
+    }
+  }
+})();

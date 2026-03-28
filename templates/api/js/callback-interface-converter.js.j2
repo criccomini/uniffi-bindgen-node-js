@@ -1,0 +1,77 @@
+class {{ converter.proxy_class_name }} extends UniffiObjectBase {
+{% for method in converter.methods %}
+
+  {% if method.is_async %}async {% endif %}{{ method.name }}({{ method.params }}) {
+{% for line in method.body_lines %}{{ line }}
+{% endfor %}  }
+{% endfor %}
+}
+
+const {{ converter.factory_name }} = createObjectFactory({
+  typeName: {{ converter.interface_name }},
+  createInstance: () => Object.create({{ converter.proxy_class_name }}.prototype),
+  cloneHandle(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.{{ converter.ffi_object_clone_identifier }}(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.{{ converter.ffi_object_free_identifier }}(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+
+function {{ converter.validator_name }}(implementation) {
+  if ((typeof implementation !== "object" && typeof implementation !== "function") || implementation == null) {
+    throw new TypeError(`${{ converter.interface_name }} implementations must be objects with callable methods.`);
+  }
+{% for method in converter.methods %}  if (typeof implementation.{{ method.name }} !== "function") {
+    throw new TypeError(`${{ converter.interface_name }} is missing required method {{ method.name }}().`);
+  }
+{% endfor %}  return implementation;
+}
+
+const {{ converter.registry_name }} = createCallbackRegistry({
+  interfaceName: {{ converter.interface_name }},
+  validate: {{ converter.validator_name }},
+});
+
+function {{ converter.register_name }}(bindings, registrations, vtableReferences) {
+{% for line in converter.registration_lines %}{{ line }}
+{% endfor %}  const uniffiFree = koffi.register(
+    (uniffiHandle) => {{ converter.registry_name }}.remove(uniffiHandle),
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
+  );
+  registrations.push(uniffiFree);
+  const uniffiVtable = koffi.alloc(bindings.ffiStructs.{{ converter.vtable_struct_name }}, 1);
+  koffi.encode(uniffiVtable, bindings.ffiStructs.{{ converter.vtable_struct_name }}, {
+{% for method in converter.methods %}    {{ method.property_name }}: {{ method.callback_name }},
+{% endfor %}    uniffi_free: uniffiFree,
+  });
+  vtableReferences.push(uniffiVtable);
+  bindings.ffiFunctions.{{ converter.ffi_init_callback_identifier }}(uniffiVtable);
+}
+
+const {{ converter.converter_name }} = Object.freeze({
+  lower(value) {
+    if ({{ converter.factory_name }}.isInstance(value)) {
+      return {{ converter.factory_name }}.cloneHandle(value);
+    }
+    return {{ converter.registry_name }}.register(value);
+  },
+  lift(handle) {
+    return {{ converter.factory_name }}.create(handle);
+  },
+  write(value, writer) {
+    writer.writeUInt64(this.lower(value));
+  },
+  read(reader) {
+    return this.lift(reader.readUInt64());
+  },
+  allocationSize() {
+    return UNIFFI_OBJECT_HANDLE_SIZE;
+  },
+});

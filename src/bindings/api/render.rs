@@ -4,14 +4,20 @@ use askama::Template;
 use super::model::VariantModel;
 use super::{
     CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel, FieldModel,
-    FunctionModel, MethodModel, ObjectModel, RecordModel, ffi_opaque_identifier, js_identifier,
+    FunctionModel, MethodModel, ObjectModel, RecordModel, callback_interface_factory_name,
+    callback_interface_proxy_class_name, callback_interface_register_name,
+    callback_interface_registry_name, callback_interface_validator_name,
+    callback_interface_vtable_struct_name, ffi_opaque_identifier, js_identifier,
     js_member_identifier, json_string_literal, object_converter_name, object_factory_name,
     quoted_property_name, render_dts_fields_as_params, render_dts_params,
-    render_js_fields_as_params, render_js_function_body_lines,
-    render_js_object_constructor_body_lines, render_js_object_method_body_lines, render_js_params,
-    render_js_primary_constructor_body_lines, render_named_return_type, render_public_type,
-    render_return_type, variant_type_name,
+    render_js_callback_vtable_registration, render_js_fields_as_params,
+    render_js_function_body_lines, render_js_object_constructor_body_lines,
+    render_js_object_method_body_lines, render_js_params, render_js_primary_constructor_body_lines,
+    render_js_property_access, render_js_record_allocation_size_expression,
+    render_js_type_converter_expression, render_named_return_type, render_public_type,
+    render_return_type, type_converter_name, variant_type_name,
 };
+use uniffi_bindgen::interface::Type;
 
 #[derive(Default)]
 pub(crate) struct JsRenderSections {
@@ -554,6 +560,417 @@ pub(crate) fn render_js_error_fragment(error: &ErrorModel) -> Result<String> {
     .to_string())
 }
 
+struct ConverterWriteFieldJsView {
+    converter_expr: String,
+    value_expr: String,
+}
+
+impl ConverterWriteFieldJsView {
+    fn from_field(field: &FieldModel, value_expr: &str) -> Result<Self> {
+        Ok(Self {
+            converter_expr: render_js_type_converter_expression(&field.type_)?,
+            value_expr: render_js_property_access(value_expr, &field.name)?,
+        })
+    }
+}
+
+struct ConverterReadFieldJsView {
+    property_name: String,
+    read_expr: String,
+}
+
+impl ConverterReadFieldJsView {
+    fn from_field(field: &FieldModel) -> Result<Self> {
+        Ok(Self {
+            property_name: quoted_property_name(&field.name)?,
+            read_expr: format!(
+                "{}.read(reader)",
+                render_js_type_converter_expression(&field.type_)?
+            ),
+        })
+    }
+}
+
+struct RecordConverterJsView {
+    converter_name: String,
+    record_type_name: String,
+    allocation_size_expr: String,
+    write_fields: Vec<ConverterWriteFieldJsView>,
+    read_fields: Vec<ConverterReadFieldJsView>,
+}
+
+impl RecordConverterJsView {
+    fn from_record(record: &RecordModel) -> Result<Self> {
+        Ok(Self {
+            converter_name: type_converter_name(&record.name),
+            record_type_name: json_string_literal(&record.name)?,
+            allocation_size_expr: render_js_record_allocation_size_expression(record)?,
+            write_fields: record
+                .fields
+                .iter()
+                .map(|field| ConverterWriteFieldJsView::from_field(field, "recordValue"))
+                .collect::<Result<_>>()?,
+            read_fields: record
+                .fields
+                .iter()
+                .map(ConverterReadFieldJsView::from_field)
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+pub(crate) fn render_js_record_converter_fragment(record: &RecordModel) -> Result<String> {
+    Ok(JsRecordConverterTemplate {
+        converter: RecordConverterJsView::from_record(record)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct FlatEnumConverterJsView {
+    converter_name: String,
+    enum_name: String,
+    enum_type_name: String,
+    variants: Vec<FlatEnumConverterVariantJsView>,
+}
+
+impl FlatEnumConverterJsView {
+    fn from_enum(enum_def: &EnumModel) -> Result<Self> {
+        Ok(Self {
+            converter_name: type_converter_name(&enum_def.name),
+            enum_name: enum_def.name.clone(),
+            enum_type_name: json_string_literal(&enum_def.name)?,
+            variants: enum_def
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(index, variant)| {
+                    FlatEnumConverterVariantJsView::from_variant(&enum_def.name, variant, index + 1)
+                })
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct FlatEnumConverterVariantJsView {
+    tag_index: usize,
+    case_value_expr: String,
+}
+
+impl FlatEnumConverterVariantJsView {
+    fn from_variant(enum_name: &str, variant: &VariantModel, tag_index: usize) -> Result<Self> {
+        Ok(Self {
+            tag_index,
+            case_value_expr: render_js_property_access(enum_name, &variant.name)?,
+        })
+    }
+}
+
+pub(crate) fn render_js_flat_enum_converter_fragment(enum_def: &EnumModel) -> Result<String> {
+    Ok(JsFlatEnumConverterTemplate {
+        converter: FlatEnumConverterJsView::from_enum(enum_def)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct TaggedEnumConverterJsView {
+    converter_name: String,
+    enum_name: String,
+    enum_type_name: String,
+    variants: Vec<TaggedEnumConverterVariantJsView>,
+}
+
+impl TaggedEnumConverterJsView {
+    fn from_enum(enum_def: &EnumModel) -> Result<Self> {
+        Ok(Self {
+            converter_name: type_converter_name(&enum_def.name),
+            enum_name: enum_def.name.clone(),
+            enum_type_name: json_string_literal(&enum_def.name)?,
+            variants: enum_def
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(index, variant)| {
+                    TaggedEnumConverterVariantJsView::from_variant(
+                        &enum_def.name,
+                        variant,
+                        index + 1,
+                    )
+                })
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct TaggedEnumConverterVariantJsView {
+    tag_literal: String,
+    tag_index: usize,
+    allocation_size_expr: String,
+    write_fields: Vec<ConverterWriteFieldJsView>,
+    read_return_expr: String,
+}
+
+impl TaggedEnumConverterVariantJsView {
+    fn from_variant(enum_name: &str, variant: &VariantModel, tag_index: usize) -> Result<Self> {
+        let allocation_terms = variant
+            .fields
+            .iter()
+            .map(|field| {
+                Ok(format!(
+                    "{}.allocationSize({})",
+                    render_js_type_converter_expression(&field.type_)?,
+                    render_js_property_access("enumValue", &field.name)?
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let read_values = variant
+            .fields
+            .iter()
+            .map(|field| {
+                Ok(format!(
+                    "{}.read(reader)",
+                    render_js_type_converter_expression(&field.type_)?
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self {
+            tag_literal: json_string_literal(&variant.name)?,
+            tag_index,
+            allocation_size_expr: if allocation_terms.is_empty() {
+                "4".to_string()
+            } else {
+                format!("4 + {}", allocation_terms.join(" + "))
+            },
+            write_fields: variant
+                .fields
+                .iter()
+                .map(|field| ConverterWriteFieldJsView::from_field(field, "enumValue"))
+                .collect::<Result<_>>()?,
+            read_return_expr: format!(
+                "{}.{}({})",
+                enum_name,
+                js_member_identifier(&variant.name),
+                read_values.join(", ")
+            ),
+        })
+    }
+}
+
+pub(crate) fn render_js_tagged_enum_converter_fragment(enum_def: &EnumModel) -> Result<String> {
+    Ok(JsTaggedEnumConverterTemplate {
+        converter: TaggedEnumConverterJsView::from_enum(enum_def)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct ErrorConverterJsView {
+    converter_name: String,
+    error_name: String,
+    invalid_value_message: String,
+    variants: Vec<ErrorConverterVariantJsView>,
+}
+
+impl ErrorConverterJsView {
+    fn from_error(error: &ErrorModel) -> Result<Self> {
+        let allowed_variants = error
+            .variants
+            .iter()
+            .map(|variant| variant_type_name(&error.name, &variant.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Ok(Self {
+            converter_name: type_converter_name(&error.name),
+            error_name: error.name.clone(),
+            invalid_value_message: json_string_literal(&format!(
+                "{} values must be instances of {}.",
+                error.name, allowed_variants
+            ))?,
+            variants: error
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(index, variant)| {
+                    ErrorConverterVariantJsView::from_variant(error, variant, index + 1)
+                })
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct ErrorConverterVariantJsView {
+    class_name: String,
+    tag_index: usize,
+    allocation_size_expr: String,
+    write_fields: Vec<ConverterWriteFieldJsView>,
+    read_expr: String,
+}
+
+impl ErrorConverterVariantJsView {
+    fn from_variant(error: &ErrorModel, variant: &VariantModel, tag_index: usize) -> Result<Self> {
+        let class_name = variant_type_name(&error.name, &variant.name);
+        let allocation_size_expr = if error.is_flat || variant.fields.is_empty() {
+            "4".to_string()
+        } else {
+            let field_terms = variant
+                .fields
+                .iter()
+                .map(|field| {
+                    Ok(format!(
+                        "{}.allocationSize({})",
+                        render_js_type_converter_expression(&field.type_)?,
+                        render_js_property_access("value", &field.name)?
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            format!("4 + {}", field_terms.join(" + "))
+        };
+        let read_expr = if error.is_flat {
+            format!(
+                "new {}({}.read(reader))",
+                class_name,
+                render_js_type_converter_expression(&Type::String)?
+            )
+        } else {
+            let field_values = variant
+                .fields
+                .iter()
+                .map(|field| {
+                    Ok(format!(
+                        "{}.read(reader)",
+                        render_js_type_converter_expression(&field.type_)?
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            format!("new {}({})", class_name, field_values.join(", "))
+        };
+
+        Ok(Self {
+            class_name,
+            tag_index,
+            allocation_size_expr,
+            write_fields: if error.is_flat {
+                Vec::new()
+            } else {
+                variant
+                    .fields
+                    .iter()
+                    .map(|field| ConverterWriteFieldJsView::from_field(field, "value"))
+                    .collect::<Result<_>>()?
+            },
+            read_expr,
+        })
+    }
+}
+
+pub(crate) fn render_js_error_converter_fragment(error: &ErrorModel) -> Result<String> {
+    Ok(JsErrorConverterTemplate {
+        converter: ErrorConverterJsView::from_error(error)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct CallbackInterfaceConverterJsView {
+    proxy_class_name: String,
+    factory_name: String,
+    registry_name: String,
+    validator_name: String,
+    register_name: String,
+    converter_name: String,
+    interface_name: String,
+    ffi_object_clone_identifier: String,
+    ffi_object_free_identifier: String,
+    ffi_init_callback_identifier: String,
+    methods: Vec<CallbackInterfaceMethodJsView>,
+    registration_lines: Vec<String>,
+    vtable_struct_name: String,
+}
+
+impl CallbackInterfaceConverterJsView {
+    fn from_callback_interface(callback_interface: &CallbackInterfaceModel) -> Result<Self> {
+        let factory_name = callback_interface_factory_name(&callback_interface.name);
+        let registry_name = callback_interface_registry_name(&callback_interface.name);
+        let methods = callback_interface
+            .methods
+            .iter()
+            .map(|method| {
+                CallbackInterfaceMethodJsView::from_method(
+                    method,
+                    &factory_name,
+                    &callback_interface.name,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut registration_lines = Vec::new();
+        for method in &callback_interface.methods {
+            registration_lines.extend(render_js_callback_vtable_registration(
+                callback_interface,
+                method,
+                &registry_name,
+            )?);
+        }
+
+        Ok(Self {
+            proxy_class_name: callback_interface_proxy_class_name(&callback_interface.name),
+            factory_name,
+            registry_name,
+            validator_name: callback_interface_validator_name(&callback_interface.name),
+            register_name: callback_interface_register_name(&callback_interface.name),
+            converter_name: type_converter_name(&callback_interface.name),
+            interface_name: json_string_literal(&callback_interface.name)?,
+            ffi_object_clone_identifier: callback_interface.ffi_object_clone_identifier.clone(),
+            ffi_object_free_identifier: callback_interface.ffi_object_free_identifier.clone(),
+            ffi_init_callback_identifier: callback_interface.ffi_init_callback_identifier.clone(),
+            methods,
+            registration_lines,
+            vtable_struct_name: callback_interface_vtable_struct_name(&callback_interface.name),
+        })
+    }
+}
+
+struct CallbackInterfaceMethodJsView {
+    name: String,
+    is_async: bool,
+    params: String,
+    body_lines: Vec<String>,
+    property_name: String,
+    callback_name: String,
+}
+
+impl CallbackInterfaceMethodJsView {
+    fn from_method(method: &MethodModel, factory_name: &str, interface_name: &str) -> Result<Self> {
+        let name = js_member_identifier(&method.name);
+
+        Ok(Self {
+            property_name: quoted_property_name(&method.name)?,
+            callback_name: format!("{name}Callback"),
+            name,
+            is_async: method.is_async,
+            params: render_js_params(&method.arguments),
+            body_lines: render_js_object_method_body_lines(method, factory_name, interface_name)?,
+        })
+    }
+}
+
+pub(crate) fn render_js_callback_interface_converter_fragment(
+    callback_interface: &CallbackInterfaceModel,
+) -> Result<String> {
+    Ok(JsCallbackInterfaceConverterTemplate {
+        converter: CallbackInterfaceConverterJsView::from_callback_interface(callback_interface)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
 struct RecordDtsView {
     name: String,
     fields: Vec<FieldDtsView>,
@@ -931,6 +1348,36 @@ struct JsTaggedEnumTemplate {
 #[template(path = "api/js/error.js.j2", escape = "none")]
 struct JsErrorTemplate {
     error: ErrorJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/record-converter.js.j2", escape = "none")]
+struct JsRecordConverterTemplate {
+    converter: RecordConverterJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/flat-enum-converter.js.j2", escape = "none")]
+struct JsFlatEnumConverterTemplate {
+    converter: FlatEnumConverterJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/tagged-enum-converter.js.j2", escape = "none")]
+struct JsTaggedEnumConverterTemplate {
+    converter: TaggedEnumConverterJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/error-converter.js.j2", escape = "none")]
+struct JsErrorConverterTemplate {
+    converter: ErrorConverterJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/callback-interface-converter.js.j2", escape = "none")]
+struct JsCallbackInterfaceConverterTemplate {
+    converter: CallbackInterfaceConverterJsView,
 }
 
 #[derive(Template)]

@@ -10,8 +10,11 @@ pub(crate) use self::model::{
     FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
 };
 use self::render::{
-    JsRenderSections, PublicApiRenderer, render_js_error_fragment, render_js_flat_enum_fragment,
-    render_js_function_fragment, render_js_object_fragment, render_js_tagged_enum_fragment,
+    JsRenderSections, PublicApiRenderer, render_js_callback_interface_converter_fragment,
+    render_js_error_converter_fragment, render_js_error_fragment,
+    render_js_flat_enum_converter_fragment, render_js_flat_enum_fragment,
+    render_js_function_fragment, render_js_object_fragment, render_js_record_converter_fragment,
+    render_js_tagged_enum_converter_fragment, render_js_tagged_enum_fragment,
 };
 pub(crate) use self::support::*;
 
@@ -115,19 +118,21 @@ impl ComponentModel {
         let mut lines = Vec::new();
 
         for record in &self.records {
-            lines.push(render_js_record_converter(record)?);
+            lines.push(render_js_record_converter_fragment(record)?);
         }
         for enum_def in &self.flat_enums {
-            lines.push(render_js_flat_enum_converter(enum_def)?);
+            lines.push(render_js_flat_enum_converter_fragment(enum_def)?);
         }
         for enum_def in &self.tagged_enums {
-            lines.push(render_js_tagged_enum_converter(enum_def)?);
+            lines.push(render_js_tagged_enum_converter_fragment(enum_def)?);
         }
         for error in &self.errors {
-            lines.push(render_js_error_converter(error)?);
+            lines.push(render_js_error_converter_fragment(error)?);
         }
         for callback_interface in &self.callback_interfaces {
-            lines.push(render_js_callback_interface_converter(callback_interface)?);
+            lines.push(render_js_callback_interface_converter_fragment(
+                callback_interface,
+            )?);
         }
 
         Ok(lines.join("\n"))
@@ -470,7 +475,7 @@ fn render_js_callback_interface_converter(
     Ok(lines.join("\n"))
 }
 
-fn render_js_callback_vtable_registration(
+pub(super) fn render_js_callback_vtable_registration(
     callback_interface: &CallbackInterfaceModel,
     method: &MethodModel,
     registry_name: &str,

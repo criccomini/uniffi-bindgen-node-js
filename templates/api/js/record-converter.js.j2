@@ -1,0 +1,17 @@
+const {{ converter.converter_name }} = new (class extends AbstractFfiConverterByteArray {
+  allocationSize(value) {
+    const recordValue = uniffiRequireRecordObject({{ converter.record_type_name }}, value);
+    return {{ converter.allocation_size_expr }};
+  }
+
+  write(value, writer) {
+    const recordValue = uniffiRequireRecordObject({{ converter.record_type_name }}, value);
+{% for field in converter.write_fields %}    {{ field.converter_expr }}.write({{ field.value_expr }}, writer);
+{% endfor %}  }
+
+  read(reader) {
+    return {
+{% for field in converter.read_fields %}      {{ field.property_name }}: {{ field.read_expr }},
+{% endfor %}    };
+  }
+})();

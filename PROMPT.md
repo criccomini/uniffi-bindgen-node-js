@@ -88,7 +88,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Extract JS function rendering into a template fragment and keep body-level expressions delegated to Rust helper methods.
 - [x] Extract JS object/class and constructor rendering into template fragments and keep async/sync body logic delegated to Rust helper methods.
 - [x] Extract JS flat enum, tagged enum, and error declarations into template fragments.
-- [ ] Extract JS converter rendering for records, enums, errors, and callback interfaces into template fragments while keeping allocation-size math and converter-expression
+- [x] Extract JS converter rendering for records, enums, errors, and callback interfaces into template fragments while keeping allocation-size math and converter-expression
   generation in Rust.
 - [ ] Extract JS callback vtable registration fragments and keep sync/async branching plus symbol lookup in Rust support methods.
 - [ ] Extract JS runtime helper and runtime hook fragments into templates without changing their emitted contents.

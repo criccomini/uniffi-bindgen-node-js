@@ -4,9 +4,10 @@ use askama::Template;
 use super::model::VariantModel;
 use super::{
     CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel, FieldModel,
-    FunctionModel, MethodModel, ObjectModel, RecordModel, js_member_identifier,
+    FunctionModel, MethodModel, ObjectModel, RecordModel, js_identifier, js_member_identifier,
     json_string_literal, quoted_property_name, render_dts_fields_as_params, render_dts_params,
-    render_named_return_type, render_public_type, render_return_type, variant_type_name,
+    render_js_function_body_lines, render_js_params, render_named_return_type, render_public_type,
+    render_return_type, variant_type_name,
 };
 
 #[derive(Default)]
@@ -224,6 +225,33 @@ impl DtsRenderer {
     fn has_declarations_after_functions(&self) -> bool {
         !self.objects.is_empty()
     }
+}
+
+struct FunctionJsView {
+    name: String,
+    is_async: bool,
+    params: String,
+    body_lines: Vec<String>,
+}
+
+impl FunctionJsView {
+    fn from_function(function: &FunctionModel) -> Result<Self> {
+        Ok(Self {
+            name: js_identifier(&function.name),
+            is_async: function.is_async,
+            params: render_js_params(&function.arguments),
+            body_lines: render_js_function_body_lines(function)?,
+        })
+    }
+}
+
+pub(crate) fn render_js_function_fragment(function: &FunctionModel) -> Result<String> {
+    Ok(JsFunctionTemplate {
+        function: FunctionJsView::from_function(function)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
 }
 
 struct RecordDtsView {
@@ -573,6 +601,12 @@ fn render_dts_object_fragment(object: &ObjectModel) -> Result<String> {
 #[template(path = "api/public-api.js.j2", escape = "none")]
 struct PublicApiJsTemplate {
     renderer: JsRenderSections,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/function.js.j2", escape = "none")]
+struct JsFunctionTemplate {
+    function: FunctionJsView,
 }
 
 #[derive(Template)]

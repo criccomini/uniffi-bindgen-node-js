@@ -9,7 +9,7 @@ pub(crate) use self::model::{
     ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
     FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
 };
-use self::render::{JsRenderSections, PublicApiRenderer};
+use self::render::{JsRenderSections, PublicApiRenderer, render_js_function_fragment};
 pub(crate) use self::support::*;
 
 impl ComponentModel {
@@ -67,7 +67,7 @@ impl ComponentModel {
         js_sections.functions = self
             .functions
             .iter()
-            .map(render_js_function)
+            .map(render_js_function_fragment)
             .collect::<Result<_>>()?;
 
         js_sections.objects = self
@@ -244,22 +244,12 @@ impl ComponentModel {
     }
 }
 
-fn render_js_function(function: &FunctionModel) -> Result<String> {
-    let mut lines = vec![format!(
-        "export {}function {}({}) {{",
-        if function.is_async { "async " } else { "" },
-        js_identifier(&function.name),
-        render_js_params(&function.arguments)
-    )];
-
+pub(super) fn render_js_function_body_lines(function: &FunctionModel) -> Result<Vec<String>> {
     if function.is_async {
-        lines.extend(render_js_async_function_body(function)?);
+        render_js_async_function_body(function)
     } else {
-        lines.extend(render_js_sync_function_body(function)?);
+        render_js_sync_function_body(function)
     }
-    lines.push("}".to_string());
-
-    Ok(lines.join("\n"))
 }
 
 fn render_js_record_converter(record: &RecordModel) -> Result<String> {

@@ -571,6 +571,7 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
     Ok(lines)
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use super::*;

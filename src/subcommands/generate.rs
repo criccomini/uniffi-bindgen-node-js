@@ -108,6 +108,7 @@ fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use super::normalize_crate_name_for_library_mode;

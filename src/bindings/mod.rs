@@ -728,6 +728,7 @@ struct RuntimeObjectsJsTemplate {}
 #[template(path = "runtime/objects.d.ts.j2", escape = "none")]
 struct RuntimeObjectsDtsTemplate {}
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use super::*;

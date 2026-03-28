@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -83,8 +84,11 @@ function uniffiNotImplemented(member) {
   throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);
 }
 
+const uniffiTextEncoder = new TextEncoder();
+const uniffiTextDecoder = new TextDecoder();
+
 function uniffiLiftString(bytes) {
-  return FfiConverterString.lift(bytes);
+  return uniffiTextDecoder.decode(bytes);
 }
 
 function uniffiDecodeRustCallStatus(status) {
@@ -126,15 +130,35 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   return options;
 }
 
-function uniffiLowerIntoRustBuffer(converter, value) {
+function uniffiCopyIntoRustBuffer(bytes) {
   return uniffiRustCaller.rustCall(
-    (status) => ffiFunctions.ffi_fixture_basic_rustbuffer_from_bytes(createForeignBytes(converter.lower(value)), status),
+    (status) => ffiFunctions.ffi_fixture_basic_rustbuffer_from_bytes(createForeignBytes(bytes), status),
     uniffiRustCallOptions(),
   );
 }
 
+function uniffiLowerString(value) {
+  return uniffiCopyIntoRustBuffer(uniffiTextEncoder.encode(value));
+}
+
+function uniffiLiftStringFromRustBuffer(value) {
+  return uniffiLiftString(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));
+}
+
+function uniffiLowerBytes(value) {
+  return uniffiCopyIntoRustBuffer(value);
+}
+
+function uniffiLiftBytesFromRustBuffer(value) {
+  return new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer);
+}
+
+function uniffiLowerIntoRustBuffer(converter, value) {
+  return uniffiCopyIntoRustBuffer(converter.lower(value));
+}
+
 function uniffiLiftFromRustBuffer(converter, value) {
-  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));
+  return converter.lift(uniffiLiftBytesFromRustBuffer(value));
 }
 
 function uniffiRequireRecordObject(typeName, value) {
@@ -390,6 +414,7 @@ const FfiConverterFixtureError = new (class extends AbstractFfiConverterByteArra
 })();
 
 const uniffiRegisteredCallbackPointers = [];
+const uniffiRegisteredCallbackVtables = [];
 
 function uniffiRegisterCallbackVtables(bindings) {
 }
@@ -399,6 +424,7 @@ function uniffiUnregisterCallbackVtables() {
   while (uniffiRegisteredCallbackPointers.length > 0) {
     koffi.unregister(uniffiRegisteredCallbackPointers.pop());
   }
+  uniffiRegisteredCallbackVtables.length = 0;
 }
 
 configureRuntimeHooks({
@@ -439,7 +465,7 @@ export class Config extends UniffiObjectBase {
   }
 
   static from_json(json) {
-    const loweredJson = uniffiLowerIntoRustBuffer(FfiConverterString, json);
+    const loweredJson = uniffiLowerString(json);
     const pointer = uniffiRustCaller.rustCall(
       (status) => ffiFunctions.uniffi_fixture_basic_fn_constructor_config_from_json(loweredJson, status),
       uniffiRustCallOptions(FfiConverterFixtureError),
@@ -457,7 +483,7 @@ export class Config extends UniffiObjectBase {
       (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
-    return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
+    return uniffiLiftStringFromRustBuffer(uniffiResult);
   }
 }
 
@@ -538,7 +564,7 @@ export class Reader extends UniffiObjectBase {
       (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
-    return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
+    return uniffiLiftStringFromRustBuffer(uniffiResult);
   }
 }
 
@@ -1147,121 +1173,146 @@ function createBindings(libraryPath) {
 
   ffiCallbacks.CallbackInterfaceFree = koffi.proto("CallbackInterfaceFree", "void", ["uint64_t"]);
 
-  const ffiStructs = Object.freeze((() => {
-    const ffiStructs = {};
+  const ffiStructs = {};
 
-    ffiStructs.ForeignFuture = defineStructType("ForeignFuture", {
+
+  ffiStructs.ForeignFuture = defineStructType("ForeignFuture", {
 
       "handle": "uint64_t",
 
       "free": koffi.pointer(ffiCallbacks.ForeignFutureFree),
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU8 = defineStructType("ForeignFutureStructU8", {
+
+
+  ffiStructs.ForeignFutureStructU8 = defineStructType("ForeignFutureStructU8", {
 
       "return_value": "uint8_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI8 = defineStructType("ForeignFutureStructI8", {
+
+
+  ffiStructs.ForeignFutureStructI8 = defineStructType("ForeignFutureStructI8", {
 
       "return_value": "int8_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU16 = defineStructType("ForeignFutureStructU16", {
+
+
+  ffiStructs.ForeignFutureStructU16 = defineStructType("ForeignFutureStructU16", {
 
       "return_value": "uint16_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI16 = defineStructType("ForeignFutureStructI16", {
+
+
+  ffiStructs.ForeignFutureStructI16 = defineStructType("ForeignFutureStructI16", {
 
       "return_value": "int16_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU32 = defineStructType("ForeignFutureStructU32", {
+
+
+  ffiStructs.ForeignFutureStructU32 = defineStructType("ForeignFutureStructU32", {
 
       "return_value": "uint32_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI32 = defineStructType("ForeignFutureStructI32", {
+
+
+  ffiStructs.ForeignFutureStructI32 = defineStructType("ForeignFutureStructI32", {
 
       "return_value": "int32_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU64 = defineStructType("ForeignFutureStructU64", {
+
+
+  ffiStructs.ForeignFutureStructU64 = defineStructType("ForeignFutureStructU64", {
 
       "return_value": "uint64_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI64 = defineStructType("ForeignFutureStructI64", {
+
+
+  ffiStructs.ForeignFutureStructI64 = defineStructType("ForeignFutureStructI64", {
 
       "return_value": "int64_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructF32 = defineStructType("ForeignFutureStructF32", {
+
+
+  ffiStructs.ForeignFutureStructF32 = defineStructType("ForeignFutureStructF32", {
 
       "return_value": "float",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructF64 = defineStructType("ForeignFutureStructF64", {
+
+
+  ffiStructs.ForeignFutureStructF64 = defineStructType("ForeignFutureStructF64", {
 
       "return_value": "double",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructPointer = defineStructType("ForeignFutureStructPointer", {
+
+
+  ffiStructs.ForeignFutureStructPointer = defineStructType("ForeignFutureStructPointer", {
 
       "return_value": ffiTypes.RustArcPtr,
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructRustBuffer = defineStructType("ForeignFutureStructRustBuffer", {
+
+
+  ffiStructs.ForeignFutureStructRustBuffer = defineStructType("ForeignFutureStructRustBuffer", {
 
       "return_value": ffiTypes.RustBuffer,
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructVoid = defineStructType("ForeignFutureStructVoid", {
+
+
+  ffiStructs.ForeignFutureStructVoid = defineStructType("ForeignFutureStructVoid", {
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    return ffiStructs;
-  })());
+
 
   ffiCallbacks.ForeignFutureCompleteU8 = koffi.proto("ForeignFutureCompleteU8", "void", ["uint64_t", ffiStructs.ForeignFutureStructU8]);
 
@@ -1289,7 +1340,37 @@ function createBindings(libraryPath) {
 
   ffiCallbacks.ForeignFutureCompleteVoid = koffi.proto("ForeignFutureCompleteVoid", "void", ["uint64_t", ffiStructs.ForeignFutureStructVoid]);
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   Object.freeze(ffiCallbacks);
+  Object.freeze(ffiStructs);
   const ffiFunctions = Object.freeze({
 
     uniffi_fixture_basic_fn_clone_config: library.func("uniffi_fixture_basic_fn_clone_config", ffiTypes.RustArcPtrConfig, [ffiTypes.RustArcPtrConfig, koffi.pointer(ffiTypes.RustCallStatus)]),

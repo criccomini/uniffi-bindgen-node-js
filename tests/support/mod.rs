@@ -224,7 +224,22 @@ pub fn generate_fixture_package_with_options(
 
 pub fn install_generated_package_dependencies(package_dir: &Utf8PathBuf) {
     rewrite_package_dependency_to_local_fixture(package_dir, "koffi", &local_koffi_fixture_dir());
+    npm_install(package_dir);
+}
 
+pub fn install_generated_package_dependencies_with_real_koffi(package_dir: &Utf8PathBuf) {
+    npm_install(package_dir);
+}
+
+pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
+    install_generated_package_dependencies(package_dir);
+}
+
+pub fn install_fixture_package_dependencies_with_real_koffi(package_dir: &Utf8PathBuf) {
+    install_generated_package_dependencies_with_real_koffi(package_dir);
+}
+
+fn npm_install(package_dir: &Utf8PathBuf) {
     let output = Command::new("npm")
         .args(["install", "--no-package-lock"])
         .current_dir(package_dir.as_std_path())
@@ -238,10 +253,6 @@ pub fn install_generated_package_dependencies(package_dir: &Utf8PathBuf) {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-}
-
-pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
-    install_generated_package_dependencies(package_dir);
 }
 
 pub fn run_node_script(package_dir: &Utf8PathBuf, script_name: &str, source: &str) {

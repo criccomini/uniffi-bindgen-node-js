@@ -138,21 +138,30 @@ function createBindings(libraryPath) {
 {% for callback in context.pre_struct_callbacks %}
   ffiCallbacks.{{ callback.identifier }} = koffi.proto({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
 {% endfor %}
-  const ffiStructs = Object.freeze((() => {
-    const ffiStructs = {};
+  const ffiStructs = {};
 {% for struct_ in context.structs %}
-    ffiStructs.{{ struct_.identifier }} = {% if struct_.is_callback_vtable %}defineCallbackVtable{% else %}defineStructType{% endif %}({{ struct_.name_json }}, {
+{% if !struct_.is_callback_vtable %}
+  ffiStructs.{{ struct_.identifier }} = defineStructType({{ struct_.name_json }}, {
 {% for field in struct_.fields %}
       {{ field.name_json }}: {{ field.type_expr }},
 {% endfor %}
-    });
+  });
+{% endif %}
 {% endfor %}
-    return ffiStructs;
-  })());
 {% for callback in context.post_struct_callbacks %}
   ffiCallbacks.{{ callback.identifier }} = koffi.proto({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
 {% endfor %}
+{% for struct_ in context.structs %}
+{% if struct_.is_callback_vtable %}
+  ffiStructs.{{ struct_.identifier }} = defineCallbackVtable({{ struct_.name_json }}, {
+{% for field in struct_.fields %}
+      {{ field.name_json }}: {{ field.type_expr }},
+{% endfor %}
+  });
+{% endif %}
+{% endfor %}
   Object.freeze(ffiCallbacks);
+  Object.freeze(ffiStructs);
   const ffiFunctions = Object.freeze({
 {% for function in context.functions %}
     {{ function.identifier }}: library.func({{ function.name_json }}, {{ function.return_type_expr }}, [{% for argument_type_expr in function.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]),

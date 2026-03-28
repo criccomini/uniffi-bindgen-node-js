@@ -1061,7 +1061,7 @@ fn render_js_callback_interface_converter(
     lines.push("});".to_string());
     lines.push(String::new());
     lines.push(format!(
-        "function {}(bindings, registrations) {{",
+        "function {}(bindings, registrations, vtableReferences) {{",
         register_name
     ));
 
@@ -1081,9 +1081,14 @@ fn render_js_callback_interface_converter(
     lines.push("    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),".to_string());
     lines.push("  );".to_string());
     lines.push("  registrations.push(uniffiFree);".to_string());
+    let vtable_struct_name = callback_interface_vtable_struct_name(&callback_interface.name);
     lines.push(format!(
-        "  bindings.ffiFunctions.{}({{",
-        callback_interface.ffi_init_callback_identifier
+        "  const uniffiVtable = koffi.alloc(bindings.ffiStructs.{}, 1);",
+        vtable_struct_name
+    ));
+    lines.push(format!(
+        "  koffi.encode(uniffiVtable, bindings.ffiStructs.{}, {{",
+        vtable_struct_name
     ));
     for method in &callback_interface.methods {
         lines.push(format!(
@@ -1094,6 +1099,11 @@ fn render_js_callback_interface_converter(
     }
     lines.push("    uniffi_free: uniffiFree,".to_string());
     lines.push("  });".to_string());
+    lines.push("  vtableReferences.push(uniffiVtable);".to_string());
+    lines.push(format!(
+        "  bindings.ffiFunctions.{}(uniffiVtable);",
+        callback_interface.ffi_init_callback_identifier
+    ));
     lines.push("}".to_string());
     lines.push(String::new());
     lines.push(format!("const {} = Object.freeze({{", converter_name));
@@ -1186,10 +1196,7 @@ fn render_js_sync_callback_vtable_registration(
             render_js_type_converter_expression(throws_type)?
         ));
     }
-    lines.push(
-        "        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),"
-            .to_string(),
-    );
+    lines.push("        lowerString: (value) => uniffiLowerString(value),".to_string());
     lines.push("        status: uniffiStatus,".to_string());
     lines.push("      });".to_string());
     lines.push("      if (callStatus != null) {".to_string());
@@ -1290,10 +1297,10 @@ fn render_js_async_callback_vtable_registration(
         ));
     }
     lines.push("        ],".to_string());
-    lines.push(
-        "        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),"
-            .to_string(),
-    );
+    lines.push(format!(
+        "        complete: (callbackData, result) => koffi.call(uniffiFutureCallback, bindings.ffiCallbacks.{}, callbackData, result),",
+        async_callback_ffi.complete_identifier
+    ));
     lines.push("        callbackData: uniffiCallbackData,".to_string());
     if let Some(throws_type) = method.throws_type.as_ref() {
         lines.push(format!(
@@ -1327,10 +1334,7 @@ fn render_js_async_callback_vtable_registration(
             default_return_value
         ));
     }
-    lines.push(
-        "        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),"
-            .to_string(),
-    );
+    lines.push("        lowerString: (value) => uniffiLowerString(value),".to_string());
     lines.push("      });".to_string());
     lines.push(
         "      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {".to_string(),
@@ -2073,7 +2077,7 @@ fn render_js_runtime_helpers(
     ffi_rustbuffer_free_identifier: &str,
 ) -> String {
     format!(
-        "function uniffiLiftString(bytes) {{\n  return FfiConverterString.lift(bytes);\n}}\n\nfunction uniffiDecodeRustCallStatus(status) {{\n  return status == null\n    ? createRustCallStatus()\n    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);\n}}\n\nfunction uniffiWriteRustCallStatus(status, value) {{\n  if (status != null) {{\n    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);\n  }}\n  return status;\n}}\n\nconst uniffiRustCaller = new UniffiRustCaller({{\n  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),\n  readStatus: uniffiDecodeRustCallStatus,\n  writeStatus: uniffiWriteRustCallStatus,\n  liftString: uniffiLiftString,\n}});\n\nfunction uniffiFreeRustBuffer(buffer) {{\n  return uniffiRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: uniffiLiftString }},\n  );\n}}\n\nfunction uniffiRustCallOptions(errorConverter = undefined) {{\n  const options = {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: uniffiLiftString,\n    rustCaller: uniffiRustCaller,\n  }};\n  if (errorConverter != null) {{\n    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);\n  }}\n  return options;\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return uniffiRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(converter.lower(value)), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiRequireTaggedEnumValue(typeName, value) {{\n  const enumValue = uniffiRequireRecordObject(typeName, value);\n  if (typeof enumValue.tag !== \"string\") {{\n    throw new TypeError(`${{typeName}} values must be tagged objects with a string tag field.`);\n  }}\n  return enumValue;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
+        "const uniffiTextEncoder = new TextEncoder();\nconst uniffiTextDecoder = new TextDecoder();\n\nfunction uniffiLiftString(bytes) {{\n  return uniffiTextDecoder.decode(bytes);\n}}\n\nfunction uniffiDecodeRustCallStatus(status) {{\n  return status == null\n    ? createRustCallStatus()\n    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);\n}}\n\nfunction uniffiWriteRustCallStatus(status, value) {{\n  if (status != null) {{\n    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);\n  }}\n  return status;\n}}\n\nconst uniffiRustCaller = new UniffiRustCaller({{\n  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),\n  readStatus: uniffiDecodeRustCallStatus,\n  writeStatus: uniffiWriteRustCallStatus,\n  liftString: uniffiLiftString,\n}});\n\nfunction uniffiFreeRustBuffer(buffer) {{\n  return uniffiRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_free_identifier}(buffer, status),\n    {{ liftString: uniffiLiftString }},\n  );\n}}\n\nfunction uniffiRustCallOptions(errorConverter = undefined) {{\n  const options = {{\n    freeRustBuffer: uniffiFreeRustBuffer,\n    liftString: uniffiLiftString,\n    rustCaller: uniffiRustCaller,\n  }};\n  if (errorConverter != null) {{\n    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);\n  }}\n  return options;\n}}\n\nfunction uniffiCopyIntoRustBuffer(bytes) {{\n  return uniffiRustCaller.rustCall(\n    (status) => ffiFunctions.{ffi_rustbuffer_from_bytes_identifier}(createForeignBytes(bytes), status),\n    uniffiRustCallOptions(),\n  );\n}}\n\nfunction uniffiLowerString(value) {{\n  return uniffiCopyIntoRustBuffer(uniffiTextEncoder.encode(value));\n}}\n\nfunction uniffiLiftStringFromRustBuffer(value) {{\n  return uniffiLiftString(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));\n}}\n\nfunction uniffiLowerBytes(value) {{\n  return uniffiCopyIntoRustBuffer(value);\n}}\n\nfunction uniffiLiftBytesFromRustBuffer(value) {{\n  return new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer);\n}}\n\nfunction uniffiLowerIntoRustBuffer(converter, value) {{\n  return uniffiCopyIntoRustBuffer(converter.lower(value));\n}}\n\nfunction uniffiLiftFromRustBuffer(converter, value) {{\n  return converter.lift(uniffiLiftBytesFromRustBuffer(value));\n}}\n\nfunction uniffiRequireRecordObject(typeName, value) {{\n  if (typeof value !== \"object\" || value == null) {{\n    throw new TypeError(`${{typeName}} values must be non-null objects.`);\n  }}\n  return value;\n}}\n\nfunction uniffiRequireFlatEnumValue(enumValues, typeName, value) {{\n  for (const enumValue of Object.values(enumValues)) {{\n    if (enumValue === value) {{\n      return enumValue;\n    }}\n  }}\n  throw new TypeError(`${{typeName}} values must be one of ${{Object.values(enumValues).map((item) => JSON.stringify(item)).join(\", \")}}.`);\n}}\n\nfunction uniffiRequireTaggedEnumValue(typeName, value) {{\n  const enumValue = uniffiRequireRecordObject(typeName, value);\n  if (typeof enumValue.tag !== \"string\") {{\n    throw new TypeError(`${{typeName}} values must be tagged objects with a string tag field.`);\n  }}\n  return enumValue;\n}}\n\nfunction uniffiNotImplementedConverter(typeName) {{\n  const fail = (member) => {{\n    throw new Error(`${{typeName}} converter ${{member}} is not implemented yet.`);\n  }};\n  return Object.freeze({{\n    lower() {{\n      return fail(\"lower\");\n    }},\n    lift() {{\n      return fail(\"lift\");\n    }},\n    write() {{\n      return fail(\"write\");\n    }},\n    read() {{\n      return fail(\"read\");\n    }},\n    allocationSize() {{\n      return fail(\"allocationSize\");\n    }},\n  }});\n}}"
     )
 }
 
@@ -2338,8 +2342,8 @@ fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> 
         Type::Float32 => Ok(format!("FfiConverterFloat32.lower({value_expr})")),
         Type::Float64 => Ok(format!("FfiConverterFloat64.lower({value_expr})")),
         Type::Boolean => Ok(format!("FfiConverterBool.lower({value_expr})")),
-        Type::String
-        | Type::Bytes
+        Type::String => Ok(format!("uniffiLowerString({value_expr})")),
+        Type::Bytes
         | Type::Record { .. }
         | Type::Enum { .. }
         | Type::Optional { .. }
@@ -2381,8 +2385,8 @@ fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
         Type::Float32 => Ok(format!("FfiConverterFloat32.lift({value_expr})")),
         Type::Float64 => Ok(format!("FfiConverterFloat64.lift({value_expr})")),
         Type::Boolean => Ok(format!("FfiConverterBool.lift({value_expr})")),
-        Type::String
-        | Type::Bytes
+        Type::String => Ok(format!("uniffiLiftStringFromRustBuffer({value_expr})")),
+        Type::Bytes
         | Type::Record { .. }
         | Type::Enum { .. }
         | Type::Optional { .. }
@@ -2506,13 +2510,14 @@ fn render_js_runtime_hooks(
 ) -> Result<String> {
     let mut lines = vec![
         "const uniffiRegisteredCallbackPointers = [];".to_string(),
+        "const uniffiRegisteredCallbackVtables = [];".to_string(),
         String::new(),
         "function uniffiRegisterCallbackVtables(bindings) {".to_string(),
     ];
 
     for callback_interface in callback_interfaces {
         lines.push(format!(
-            "  {}(bindings, uniffiRegisteredCallbackPointers);",
+            "  {}(bindings, uniffiRegisteredCallbackPointers, uniffiRegisteredCallbackVtables);",
             callback_interface_register_name(&callback_interface.name)
         ));
     }
@@ -2529,6 +2534,7 @@ fn render_js_runtime_hooks(
     lines.push("  while (uniffiRegisteredCallbackPointers.length > 0) {".to_string());
     lines.push("    koffi.unregister(uniffiRegisteredCallbackPointers.pop());".to_string());
     lines.push("  }".to_string());
+    lines.push("  uniffiRegisteredCallbackVtables.length = 0;".to_string());
     lines.push("}".to_string());
     lines.push(String::new());
     lines.push("configureRuntimeHooks({".to_string());
@@ -2723,6 +2729,10 @@ fn callback_interface_validator_name(type_name: &str) -> String {
 
 fn callback_interface_register_name(type_name: &str) -> String {
     format!("uniffiRegister{}Vtable", type_name.to_upper_camel_case())
+}
+
+fn callback_interface_vtable_struct_name(type_name: &str) -> String {
+    format!("VTableCallbackInterface{}", type_name.to_upper_camel_case())
 }
 
 fn object_factory_name(type_name: &str) -> String {

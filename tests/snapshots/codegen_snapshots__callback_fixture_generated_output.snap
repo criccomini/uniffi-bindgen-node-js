@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -83,8 +84,11 @@ function uniffiNotImplemented(member) {
   throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);
 }
 
+const uniffiTextEncoder = new TextEncoder();
+const uniffiTextDecoder = new TextDecoder();
+
 function uniffiLiftString(bytes) {
-  return FfiConverterString.lift(bytes);
+  return uniffiTextDecoder.decode(bytes);
 }
 
 function uniffiDecodeRustCallStatus(status) {
@@ -126,15 +130,35 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   return options;
 }
 
-function uniffiLowerIntoRustBuffer(converter, value) {
+function uniffiCopyIntoRustBuffer(bytes) {
   return uniffiRustCaller.rustCall(
-    (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_from_bytes(createForeignBytes(converter.lower(value)), status),
+    (status) => ffiFunctions.ffi_fixture_callbacks_rustbuffer_from_bytes(createForeignBytes(bytes), status),
     uniffiRustCallOptions(),
   );
 }
 
+function uniffiLowerString(value) {
+  return uniffiCopyIntoRustBuffer(uniffiTextEncoder.encode(value));
+}
+
+function uniffiLiftStringFromRustBuffer(value) {
+  return uniffiLiftString(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));
+}
+
+function uniffiLowerBytes(value) {
+  return uniffiCopyIntoRustBuffer(value);
+}
+
+function uniffiLiftBytesFromRustBuffer(value) {
+  return new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer);
+}
+
+function uniffiLowerIntoRustBuffer(converter, value) {
+  return uniffiCopyIntoRustBuffer(converter.lower(value));
+}
+
 function uniffiLiftFromRustBuffer(converter, value) {
-  return converter.lift(new RustBufferValue(value).consumeIntoUint8Array(uniffiFreeRustBuffer));
+  return converter.lift(uniffiLiftBytesFromRustBuffer(value));
 }
 
 function uniffiRequireRecordObject(typeName, value) {
@@ -336,7 +360,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
       uniffiAsyncLogSinkFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write;
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
     const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf, loweredMessage),
@@ -344,7 +368,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
       completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
-      liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+      liftFunc: (uniffiResult) => uniffiLiftStringFromRustBuffer(uniffiResult),
       ...uniffiRustCallOptions(),
     });
   }
@@ -355,7 +379,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
       uniffiAsyncLogSinkFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_fallible_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_asynclogsink_write_fallible;
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
     const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
     return rustCallAsync({
       rustFutureFunc: () => ffiMethod(loweredSelf, loweredMessage),
@@ -363,7 +387,7 @@ class UniffiAsyncLogSinkProxy extends UniffiObjectBase {
       cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
       completeFunc,
       freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
-      liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+      liftFunc: (uniffiResult) => uniffiLiftStringFromRustBuffer(uniffiResult),
       ...uniffiRustCallOptions(FfiConverterAsyncLogError),
     });
   }
@@ -425,7 +449,7 @@ const uniffiAsyncLogSinkRegistry = createCallbackRegistry({
   validate: uniffiValidateAsyncLogSinkImplementation,
 });
 
-function uniffiRegisterAsyncLogSinkVtable(bindings, registrations) {
+function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferences) {
   const writeFutureFree = koffi.register(
     (uniffiFutureHandle) => {
       freePendingForeignFuture(uniffiFutureHandle);
@@ -440,13 +464,13 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations) {
         handle: uniffiHandle,
         methodName: "write",
         args: [
-          uniffiLiftFromRustBuffer(FfiConverterString, message),
+          uniffiLiftStringFromRustBuffer(message),
         ],
-        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),
+        complete: (callbackData, result) => koffi.call(uniffiFutureCallback, bindings.ffiCallbacks.ForeignFutureCompleteRustBuffer, callbackData, result),
         callbackData: uniffiCallbackData,
-        lowerReturn: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerReturn: (value) => uniffiLowerString(value),
         defaultReturnValue: EMPTY_RUST_BUFFER,
-        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerString: (value) => uniffiLowerString(value),
       });
       koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
         handle: uniffiFutureHandle,
@@ -470,14 +494,14 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations) {
         handle: uniffiHandle,
         methodName: "write_fallible",
         args: [
-          uniffiLiftFromRustBuffer(FfiConverterString, message),
+          uniffiLiftStringFromRustBuffer(message),
         ],
-        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),
+        complete: (callbackData, result) => koffi.call(uniffiFutureCallback, bindings.ffiCallbacks.ForeignFutureCompleteRustBuffer, callbackData, result),
         callbackData: uniffiCallbackData,
         lowerError: (error) => error instanceof AsyncLogError ? uniffiLowerIntoRustBuffer(FfiConverterAsyncLogError, error) : null,
-        lowerReturn: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerReturn: (value) => uniffiLowerString(value),
         defaultReturnValue: EMPTY_RUST_BUFFER,
-        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerString: (value) => uniffiLowerString(value),
       });
       koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
         handle: uniffiFutureHandle,
@@ -502,9 +526,9 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations) {
         methodName: "flush",
         args: [
         ],
-        complete: (callbackData, result) => uniffiFutureCallback(callbackData, result),
+        complete: (callbackData, result) => koffi.call(uniffiFutureCallback, bindings.ffiCallbacks.ForeignFutureCompleteVoid, callbackData, result),
         callbackData: uniffiCallbackData,
-        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerString: (value) => uniffiLowerString(value),
       });
       koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
         handle: uniffiFutureHandle,
@@ -519,12 +543,15 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations) {
     koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
   );
   registrations.push(uniffiFree);
-  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink({
+  const uniffiVtable = koffi.alloc(bindings.ffiStructs.VTableCallbackInterfaceAsyncLogSink, 1);
+  koffi.encode(uniffiVtable, bindings.ffiStructs.VTableCallbackInterfaceAsyncLogSink, {
     "write": writeCallback,
     "write_fallible": write_fallibleCallback,
     "flush": flushCallback,
     uniffi_free: uniffiFree,
   });
+  vtableReferences.push(uniffiVtable);
+  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink(uniffiVtable);
 }
 
 const FfiConverterAsyncLogSink = Object.freeze({
@@ -595,7 +622,7 @@ const uniffiLogCollectorRegistry = createCallbackRegistry({
   validate: uniffiValidateLogCollectorImplementation,
 });
 
-function uniffiRegisterLogCollectorVtable(bindings, registrations) {
+function uniffiRegisterLogCollectorVtable(bindings, registrations, vtableReferences) {
   const logCallback = koffi.register(
     (uniffiHandle, record, uniffiOutReturn, callStatus) => {
       const uniffiStatus = callStatus == null
@@ -608,7 +635,7 @@ function uniffiRegisterLogCollectorVtable(bindings, registrations) {
         args: [
           uniffiLiftFromRustBuffer(FfiConverterLogRecord, record),
         ],
-        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerString: (value) => uniffiLowerString(value),
         status: uniffiStatus,
       });
       if (callStatus != null) {
@@ -626,10 +653,13 @@ function uniffiRegisterLogCollectorVtable(bindings, registrations) {
     koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
   );
   registrations.push(uniffiFree);
-  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector({
+  const uniffiVtable = koffi.alloc(bindings.ffiStructs.VTableCallbackInterfaceLogCollector, 1);
+  koffi.encode(uniffiVtable, bindings.ffiStructs.VTableCallbackInterfaceLogCollector, {
     "log": logCallback,
     uniffi_free: uniffiFree,
   });
+  vtableReferences.push(uniffiVtable);
+  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector(uniffiVtable);
 }
 
 const FfiConverterLogCollector = Object.freeze({
@@ -660,7 +690,7 @@ class UniffiLogSinkProxy extends UniffiObjectBase {
       uniffiLogSinkFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_logsink_write_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_logsink_write;
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
     uniffiRustCaller.rustCall(
       (status) => ffiMethod(loweredSelf, loweredMessage, status),
       uniffiRustCallOptions(),
@@ -716,7 +746,7 @@ const uniffiLogSinkRegistry = createCallbackRegistry({
   validate: uniffiValidateLogSinkImplementation,
 });
 
-function uniffiRegisterLogSinkVtable(bindings, registrations) {
+function uniffiRegisterLogSinkVtable(bindings, registrations, vtableReferences) {
   const writeCallback = koffi.register(
     (uniffiHandle, message, uniffiOutReturn, callStatus) => {
       const uniffiStatus = callStatus == null
@@ -727,9 +757,9 @@ function uniffiRegisterLogSinkVtable(bindings, registrations) {
         handle: uniffiHandle,
         methodName: "write",
         args: [
-          uniffiLiftFromRustBuffer(FfiConverterString, message),
+          uniffiLiftStringFromRustBuffer(message),
         ],
-        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerString: (value) => uniffiLowerString(value),
         status: uniffiStatus,
       });
       if (callStatus != null) {
@@ -753,7 +783,7 @@ function uniffiRegisterLogSinkVtable(bindings, registrations) {
         methodName: "latest",
         args: [
         ],
-        lowerString: (value) => uniffiLowerIntoRustBuffer(FfiConverterString, value),
+        lowerString: (value) => uniffiLowerString(value),
         status: uniffiStatus,
       });
       if (callStatus != null) {
@@ -773,11 +803,14 @@ function uniffiRegisterLogSinkVtable(bindings, registrations) {
     koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
   );
   registrations.push(uniffiFree);
-  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logsink({
+  const uniffiVtable = koffi.alloc(bindings.ffiStructs.VTableCallbackInterfaceLogSink, 1);
+  koffi.encode(uniffiVtable, bindings.ffiStructs.VTableCallbackInterfaceLogSink, {
     "write": writeCallback,
     "latest": latestCallback,
     uniffi_free: uniffiFree,
   });
+  vtableReferences.push(uniffiVtable);
+  bindings.ffiFunctions.uniffi_fixture_callbacks_fn_init_callback_vtable_logsink(uniffiVtable);
 }
 
 const FfiConverterLogSink = Object.freeze({
@@ -802,11 +835,12 @@ const FfiConverterLogSink = Object.freeze({
 });
 
 const uniffiRegisteredCallbackPointers = [];
+const uniffiRegisteredCallbackVtables = [];
 
 function uniffiRegisterCallbackVtables(bindings) {
-  uniffiRegisterAsyncLogSinkVtable(bindings, uniffiRegisteredCallbackPointers);
-  uniffiRegisterLogCollectorVtable(bindings, uniffiRegisteredCallbackPointers);
-  uniffiRegisterLogSinkVtable(bindings, uniffiRegisteredCallbackPointers);
+  uniffiRegisterAsyncLogSinkVtable(bindings, uniffiRegisteredCallbackPointers, uniffiRegisteredCallbackVtables);
+  uniffiRegisterLogCollectorVtable(bindings, uniffiRegisteredCallbackPointers, uniffiRegisteredCallbackVtables);
+  uniffiRegisterLogSinkVtable(bindings, uniffiRegisteredCallbackPointers, uniffiRegisteredCallbackVtables);
 }
 
 function uniffiUnregisterCallbackVtables() {
@@ -817,6 +851,7 @@ function uniffiUnregisterCallbackVtables() {
   while (uniffiRegisteredCallbackPointers.length > 0) {
     koffi.unregister(uniffiRegisteredCallbackPointers.pop());
   }
+  uniffiRegisteredCallbackVtables.length = 0;
 }
 
 configureRuntimeHooks({
@@ -834,7 +869,7 @@ configureRuntimeHooks({
 
 export function cancel_emit_async(sink, message) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
   uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_cancel_emit_async(loweredSink, loweredMessage, status),
     uniffiRustCallOptions(),
@@ -843,7 +878,7 @@ export function cancel_emit_async(sink, message) {
 
 export function emit(sink, message) {
     const loweredSink = FfiConverterLogSink.lower(sink);
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
   uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit(loweredSink, loweredMessage, status),
     uniffiRustCallOptions(),
@@ -852,7 +887,7 @@ export function emit(sink, message) {
 
 export async function emit_async(sink, message) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
   const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async(loweredSink, loweredMessage),
@@ -860,14 +895,14 @@ export async function emit_async(sink, message) {
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
     completeFunc,
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
-    liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+    liftFunc: (uniffiResult) => uniffiLiftStringFromRustBuffer(uniffiResult),
     ...uniffiRustCallOptions(),
   });
 }
 
 export async function emit_async_fallible(sink, message) {
     const loweredSink = FfiConverterAsyncLogSink.lower(sink);
-    const loweredMessage = uniffiLowerIntoRustBuffer(FfiConverterString, message);
+    const loweredMessage = uniffiLowerString(message);
   const completeFunc = (rustFuture, status) => ffiFunctions.ffi_fixture_callbacks_rust_future_complete_rust_buffer(rustFuture, status);
   return rustCallAsync({
     rustFutureFunc: () => ffiFunctions.uniffi_fixture_callbacks_fn_func_emit_async_fallible(loweredSink, loweredMessage),
@@ -875,7 +910,7 @@ export async function emit_async_fallible(sink, message) {
     cancelFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_cancel_rust_buffer(rustFuture),
     completeFunc,
     freeFunc: (rustFuture) => ffiFunctions.ffi_fixture_callbacks_rust_future_free_rust_buffer(rustFuture),
-    liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),
+    liftFunc: (uniffiResult) => uniffiLiftStringFromRustBuffer(uniffiResult),
     ...uniffiRustCallOptions(FfiConverterAsyncLogError),
   });
 }
@@ -932,8 +967,8 @@ export class Settings extends UniffiObjectBase {
       uniffiSettingsObjectFactory.usesGenericAbi(this)
         ? ffiFunctions.uniffi_fixture_callbacks_fn_method_settings_set_generic_abi
         : ffiFunctions.uniffi_fixture_callbacks_fn_method_settings_set;
-    const loweredKey = uniffiLowerIntoRustBuffer(FfiConverterString, key);
-    const loweredValueJson = uniffiLowerIntoRustBuffer(FfiConverterString, value_json);
+    const loweredKey = uniffiLowerString(key);
+    const loweredValueJson = uniffiLowerString(value_json);
     uniffiRustCaller.rustCall(
       (status) => ffiMethod(loweredSelf, loweredKey, loweredValueJson, status),
       uniffiRustCallOptions(),
@@ -950,7 +985,7 @@ export class Settings extends UniffiObjectBase {
       (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
-    return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);
+    return uniffiLiftStringFromRustBuffer(uniffiResult);
   }
 }
 
@@ -1417,151 +1452,152 @@ function createBindings(libraryPath) {
 
   ffiCallbacks.CallbackInterfaceLogSinkMethod1 = koffi.proto("CallbackInterfaceLogSinkMethod1", "void", ["uint64_t", koffi.pointer(ffiTypes.RustBuffer), koffi.pointer(ffiTypes.RustCallStatus)]);
 
-  const ffiStructs = Object.freeze((() => {
-    const ffiStructs = {};
+  const ffiStructs = {};
 
-    ffiStructs.ForeignFuture = defineStructType("ForeignFuture", {
+
+  ffiStructs.ForeignFuture = defineStructType("ForeignFuture", {
 
       "handle": "uint64_t",
 
       "free": koffi.pointer(ffiCallbacks.ForeignFutureFree),
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU8 = defineStructType("ForeignFutureStructU8", {
+
+
+  ffiStructs.ForeignFutureStructU8 = defineStructType("ForeignFutureStructU8", {
 
       "return_value": "uint8_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI8 = defineStructType("ForeignFutureStructI8", {
+
+
+  ffiStructs.ForeignFutureStructI8 = defineStructType("ForeignFutureStructI8", {
 
       "return_value": "int8_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU16 = defineStructType("ForeignFutureStructU16", {
+
+
+  ffiStructs.ForeignFutureStructU16 = defineStructType("ForeignFutureStructU16", {
 
       "return_value": "uint16_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI16 = defineStructType("ForeignFutureStructI16", {
+
+
+  ffiStructs.ForeignFutureStructI16 = defineStructType("ForeignFutureStructI16", {
 
       "return_value": "int16_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU32 = defineStructType("ForeignFutureStructU32", {
+
+
+  ffiStructs.ForeignFutureStructU32 = defineStructType("ForeignFutureStructU32", {
 
       "return_value": "uint32_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI32 = defineStructType("ForeignFutureStructI32", {
+
+
+  ffiStructs.ForeignFutureStructI32 = defineStructType("ForeignFutureStructI32", {
 
       "return_value": "int32_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructU64 = defineStructType("ForeignFutureStructU64", {
+
+
+  ffiStructs.ForeignFutureStructU64 = defineStructType("ForeignFutureStructU64", {
 
       "return_value": "uint64_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructI64 = defineStructType("ForeignFutureStructI64", {
+
+
+  ffiStructs.ForeignFutureStructI64 = defineStructType("ForeignFutureStructI64", {
 
       "return_value": "int64_t",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructF32 = defineStructType("ForeignFutureStructF32", {
+
+
+  ffiStructs.ForeignFutureStructF32 = defineStructType("ForeignFutureStructF32", {
 
       "return_value": "float",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructF64 = defineStructType("ForeignFutureStructF64", {
+
+
+  ffiStructs.ForeignFutureStructF64 = defineStructType("ForeignFutureStructF64", {
 
       "return_value": "double",
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructPointer = defineStructType("ForeignFutureStructPointer", {
+
+
+  ffiStructs.ForeignFutureStructPointer = defineStructType("ForeignFutureStructPointer", {
 
       "return_value": ffiTypes.RustArcPtr,
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructRustBuffer = defineStructType("ForeignFutureStructRustBuffer", {
+
+
+  ffiStructs.ForeignFutureStructRustBuffer = defineStructType("ForeignFutureStructRustBuffer", {
 
       "return_value": ffiTypes.RustBuffer,
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.ForeignFutureStructVoid = defineStructType("ForeignFutureStructVoid", {
+
+
+  ffiStructs.ForeignFutureStructVoid = defineStructType("ForeignFutureStructVoid", {
 
       "call_status": ffiTypes.RustCallStatus,
 
-    });
+  });
 
-    ffiStructs.VTableCallbackInterfaceAsyncLogSink = defineCallbackVtable("VTableCallbackInterfaceAsyncLogSink", {
 
-      "write": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod0),
 
-      "write_fallible": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod1),
 
-      "flush": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod2),
 
-      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
 
-    });
 
-    ffiStructs.VTableCallbackInterfaceLogCollector = defineCallbackVtable("VTableCallbackInterfaceLogCollector", {
 
-      "log": koffi.pointer(ffiCallbacks.CallbackInterfaceLogCollectorMethod0),
-
-      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
-
-    });
-
-    ffiStructs.VTableCallbackInterfaceLogSink = defineCallbackVtable("VTableCallbackInterfaceLogSink", {
-
-      "write": koffi.pointer(ffiCallbacks.CallbackInterfaceLogSinkMethod0),
-
-      "latest": koffi.pointer(ffiCallbacks.CallbackInterfaceLogSinkMethod1),
-
-      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
-
-    });
-
-    return ffiStructs;
-  })());
 
   ffiCallbacks.ForeignFutureCompleteU8 = koffi.proto("ForeignFutureCompleteU8", "void", ["uint64_t", ffiStructs.ForeignFutureStructU8]);
 
@@ -1595,7 +1631,73 @@ function createBindings(libraryPath) {
 
   ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod2 = koffi.proto("CallbackInterfaceAsyncLogSinkMethod2", "void", ["uint64_t", koffi.pointer(ffiCallbacks.ForeignFutureCompleteVoid), "uint64_t", koffi.pointer(ffiStructs.ForeignFuture)]);
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ffiStructs.VTableCallbackInterfaceAsyncLogSink = defineCallbackVtable("VTableCallbackInterfaceAsyncLogSink", {
+
+      "write": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod0),
+
+      "write_fallible": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod1),
+
+      "flush": koffi.pointer(ffiCallbacks.CallbackInterfaceAsyncLogSinkMethod2),
+
+      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
+
+  });
+
+
+
+  ffiStructs.VTableCallbackInterfaceLogCollector = defineCallbackVtable("VTableCallbackInterfaceLogCollector", {
+
+      "log": koffi.pointer(ffiCallbacks.CallbackInterfaceLogCollectorMethod0),
+
+      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
+
+  });
+
+
+
+  ffiStructs.VTableCallbackInterfaceLogSink = defineCallbackVtable("VTableCallbackInterfaceLogSink", {
+
+      "write": koffi.pointer(ffiCallbacks.CallbackInterfaceLogSinkMethod0),
+
+      "latest": koffi.pointer(ffiCallbacks.CallbackInterfaceLogSinkMethod1),
+
+      "uniffi_free": koffi.pointer(ffiCallbacks.CallbackInterfaceFree),
+
+  });
+
+
   Object.freeze(ffiCallbacks);
+  Object.freeze(ffiStructs);
   const ffiFunctions = Object.freeze({
 
     uniffi_fixture_callbacks_fn_clone_settings: library.func("uniffi_fixture_callbacks_fn_clone_settings", ffiTypes.RustArcPtrSettings, [ffiTypes.RustArcPtrSettings, koffi.pointer(ffiTypes.RustCallStatus)]),

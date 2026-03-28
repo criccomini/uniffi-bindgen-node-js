@@ -257,7 +257,7 @@ function setCallUnexpectedError(status, message) {
   setCallStatus(
     status,
     CALL_UNEXPECTED_ERROR,
-    rustBufferFromBytes(encodeString(String(message))),
+    rustBufferFromUtf8String(String(message)),
   );
 }
 
@@ -300,6 +300,10 @@ function rustBufferFromBytes(bytes) {
     len: BigInt(copied.byteLength),
     data: copied,
   };
+}
+
+function rustBufferFromUtf8String(value) {
+  return rustBufferFromBytes(TEXT_ENCODER.encode(value));
 }
 
 class ByteWriter {
@@ -397,6 +401,10 @@ function decodeString(reader) {
 
 function decodeSerializedString(buffer) {
   return decodeString(new ByteReader(buffer));
+}
+
+function decodeRustBufferString(buffer) {
+  return TEXT_DECODER.decode(rustBufferToUint8Array(buffer));
 }
 
 function allocationSizeForBytes(value) {
@@ -824,7 +832,7 @@ function createBasicFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_basic_fn_constructor_config_from_json",
       (jsonBuffer, status) => {
-        const json = decodeSerializedString(rustBufferToUint8Array(jsonBuffer));
+        const json = decodeRustBufferString(jsonBuffer);
         if (json !== "ok") {
           setPointerCallError(
             status,
@@ -844,7 +852,7 @@ function createBasicFixtureRuntime(libraryPath) {
       "uniffi_fixture_basic_fn_method_config_value",
       (handle, status) => {
         setCallSuccess(status);
-        return rustBufferFromBytes(encodeString(getConfig(handle).value));
+        return rustBufferFromUtf8String(getConfig(handle).value);
       },
     ],
     [
@@ -866,7 +874,7 @@ function createBasicFixtureRuntime(libraryPath) {
       "uniffi_fixture_basic_fn_method_reader_label",
       (handle, status) => {
         setCallSuccess(status);
-        return rustBufferFromBytes(encodeString(getReader(handle).label));
+        return rustBufferFromUtf8String(getReader(handle).label);
       },
     ],
     [
@@ -876,7 +884,7 @@ function createBasicFixtureRuntime(libraryPath) {
         nextFutureHandle += 1n;
         futures.set(futureHandle, {
           kind: "rust_buffer",
-          payload: rustBufferFromBytes(encodeString(getReader(handle).label)),
+          payload: rustBufferFromUtf8String(getReader(handle).label),
         });
         return futureHandle;
       },
@@ -1298,7 +1306,7 @@ function createCallbacksFixtureRuntime(libraryPath) {
 
     future.ready = true;
     future.statusCode = CALL_UNEXPECTED_ERROR;
-    future.errorBuffer = rustBufferFromBytes(encodeString(String(error)));
+    future.errorBuffer = rustBufferFromUtf8String(String(error));
     if (future.kind === "rust_buffer") {
       future.returnValue = emptyRustBuffer();
     }
@@ -1504,8 +1512,8 @@ function createCallbacksFixtureRuntime(libraryPath) {
       "uniffi_fixture_callbacks_fn_method_settings_set",
       (handle, keyBuffer, valueJsonBuffer, status) => {
         const settingsValue = getSettings(handle);
-        const key = decodeSerializedString(rustBufferToUint8Array(keyBuffer));
-        const valueJson = decodeSerializedString(rustBufferToUint8Array(valueJsonBuffer));
+        const key = decodeRustBufferString(keyBuffer);
+        const valueJson = decodeRustBufferString(valueJsonBuffer);
         setJsonPathValue(settingsValue, key, valueJson);
         setCallSuccess(status);
       },
@@ -1514,7 +1522,7 @@ function createCallbacksFixtureRuntime(libraryPath) {
       "uniffi_fixture_callbacks_fn_method_settings_to_json_string",
       (handle, status) => {
         setCallSuccess(status);
-        return rustBufferFromBytes(encodeString(renderJsonNode(getSettings(handle))));
+        return rustBufferFromUtf8String(renderJsonNode(getSettings(handle)));
       },
     ],
     [
@@ -1575,13 +1583,13 @@ function createCallbacksFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_callbacks_fn_init_callback_vtable_logcollector",
       (vtable) => {
-        logCollectorVtable = vtable;
+        logCollectorVtable = readEncodedValue(vtable);
       },
     ],
     [
       "uniffi_fixture_callbacks_fn_init_callback_vtable_asynclogsink",
       (vtable) => {
-        asyncLogSinkVtable = vtable;
+        asyncLogSinkVtable = readEncodedValue(vtable);
       },
     ],
     [
@@ -1626,7 +1634,7 @@ function createCallbacksFixtureRuntime(libraryPath) {
     [
       "uniffi_fixture_callbacks_fn_init_callback_vtable_logsink",
       (vtable) => {
-        logSinkVtable = vtable;
+        logSinkVtable = readEncodedValue(vtable);
       },
     ],
     [
@@ -1902,6 +1910,12 @@ const koffi = {
   },
   view(pointer, length) {
     return toUint8Array(pointer, length);
+  },
+  call(pointer, _type, ...args) {
+    if (typeof pointer === "function") {
+      return pointer(...args);
+    }
+    return requireRegisteredCallback(pointer, "koffi.call")(...args);
   },
   register(thisArgOrCallback, callbackOrType, _maybeType) {
     const callback =

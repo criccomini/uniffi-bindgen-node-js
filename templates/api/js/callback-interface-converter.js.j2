@@ -1,10 +1,10 @@
 class {{ converter.proxy_class_name }} extends UniffiObjectBase {
-{% for method in converter.methods %}
+{%- for method in converter.methods %}
 
   {% if method.is_async %}async {% endif %}{{ method.name }}({{ method.params }}) {
 {% for line in method.body_lines %}{{ line }}
 {% endfor %}  }
-{% endfor %}
+{%- endfor %}
 }
 
 const {{ converter.factory_name }} = createObjectFactory({
@@ -26,10 +26,10 @@ const {{ converter.factory_name }} = createObjectFactory({
 
 function {{ converter.validator_name }}(implementation) {
   if ((typeof implementation !== "object" && typeof implementation !== "function") || implementation == null) {
-    throw new TypeError(`${{ converter.interface_name }} implementations must be objects with callable methods.`);
+    throw new TypeError(`{{ converter.interface_name_template_expr }} implementations must be objects with callable methods.`);
   }
 {% for method in converter.methods %}  if (typeof implementation.{{ method.name }} !== "function") {
-    throw new TypeError(`${{ converter.interface_name }} is missing required method {{ method.name }}().`);
+    throw new TypeError(`{{ converter.interface_name_template_expr }} is missing required method {{ method.name }}().`);
   }
 {% endfor %}  return implementation;
 }
@@ -40,7 +40,7 @@ const {{ converter.registry_name }} = createCallbackRegistry({
 });
 
 function {{ converter.register_name }}(bindings, registrations, vtableReferences) {
-{% for line in converter.registration_lines %}{{ line }}
+{% for registration in converter.registrations %}{{ registration }}
 {% endfor %}  const uniffiFree = koffi.register(
     (uniffiHandle) => {{ converter.registry_name }}.remove(uniffiHandle),
     koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),

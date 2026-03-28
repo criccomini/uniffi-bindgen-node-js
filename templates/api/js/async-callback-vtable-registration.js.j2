@@ -1,0 +1,31 @@
+  const {{ registration.future_free_name }} = koffi.register(
+    (uniffiFutureHandle) => {
+      freePendingForeignFuture(uniffiFutureHandle);
+    },
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+  );
+  registrations.push({{ registration.future_free_name }});
+  const {{ registration.callback_name }} = koffi.register(
+    (uniffiHandle, {{ registration.callback_params }}) => {
+      const uniffiFutureHandle = invokeAsyncCallbackMethod({
+        registry: {{ registration.registry_name }},
+        handle: uniffiHandle,
+        methodName: {{ registration.method_name_literal }},
+        args: [
+{% for arg in registration.lifted_args %}          {{ arg }},
+{% endfor %}        ],
+        complete: (callbackData, result) => koffi.call(uniffiFutureCallback, bindings.ffiCallbacks.{{ registration.complete_callback_identifier }}, callbackData, result),
+        callbackData: uniffiCallbackData,
+{% if registration.has_lower_error %}        lowerError: (error) => error instanceof {{ registration.lower_error_type }} ? uniffiLowerIntoRustBuffer({{ registration.lower_error_converter_expr }}, error) : null,
+{% endif %}{% if registration.has_lower_return %}        lowerReturn: (value) => {{ registration.lower_return_expr }},
+        defaultReturnValue: {{ registration.default_return_value_expr }},
+{% endif %}        lowerString: (value) => uniffiLowerString(value),
+      });
+      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+        handle: uniffiFutureHandle,
+        free: {{ registration.future_free_name }},
+      });
+    },
+    koffi.pointer(bindings.ffiCallbacks.{{ registration.ffi_callback_identifier }}),
+  );
+  registrations.push({{ registration.callback_name }});

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use askama::Template;
 
 use super::model::VariantModel;
@@ -10,12 +10,13 @@ use super::{
     callback_interface_vtable_struct_name, ffi_opaque_identifier, js_identifier,
     js_member_identifier, json_string_literal, object_converter_name, object_factory_name,
     quoted_property_name, render_dts_fields_as_params, render_dts_params,
-    render_js_callback_vtable_registration, render_js_fields_as_params,
-    render_js_function_body_lines, render_js_object_constructor_body_lines,
-    render_js_object_method_body_lines, render_js_params, render_js_primary_constructor_body_lines,
-    render_js_property_access, render_js_record_allocation_size_expression,
-    render_js_type_converter_expression, render_named_return_type, render_public_type,
-    render_return_type, type_converter_name, variant_type_name,
+    render_js_fields_as_params, render_js_function_body_lines, render_js_koffi_type_expression,
+    render_js_lift_expression, render_js_lower_expression,
+    render_js_object_constructor_body_lines, render_js_object_method_body_lines,
+    render_js_params, render_js_primary_constructor_body_lines, render_js_property_access,
+    render_js_record_allocation_size_expression, render_js_type_converter_expression,
+    render_named_return_type, render_public_type, render_return_type, type_converter_name,
+    variant_type_name,
 };
 use uniffi_bindgen::interface::Type;
 
@@ -886,11 +887,12 @@ struct CallbackInterfaceConverterJsView {
     register_name: String,
     converter_name: String,
     interface_name: String,
+    interface_name_template_expr: String,
     ffi_object_clone_identifier: String,
     ffi_object_free_identifier: String,
     ffi_init_callback_identifier: String,
     methods: Vec<CallbackInterfaceMethodJsView>,
-    registration_lines: Vec<String>,
+    registrations: Vec<String>,
     vtable_struct_name: String,
 }
 
@@ -909,14 +911,17 @@ impl CallbackInterfaceConverterJsView {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        let mut registration_lines = Vec::new();
-        for method in &callback_interface.methods {
-            registration_lines.extend(render_js_callback_vtable_registration(
-                callback_interface,
-                method,
-                &registry_name,
-            )?);
-        }
+        let registrations = callback_interface
+            .methods
+            .iter()
+            .map(|method| {
+                render_js_callback_vtable_registration_fragment(
+                    callback_interface,
+                    method,
+                    &registry_name,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
             proxy_class_name: callback_interface_proxy_class_name(&callback_interface.name),
@@ -926,11 +931,15 @@ impl CallbackInterfaceConverterJsView {
             register_name: callback_interface_register_name(&callback_interface.name),
             converter_name: type_converter_name(&callback_interface.name),
             interface_name: json_string_literal(&callback_interface.name)?,
+            interface_name_template_expr: format!(
+                "${{{}}}",
+                json_string_literal(&callback_interface.name)?
+            ),
             ffi_object_clone_identifier: callback_interface.ffi_object_clone_identifier.clone(),
             ffi_object_free_identifier: callback_interface.ffi_object_free_identifier.clone(),
             ffi_init_callback_identifier: callback_interface.ffi_init_callback_identifier.clone(),
             methods,
-            registration_lines,
+            registrations,
             vtable_struct_name: callback_interface_vtable_struct_name(&callback_interface.name),
         })
     }
@@ -969,6 +978,226 @@ pub(crate) fn render_js_callback_interface_converter_fragment(
     .render()?
     .trim_end()
     .to_string())
+}
+
+struct SyncCallbackVtableRegistrationJsView {
+    callback_name: String,
+    callback_params: String,
+    registry_name: String,
+    method_name_literal: String,
+    lifted_args: Vec<String>,
+    ffi_callback_identifier: String,
+    lowered_return_expr: String,
+    return_koffi_type_expr: String,
+    has_return_value: bool,
+    lower_error_type: String,
+    lower_error_converter_expr: String,
+    has_lower_error: bool,
+}
+
+impl SyncCallbackVtableRegistrationJsView {
+    fn from_method(
+        callback_interface: &CallbackInterfaceModel,
+        method: &MethodModel,
+        registry_name: &str,
+    ) -> Result<Self> {
+        let callback_name = format!("{}Callback", js_member_identifier(&method.name));
+        let ffi_callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
+            format!(
+                "callback interface {}.{} is missing an FFI callback identifier",
+                callback_interface.name, method.name
+            )
+        })?;
+        let lifted_args = method
+            .arguments
+            .iter()
+            .map(|argument| {
+                render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let (has_return_value, lowered_return_expr, return_koffi_type_expr) =
+            if let Some(return_type) = method.return_type.as_ref() {
+                (
+                    true,
+                    render_js_lower_expression(return_type, "uniffiResult")?,
+                    render_js_koffi_type_expression(return_type, "bindings")?,
+                )
+            } else {
+                (false, String::new(), String::new())
+            };
+        let (has_lower_error, lower_error_type, lower_error_converter_expr) =
+            if let Some(throws_type) = method.throws_type.as_ref() {
+                (
+                    true,
+                    render_public_type(throws_type)?,
+                    render_js_type_converter_expression(throws_type)?,
+                )
+            } else {
+                (false, String::new(), String::new())
+            };
+
+        Ok(Self {
+            callback_name,
+            callback_params: method
+                .arguments
+                .iter()
+                .map(|argument| js_identifier(&argument.name))
+                .chain(["uniffiOutReturn".to_string(), "callStatus".to_string()].into_iter())
+                .collect::<Vec<_>>()
+                .join(", "),
+            registry_name: registry_name.to_string(),
+            method_name_literal: json_string_literal(&method.name)?,
+            lifted_args,
+            ffi_callback_identifier: ffi_callback_identifier.to_string(),
+            lowered_return_expr,
+            return_koffi_type_expr,
+            has_return_value,
+            lower_error_type,
+            lower_error_converter_expr,
+            has_lower_error,
+        })
+    }
+}
+
+struct AsyncCallbackVtableRegistrationJsView {
+    future_free_name: String,
+    callback_name: String,
+    callback_params: String,
+    registry_name: String,
+    method_name_literal: String,
+    lifted_args: Vec<String>,
+    complete_callback_identifier: String,
+    ffi_callback_identifier: String,
+    lower_error_type: String,
+    lower_error_converter_expr: String,
+    has_lower_error: bool,
+    lower_return_expr: String,
+    default_return_value_expr: String,
+    has_lower_return: bool,
+}
+
+impl AsyncCallbackVtableRegistrationJsView {
+    fn from_method(
+        callback_interface: &CallbackInterfaceModel,
+        method: &MethodModel,
+        registry_name: &str,
+    ) -> Result<Self> {
+        let ffi_callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
+            format!(
+                "callback interface {}.{} is missing an FFI callback identifier",
+                callback_interface.name, method.name
+            )
+        })?;
+        let async_callback_ffi = method.async_callback_ffi.as_ref().with_context(|| {
+            format!(
+                "async callback interface {}.{} is missing ForeignFuture metadata",
+                callback_interface.name, method.name
+            )
+        })?;
+        let method_identifier = js_identifier(&method.name);
+        let (has_lower_error, lower_error_type, lower_error_converter_expr) =
+            if let Some(throws_type) = method.throws_type.as_ref() {
+                (
+                    true,
+                    render_public_type(throws_type)?,
+                    render_js_type_converter_expression(throws_type)?,
+                )
+            } else {
+                (false, String::new(), String::new())
+            };
+        let (has_lower_return, lower_return_expr, default_return_value_expr) =
+            if async_callback_ffi.result_struct_has_return_value {
+                let return_type = method.return_type.as_ref().with_context(|| {
+                    format!(
+                        "async callback interface {}.{} is missing a return type",
+                        callback_interface.name, method.name
+                    )
+                })?;
+                let default_return_value_expr = async_callback_ffi
+                    .default_error_return_value_expression
+                    .as_deref()
+                    .with_context(|| {
+                        format!(
+                            "async callback interface {}.{} is missing a default error return value",
+                            callback_interface.name, method.name
+                        )
+                    })?;
+
+                (
+                    true,
+                    render_js_lower_expression(return_type, "value")?,
+                    default_return_value_expr.to_string(),
+                )
+            } else {
+                (false, String::new(), String::new())
+            };
+
+        Ok(Self {
+            future_free_name: format!("{method_identifier}FutureFree"),
+            callback_name: format!("{}Callback", js_member_identifier(&method.name)),
+            callback_params: method
+                .arguments
+                .iter()
+                .map(|argument| js_identifier(&argument.name))
+                .chain(
+                    [
+                        "uniffiFutureCallback".to_string(),
+                        "uniffiCallbackData".to_string(),
+                        "uniffiOutReturn".to_string(),
+                    ]
+                    .into_iter(),
+                )
+                .collect::<Vec<_>>()
+                .join(", "),
+            registry_name: registry_name.to_string(),
+            method_name_literal: json_string_literal(&method.name)?,
+            lifted_args: method
+                .arguments
+                .iter()
+                .map(|argument| {
+                    render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))
+                })
+                .collect::<Result<Vec<_>>>()?,
+            complete_callback_identifier: async_callback_ffi.complete_identifier.clone(),
+            ffi_callback_identifier: ffi_callback_identifier.to_string(),
+            lower_error_type,
+            lower_error_converter_expr,
+            has_lower_error,
+            lower_return_expr,
+            default_return_value_expr,
+            has_lower_return,
+        })
+    }
+}
+
+fn render_js_callback_vtable_registration_fragment(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    registry_name: &str,
+) -> Result<String> {
+    if method.is_async {
+        Ok(JsAsyncCallbackVtableRegistrationTemplate {
+            registration: AsyncCallbackVtableRegistrationJsView::from_method(
+                callback_interface,
+                method,
+                registry_name,
+            )?,
+        }
+        .render()?
+        .trim_end()
+        .to_string())
+    } else {
+        Ok(JsSyncCallbackVtableRegistrationTemplate {
+            registration: SyncCallbackVtableRegistrationJsView::from_method(
+                callback_interface,
+                method,
+                registry_name,
+            )?,
+        }
+        .render()?
+        .trim_end()
+        .to_string())
+    }
 }
 
 struct RecordDtsView {
@@ -1378,6 +1607,18 @@ struct JsErrorConverterTemplate {
 #[template(path = "api/js/callback-interface-converter.js.j2", escape = "none")]
 struct JsCallbackInterfaceConverterTemplate {
     converter: CallbackInterfaceConverterJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/sync-callback-vtable-registration.js.j2", escape = "none")]
+struct JsSyncCallbackVtableRegistrationTemplate {
+    registration: SyncCallbackVtableRegistrationJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/async-callback-vtable-registration.js.j2", escape = "none")]
+struct JsAsyncCallbackVtableRegistrationTemplate {
+    registration: AsyncCallbackVtableRegistrationJsView,
 }
 
 #[derive(Template)]

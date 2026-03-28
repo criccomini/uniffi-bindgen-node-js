@@ -90,7 +90,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Extract JS flat enum, tagged enum, and error declarations into template fragments.
 - [x] Extract JS converter rendering for records, enums, errors, and callback interfaces into template fragments while keeping allocation-size math and converter-expression
   generation in Rust.
-- [ ] Extract JS callback vtable registration fragments and keep sync/async branching plus symbol lookup in Rust support methods.
+- [x] Extract JS callback vtable registration fragments and keep sync/async branching plus symbol lookup in Rust support methods.
 - [ ] Extract JS runtime helper and runtime hook fragments into templates without changing their emitted contents.
 - [ ] Remove the obsolete JS Vec<String> emitter functions after all JS fragments are template-backed and snapshot-stable.
 - [x] Run cargo test bindings::api::tests and fix any regressions without changing intended output.

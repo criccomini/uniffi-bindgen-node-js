@@ -1,0 +1,28 @@
+  const {{ registration.callback_name }} = koffi.register(
+    (uniffiHandle, {{ registration.callback_params }}) => {
+      const uniffiStatus = callStatus == null
+        ? createRustCallStatus()
+        : koffi.decode(callStatus, bindings.ffiTypes.RustCallStatus);
+      const uniffiResult = invokeCallbackMethod({
+        registry: {{ registration.registry_name }},
+        handle: uniffiHandle,
+        methodName: {{ registration.method_name_literal }},
+        args: [
+{% for arg in registration.lifted_args %}          {{ arg }},
+{% endfor %}        ],
+{% if registration.has_lower_error %}        lowerError: (error) => error instanceof {{ registration.lower_error_type }} ? uniffiLowerIntoRustBuffer({{ registration.lower_error_converter_expr }}, error) : null,
+{% endif %}        lowerString: (value) => uniffiLowerString(value),
+        status: uniffiStatus,
+      });
+      if (callStatus != null) {
+        koffi.encode(callStatus, bindings.ffiTypes.RustCallStatus, uniffiStatus);
+      }
+      if (uniffiStatus.code !== CALL_SUCCESS) {
+        return;
+      }
+{% if registration.has_return_value %}      const loweredReturn = {{ registration.lowered_return_expr }};
+      koffi.encode(uniffiOutReturn, {{ registration.return_koffi_type_expr }}, loweredReturn);
+{% endif %}    },
+    koffi.pointer(bindings.ffiCallbacks.{{ registration.ffi_callback_identifier }}),
+  );
+  registrations.push({{ registration.callback_name }});

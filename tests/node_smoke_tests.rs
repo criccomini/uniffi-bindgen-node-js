@@ -337,7 +337,10 @@ export default koffi;
         "objects-raw-external-pointer-smoke.mjs",
         r#"
 import assert from "node:assert/strict";
+import koffi from "koffi";
 import { createObjectFactory } from "./runtime/objects.js";
+
+const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
 
 class Resource {
   ping() {
@@ -352,6 +355,7 @@ const rawHandle = {
 const resourceFactory = createObjectFactory({
   typeName: "Resource",
   createInstance: () => Object.create(Resource.prototype),
+  handleType: () => resourceHandleType,
   cloneHandle() {
     throw new Error("typed clone should not be used for raw external handles");
   },
@@ -371,7 +375,11 @@ const resourceFactory = createObjectFactory({
 
 const resource = resourceFactory.createRawExternal(rawHandle);
 assert.equal(typeof resource.ping, "function");
-assert.doesNotThrow(() => resource.ping());
+const cloned = resource.ping();
+assert.equal(cloned.__retagged, true);
+assert.equal(cloned.__type?.name, "RustArcPtrResource");
+assert.equal(cloned.__pointer, rawHandle);
+assert.equal(resourceFactory.handle(resource).__type?.name, "RustArcPtrResource");
 assert.strictEqual(resourceFactory.peekHandle(resource), rawHandle);
 assert.equal(resourceFactory.usesRawExternal(resource), true);
 assert.equal(resourceFactory.destroy(resource), true);

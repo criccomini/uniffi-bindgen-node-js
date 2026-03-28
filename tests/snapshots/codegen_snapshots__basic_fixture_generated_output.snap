@@ -6691,16 +6691,18 @@ export class UniffiObjectFactory {
         ? null
         : new FinalizationRegistry((record) => {
             try {
+              const useRawExternal =
+                record.rawExternal === true
+                && typeof this._freeHandleRawExternal === "function";
               const freeHandle =
                 record.genericAbi === true
                   ? this._freeHandleGeneric
-                  : record.rawExternal === true
-                    && typeof this._freeHandleRawExternal === "function"
+                  : useRawExternal
                     ? this._freeHandleRawExternal
                   : this._freeHandle;
               if (typeof freeHandle === "function") {
                 freeHandle(
-                  record.genericAbi === true || record.rawExternal === true
+                  record.genericAbi === true || useRawExternal
                     ? record.handle
                     : this._coerceHandle(record.handle),
                 );
@@ -6858,7 +6860,7 @@ export class UniffiObjectFactory {
       this._normalizeHandle(storedHandle(value)),
       `${this.typeName} handle`,
     );
-    return this.usesGenericAbi(value) || this.usesRawExternal(value)
+    return this.usesGenericAbi(value)
       ? rawHandle
       : this._coerceHandle(rawHandle);
   }
@@ -6871,17 +6873,36 @@ export class UniffiObjectFactory {
   }
 
   cloneHandle(value) {
-    const handle = this.handle(value);
+    const rawHandle = requireHandle(
+      this._normalizeHandle(storedHandle(value)),
+      `${this.typeName} handle`,
+    );
+    const genericAbi = this.usesGenericAbi(value);
+    const useRawExternal =
+      this.usesRawExternal(value)
+      && typeof this._cloneHandleRawExternal === "function";
+    const handle =
+      genericAbi || useRawExternal
+        ? rawHandle
+        : this._coerceHandle(rawHandle);
     const cloneHandle =
-      this.usesGenericAbi(value)
+      genericAbi
         ? this._cloneHandleGeneric
-        : this.usesRawExternal(value) && typeof this._cloneHandleRawExternal === "function"
+        : useRawExternal
           ? this._cloneHandleRawExternal
         : this._cloneHandle;
     if (typeof cloneHandle !== "function") {
       return handle;
     }
-    return requireHandle(cloneHandle(handle, value), `${this.typeName} cloned handle`);
+    const clonedHandle = requireHandle(
+      cloneHandle(handle, value),
+      `${this.typeName} cloned handle`,
+    );
+    return genericAbi
+      ? clonedHandle
+      : useRawExternal
+        ? this._coerceHandle(clonedHandle)
+        : clonedHandle;
   }
 
   destroy(value) {
@@ -6889,9 +6910,18 @@ export class UniffiObjectFactory {
       return false;
     }
 
-    const handle = this.handle(value);
+    const rawHandle = requireHandle(
+      this._normalizeHandle(storedHandle(value)),
+      `${this.typeName} handle`,
+    );
     const genericAbi = this.usesGenericAbi(value);
-    const rawExternal = this.usesRawExternal(value);
+    const useRawExternal =
+      this.usesRawExternal(value)
+      && typeof this._freeHandleRawExternal === "function";
+    const handle =
+      genericAbi || useRawExternal
+        ? rawHandle
+        : this._coerceHandle(rawHandle);
     const cleanupHandle = value[uniffiRetypedHandleCleanupSymbol];
     this._unregisterFinalizer(value);
     this._markDestroyed(value);
@@ -6899,7 +6929,7 @@ export class UniffiObjectFactory {
     const freeHandle =
       genericAbi
         ? this._freeHandleGeneric
-        : rawExternal && typeof this._freeHandleRawExternal === "function"
+        : useRawExternal
           ? this._freeHandleRawExternal
         : this._freeHandle;
     if (typeof freeHandle === "function") {

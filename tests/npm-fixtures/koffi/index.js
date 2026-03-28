@@ -1882,6 +1882,9 @@ const koffi = {
       if (typeof value === "object" && value != null && value.__koffiPointer === true) {
         return wrapPointerCast(value, type);
       }
+      if (isExternalPointerValue(value)) {
+        return wrapPointerCast(wrapExternalPointerValue(value), type);
+      }
       throw new TypeError("Invalid argument");
     }
     return normalizeBigInt(value);

@@ -7,9 +7,9 @@ use uniffi_bindgen::interface::{
 };
 
 use super::{
-    callback_method_ffi_name, ffi_clone_symbol_name, ffi_free_symbol_name,
-    ffi_symbol_identifier, foreign_future_complete_ffi_name,
-    render_js_default_async_callback_return_value_expression, validate_supported_features,
+    callback_method_ffi_name, ffi_clone_symbol_name, ffi_free_symbol_name, ffi_symbol_identifier,
+    foreign_future_complete_ffi_name, render_js_default_async_callback_return_value_expression,
+    validate_supported_features,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

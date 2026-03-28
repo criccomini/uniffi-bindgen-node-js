@@ -1,1 +1,35 @@
-{{ contents }}
+{%- for record in renderer.records -%}
+{{ record }}{% if !loop.last || renderer.has_declarations_after_records() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for flat_enum in renderer.flat_enums -%}
+{{ flat_enum }}{% if !loop.last || renderer.has_declarations_after_flat_enums() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for tagged_enum in renderer.tagged_enums -%}
+{{ tagged_enum }}{% if !loop.last || renderer.has_declarations_after_tagged_enums() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for error in renderer.errors -%}
+{{ error }}{% if !loop.last || renderer.has_declarations_after_errors() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for callback_interface in renderer.callback_interfaces -%}
+{{ callback_interface }}{% if !loop.last || renderer.has_declarations_after_callback_interfaces() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for function in renderer.functions -%}
+{{ function }}{% if !loop.last || renderer.has_declarations_after_functions() %}
+
+{% endif -%}
+{%- endfor -%}
+{%- for object in renderer.objects -%}
+{{ object }}{% if !loop.last %}
+
+{% endif -%}
+{%- endfor -%}

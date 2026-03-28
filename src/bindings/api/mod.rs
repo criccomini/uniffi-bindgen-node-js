@@ -6,9 +6,8 @@ use anyhow::{Context, Result};
 use uniffi_bindgen::interface::Type;
 
 pub(crate) use self::model::{
-    ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel,
-    ErrorModel, FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel,
-    RenderedComponentApi,
+    ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
+    FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
 };
 use self::render::PublicApiRenderer;
 pub(crate) use self::support::*;
@@ -17,7 +16,6 @@ impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
         let renderer = PublicApiRenderer::new(self);
         let mut js_sections = Vec::new();
-        let mut dts_sections = Vec::new();
         let requires_async_rust_future_hooks = self.requires_async_rust_future_hooks();
 
         if !self.functions.is_empty() || !self.objects.is_empty() {
@@ -38,16 +36,6 @@ impl ComponentModel {
             js_sections.push(render_js_async_rust_future_helpers());
         }
 
-        if !self.records.is_empty() {
-            dts_sections.push(
-                self.records
-                    .iter()
-                    .map(render_dts_record)
-                    .collect::<Result<Vec<_>>>()?
-                    .join("\n\n"),
-            );
-        }
-
         if !self.flat_enums.is_empty() {
             let flat_enum_js = self
                 .flat_enums
@@ -55,14 +43,7 @@ impl ComponentModel {
                 .map(render_js_flat_enum)
                 .collect::<Result<Vec<_>>>()?
                 .join("\n\n");
-            let flat_enum_dts = self
-                .flat_enums
-                .iter()
-                .map(render_dts_flat_enum)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
             js_sections.push(flat_enum_js);
-            dts_sections.push(flat_enum_dts);
         }
 
         if !self.tagged_enums.is_empty() {
@@ -72,14 +53,7 @@ impl ComponentModel {
                 .map(render_js_tagged_enum)
                 .collect::<Result<Vec<_>>>()?
                 .join("\n\n");
-            let tagged_enum_dts = self
-                .tagged_enums
-                .iter()
-                .map(render_dts_tagged_enum)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
             js_sections.push(tagged_enum_js);
-            dts_sections.push(tagged_enum_dts);
         }
 
         if !self.errors.is_empty() {
@@ -89,24 +63,7 @@ impl ComponentModel {
                 .map(render_js_error)
                 .collect::<Result<Vec<_>>>()?
                 .join("\n\n");
-            let error_dts = self
-                .errors
-                .iter()
-                .map(render_dts_error)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
             js_sections.push(error_js);
-            dts_sections.push(error_dts);
-        }
-
-        if !self.callback_interfaces.is_empty() {
-            dts_sections.push(
-                self.callback_interfaces
-                    .iter()
-                    .map(render_dts_callback_interface)
-                    .collect::<Result<Vec<_>>>()?
-                    .join("\n\n"),
-            );
         }
 
         if self.has_placeholder_converters() {
@@ -127,14 +84,7 @@ impl ComponentModel {
                 .map(render_js_function)
                 .collect::<Result<Vec<_>>>()?
                 .join("\n\n");
-            let functions_dts = self
-                .functions
-                .iter()
-                .map(render_dts_function)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
             js_sections.push(functions_js);
-            dts_sections.push(functions_dts);
         }
 
         if !self.objects.is_empty() {
@@ -144,19 +94,12 @@ impl ComponentModel {
                 .map(render_js_object)
                 .collect::<Result<Vec<_>>>()?
                 .join("\n\n");
-            let objects_dts = self
-                .objects
-                .iter()
-                .map(render_dts_object)
-                .collect::<Result<Vec<_>>>()?
-                .join("\n\n");
             js_sections.push(objects_js);
-            dts_sections.push(objects_dts);
         }
 
         Ok(RenderedComponentApi {
             js: renderer.render_js(&js_sections)?,
-            dts: renderer.render_dts(&dts_sections)?,
+            dts: renderer.render_dts()?,
             requires_async_rust_future_hooks,
         })
     }
@@ -1882,8 +1825,8 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uniffi_bindgen::interface::ComponentInterface;
     use uniffi_bindgen::interface::AsType;
+    use uniffi_bindgen::interface::ComponentInterface;
 
     #[test]
     fn component_model_collects_objects_records_enums_errors_and_functions() {

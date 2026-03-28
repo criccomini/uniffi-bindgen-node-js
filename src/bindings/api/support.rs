@@ -463,9 +463,7 @@ pub(crate) fn render_named_return_type(type_name: &str, is_async: bool) -> Strin
     }
 }
 
-pub(crate) fn render_js_rust_call_options_expression(
-    throws_type: Option<&Type>,
-) -> Result<String> {
+pub(crate) fn render_js_rust_call_options_expression(throws_type: Option<&Type>) -> Result<String> {
     match throws_type {
         Some(throws_type) => Ok(format!(
             "uniffiRustCallOptions({})",

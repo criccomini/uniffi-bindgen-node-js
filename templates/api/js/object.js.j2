@@ -1,0 +1,82 @@
+export class {{ object.name }} extends UniffiObjectBase {
+{% if object.has_primary_constructor %}  constructor({{ object.primary_constructor_params }}) {
+    super();
+{% for line in object.primary_constructor_body_lines %}{{ line }}
+{% endfor %}  }
+{% else %}  constructor() {
+    super();
+    return uniffiNotImplemented({{ object.unimplemented_constructor_member }});
+  }
+{% endif %}{% for constructor in object.constructors %}
+
+  static {% if constructor.is_async %}async {% endif %}{{ constructor.name }}({{ constructor.params }}) {
+{% for line in constructor.body_lines %}{{ line }}
+{% endfor %}  }
+{% endfor %}{% for method in object.methods %}
+
+  {% if method.is_async %}async {% endif %}{{ method.name }}({{ method.params }}) {
+{% for line in method.body_lines %}{{ line }}
+{% endfor %}  }
+{% endfor %}
+}
+
+const {{ object.factory_name }} = createObjectFactory({
+  typeName: {{ object.type_name_literal }},
+  createInstance: () => Object.create({{ object.name }}.prototype),
+  handleType: () => getFfiBindings().ffiTypes.{{ object.ffi_opaque_identifier }},
+  cloneHandleGeneric(handle) {
+    const bindings = getFfiBindings();
+    const genericCloneHandle = bindings.library.func(
+      {{ object.ffi_object_clone_symbol }},
+      bindings.ffiTypes.RustArcPtr,
+      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    return uniffiRustCaller.rustCall(
+      (status) => genericCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  cloneHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalCloneHandle = bindings.library.func(
+      {{ object.ffi_object_clone_symbol }},
+      bindings.ffiTypes.VoidPointer,
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    return uniffiRustCaller.rustCall(
+      (status) => rawExternalCloneHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  cloneHandle(handle) {
+    return uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.{{ object.ffi_object_clone_identifier }}(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleGeneric(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.{{ object.ffi_object_free_identifier }}_generic_abi(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandleRawExternal(handle) {
+    const bindings = getFfiBindings();
+    const rawExternalFreeHandle = bindings.library.func(
+      {{ object.ffi_object_free_symbol }},
+      "void",
+      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    );
+    uniffiRustCaller.rustCall(
+      (status) => rawExternalFreeHandle(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+  freeHandle(handle) {
+    uniffiRustCaller.rustCall(
+      (status) => ffiFunctions.{{ object.ffi_object_free_identifier }}(handle, status),
+      uniffiRustCallOptions(),
+    );
+  },
+});
+const {{ object.converter_name }} = createObjectConverter({{ object.factory_name }});

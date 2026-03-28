@@ -9,7 +9,9 @@ pub(crate) use self::model::{
     ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
     FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
 };
-use self::render::{JsRenderSections, PublicApiRenderer, render_js_function_fragment};
+use self::render::{
+    JsRenderSections, PublicApiRenderer, render_js_function_fragment, render_js_object_fragment,
+};
 pub(crate) use self::support::*;
 
 impl ComponentModel {
@@ -73,7 +75,7 @@ impl ComponentModel {
         js_sections.objects = self
             .objects
             .iter()
-            .map(render_js_object)
+            .map(render_js_object_fragment)
             .collect::<Result<_>>()?;
 
         Ok(RenderedComponentApi {
@@ -1072,184 +1074,31 @@ fn render_js_error_converter(error: &ErrorModel) -> Result<String> {
     Ok(lines.join("\n"))
 }
 
-fn render_js_object(object: &ObjectModel) -> Result<String> {
-    let factory_name = object_factory_name(&object.name);
-    let converter_name = object_converter_name(&object.name);
-    let mut lines = vec![format!(
-        "export class {} extends UniffiObjectBase {{",
-        object.name
-    )];
+pub(super) fn render_js_primary_constructor_body_lines(
+    constructor: &ConstructorModel,
+    factory_name: &str,
+) -> Result<Vec<String>> {
+    render_js_sync_constructor_body(constructor, Some("this"), factory_name)
+}
 
-    if let Some(primary_constructor) = object
-        .constructors
-        .iter()
-        .find(|constructor| constructor.is_primary && !constructor.is_async)
-    {
-        lines.push(format!(
-            "  constructor({}) {{",
-            render_js_params(&primary_constructor.arguments)
-        ));
-        lines.push("    super();".to_string());
-        lines.extend(render_js_sync_constructor_body(
-            primary_constructor,
-            Some("this"),
-            &factory_name,
-        )?);
+pub(super) fn render_js_object_constructor_body_lines(
+    constructor: &ConstructorModel,
+    factory_name: &str,
+    object_name: &str,
+) -> Result<Vec<String>> {
+    render_js_constructor_body(constructor, factory_name, object_name)
+}
+
+pub(super) fn render_js_object_method_body_lines(
+    method: &MethodModel,
+    factory_name: &str,
+    object_name: &str,
+) -> Result<Vec<String>> {
+    if method.is_async {
+        render_js_async_method_body(method, factory_name, object_name)
     } else {
-        lines.push("  constructor() {".to_string());
-        lines.push("    super();".to_string());
-        lines.push(format!(
-            "    return uniffiNotImplemented({});",
-            json_string_literal(&format!("{}.constructor", object.name))?
-        ));
+        render_js_sync_method_body(method, factory_name, object_name)
     }
-    lines.push("  }".to_string());
-
-    for constructor in &object.constructors {
-        if constructor.is_primary && !constructor.is_async {
-            continue;
-        }
-        lines.push(String::new());
-        lines.push(format!(
-            "  static {}{}({}) {{",
-            if constructor.is_async { "async " } else { "" },
-            js_member_identifier(&constructor.name),
-            render_js_params(&constructor.arguments)
-        ));
-        lines.extend(render_js_constructor_body(
-            constructor,
-            &factory_name,
-            &object.name,
-        )?);
-        lines.push("  }".to_string());
-    }
-
-    for method in &object.methods {
-        lines.push(String::new());
-        lines.push(format!(
-            "  {}{}({}) {{",
-            if method.is_async { "async " } else { "" },
-            js_member_identifier(&method.name),
-            render_js_params(&method.arguments)
-        ));
-        if method.is_async {
-            lines.extend(render_js_async_method_body(
-                method,
-                &factory_name,
-                &object.name,
-            )?);
-        } else {
-            lines.extend(render_js_sync_method_body(
-                method,
-                &factory_name,
-                &object.name,
-            )?);
-        }
-        lines.push("  }".to_string());
-    }
-
-    lines.push("}".to_string());
-    lines.push(String::new());
-    lines.push(format!("const {} = createObjectFactory({{", factory_name));
-    lines.push(format!(
-        "  typeName: {},",
-        json_string_literal(&object.name)?
-    ));
-    lines.push(format!(
-        "  createInstance: () => Object.create({}.prototype),",
-        object.name
-    ));
-    lines.push(format!(
-        "  handleType: () => getFfiBindings().ffiTypes.{},",
-        ffi_opaque_identifier(&object.name)
-    ));
-    lines.push("  cloneHandleGeneric(handle) {".to_string());
-    lines.push("    const bindings = getFfiBindings();".to_string());
-    lines.push("    const genericCloneHandle = bindings.library.func(".to_string());
-    lines.push(format!(
-        "      {},",
-        json_string_literal(&object.ffi_object_clone_identifier)?
-    ));
-    lines.push("      bindings.ffiTypes.RustArcPtr,".to_string());
-    lines.push(
-        "      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
-            .to_string(),
-    );
-    lines.push("    );".to_string());
-    lines.push("    return uniffiRustCaller.rustCall(".to_string());
-    lines.push("      (status) => genericCloneHandle(handle, status),".to_string());
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("  },".to_string());
-    lines.push("  cloneHandleRawExternal(handle) {".to_string());
-    lines.push("    const bindings = getFfiBindings();".to_string());
-    lines.push("    const rawExternalCloneHandle = bindings.library.func(".to_string());
-    lines.push(format!(
-        "      {},",
-        json_string_literal(&object.ffi_object_clone_identifier)?
-    ));
-    lines.push("      bindings.ffiTypes.VoidPointer,".to_string());
-    lines.push(
-        "      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
-            .to_string(),
-    );
-    lines.push("    );".to_string());
-    lines.push("    return uniffiRustCaller.rustCall(".to_string());
-    lines.push("      (status) => rawExternalCloneHandle(handle, status),".to_string());
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("  },".to_string());
-    lines.push("  cloneHandle(handle) {".to_string());
-    lines.push("    return uniffiRustCaller.rustCall(".to_string());
-    lines.push(format!(
-        "      (status) => ffiFunctions.{}(handle, status),",
-        object.ffi_object_clone_identifier
-    ));
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("  },".to_string());
-    lines.push("  freeHandleGeneric(handle) {".to_string());
-    lines.push("    uniffiRustCaller.rustCall(".to_string());
-    lines.push(format!(
-        "      (status) => ffiFunctions.{}_generic_abi(handle, status),",
-        object.ffi_object_free_identifier
-    ));
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("  },".to_string());
-    lines.push("  freeHandleRawExternal(handle) {".to_string());
-    lines.push("    const bindings = getFfiBindings();".to_string());
-    lines.push("    const rawExternalFreeHandle = bindings.library.func(".to_string());
-    lines.push(format!(
-        "      {},",
-        json_string_literal(&object.ffi_object_free_identifier)?
-    ));
-    lines.push("      \"void\",".to_string());
-    lines.push(
-        "      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
-            .to_string(),
-    );
-    lines.push("    );".to_string());
-    lines.push("    uniffiRustCaller.rustCall(".to_string());
-    lines.push("      (status) => rawExternalFreeHandle(handle, status),".to_string());
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("  },".to_string());
-    lines.push("  freeHandle(handle) {".to_string());
-    lines.push("    uniffiRustCaller.rustCall(".to_string());
-    lines.push(format!(
-        "      (status) => ffiFunctions.{}(handle, status),",
-        object.ffi_object_free_identifier
-    ));
-    lines.push("      uniffiRustCallOptions(),".to_string());
-    lines.push("    );".to_string());
-    lines.push("  },".to_string());
-    lines.push("});".to_string());
-    lines.push(format!(
-        "const {} = createObjectConverter({});",
-        converter_name, factory_name
-    ));
-    Ok(lines.join("\n"))
 }
 
 fn render_js_runtime_helpers(

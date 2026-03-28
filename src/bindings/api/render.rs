@@ -4,10 +4,12 @@ use askama::Template;
 use super::model::VariantModel;
 use super::{
     CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel, FieldModel,
-    FunctionModel, MethodModel, ObjectModel, RecordModel, js_identifier, js_member_identifier,
-    json_string_literal, quoted_property_name, render_dts_fields_as_params, render_dts_params,
-    render_js_function_body_lines, render_js_params, render_named_return_type, render_public_type,
-    render_return_type, variant_type_name,
+    FunctionModel, MethodModel, ObjectModel, RecordModel, ffi_opaque_identifier, js_identifier,
+    js_member_identifier, json_string_literal, object_converter_name, object_factory_name,
+    quoted_property_name, render_dts_fields_as_params, render_dts_params,
+    render_js_function_body_lines, render_js_object_constructor_body_lines,
+    render_js_object_method_body_lines, render_js_params, render_js_primary_constructor_body_lines,
+    render_named_return_type, render_public_type, render_return_type, variant_type_name,
 };
 
 #[derive(Default)]
@@ -248,6 +250,124 @@ impl FunctionJsView {
 pub(crate) fn render_js_function_fragment(function: &FunctionModel) -> Result<String> {
     Ok(JsFunctionTemplate {
         function: FunctionJsView::from_function(function)?,
+    }
+    .render()?
+    .trim_end()
+    .to_string())
+}
+
+struct ObjectJsView {
+    name: String,
+    factory_name: String,
+    converter_name: String,
+    type_name_literal: String,
+    ffi_opaque_identifier: String,
+    ffi_object_clone_symbol: String,
+    ffi_object_clone_identifier: String,
+    ffi_object_free_symbol: String,
+    ffi_object_free_identifier: String,
+    has_primary_constructor: bool,
+    primary_constructor_params: String,
+    primary_constructor_body_lines: Vec<String>,
+    unimplemented_constructor_member: String,
+    constructors: Vec<ConstructorJsView>,
+    methods: Vec<ObjectMethodJsView>,
+}
+
+impl ObjectJsView {
+    fn from_object(object: &ObjectModel) -> Result<Self> {
+        let factory_name = object_factory_name(&object.name);
+        let primary_constructor = object
+            .constructors
+            .iter()
+            .find(|constructor| constructor.is_primary && !constructor.is_async);
+
+        Ok(Self {
+            name: object.name.clone(),
+            factory_name: factory_name.clone(),
+            converter_name: object_converter_name(&object.name),
+            type_name_literal: json_string_literal(&object.name)?,
+            ffi_opaque_identifier: ffi_opaque_identifier(&object.name),
+            ffi_object_clone_symbol: json_string_literal(&object.ffi_object_clone_identifier)?,
+            ffi_object_clone_identifier: object.ffi_object_clone_identifier.clone(),
+            ffi_object_free_symbol: json_string_literal(&object.ffi_object_free_identifier)?,
+            ffi_object_free_identifier: object.ffi_object_free_identifier.clone(),
+            has_primary_constructor: primary_constructor.is_some(),
+            primary_constructor_params: primary_constructor
+                .map(|constructor| render_js_params(&constructor.arguments))
+                .unwrap_or_default(),
+            primary_constructor_body_lines: primary_constructor
+                .map(|constructor| {
+                    render_js_primary_constructor_body_lines(constructor, &factory_name)
+                })
+                .transpose()?
+                .unwrap_or_default(),
+            unimplemented_constructor_member: json_string_literal(&format!(
+                "{}.constructor",
+                object.name
+            ))?,
+            constructors: object
+                .constructors
+                .iter()
+                .filter(|constructor| !(constructor.is_primary && !constructor.is_async))
+                .map(|constructor| ConstructorJsView::from_constructor(object, constructor))
+                .collect::<Result<_>>()?,
+            methods: object
+                .methods
+                .iter()
+                .map(|method| ObjectMethodJsView::from_method(object, method))
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
+struct ConstructorJsView {
+    name: String,
+    is_async: bool,
+    params: String,
+    body_lines: Vec<String>,
+}
+
+impl ConstructorJsView {
+    fn from_constructor(object: &ObjectModel, constructor: &ConstructorModel) -> Result<Self> {
+        let factory_name = object_factory_name(&object.name);
+
+        Ok(Self {
+            name: js_member_identifier(&constructor.name),
+            is_async: constructor.is_async,
+            params: render_js_params(&constructor.arguments),
+            body_lines: render_js_object_constructor_body_lines(
+                constructor,
+                &factory_name,
+                &object.name,
+            )?,
+        })
+    }
+}
+
+struct ObjectMethodJsView {
+    name: String,
+    is_async: bool,
+    params: String,
+    body_lines: Vec<String>,
+}
+
+impl ObjectMethodJsView {
+    fn from_method(object: &ObjectModel, method: &MethodModel) -> Result<Self> {
+        let factory_name = object_factory_name(&object.name);
+
+        Ok(Self {
+            name: js_member_identifier(&method.name),
+            is_async: method.is_async,
+            params: render_js_params(&method.arguments),
+            body_lines: render_js_object_method_body_lines(method, &factory_name, &object.name)?,
+        })
+    }
+}
+
+pub(crate) fn render_js_object_fragment(object: &ObjectModel) -> Result<String> {
+    Ok(JsObjectTemplate {
+        object: ObjectJsView::from_object(object)?,
     }
     .render()?
     .trim_end()
@@ -607,6 +727,12 @@ struct PublicApiJsTemplate {
 #[template(path = "api/js/function.js.j2", escape = "none")]
 struct JsFunctionTemplate {
     function: FunctionJsView,
+}
+
+#[derive(Template)]
+#[template(path = "api/js/object.js.j2", escape = "none")]
+struct JsObjectTemplate {
+    object: ObjectJsView,
 }
 
 #[derive(Template)]

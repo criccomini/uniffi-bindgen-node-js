@@ -3,7 +3,9 @@ mod render;
 mod support;
 
 use anyhow::{Context, Result};
+use uniffi_bindgen::interface::Type;
 
+use self::model::AsyncScaffoldingModel;
 pub(crate) use self::model::{
     ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
     FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
@@ -11,10 +13,9 @@ pub(crate) use self::model::{
 use self::render::{
     JsRenderSections, PublicApiRenderer, render_js_async_rust_future_helpers_fragment,
     render_js_callback_interface_converter_fragment, render_js_error_converter_fragment,
-    render_js_error_fragment, render_js_runtime_helpers_fragment,
-    render_js_runtime_hooks_fragment,
-    render_js_flat_enum_converter_fragment, render_js_flat_enum_fragment,
+    render_js_error_fragment, render_js_flat_enum_converter_fragment, render_js_flat_enum_fragment,
     render_js_function_fragment, render_js_object_fragment, render_js_record_converter_fragment,
+    render_js_runtime_helpers_fragment, render_js_runtime_hooks_fragment,
     render_js_tagged_enum_converter_fragment, render_js_tagged_enum_fragment,
 };
 pub(crate) use self::support::*;
@@ -22,66 +23,8 @@ pub(crate) use self::support::*;
 impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
         let renderer = PublicApiRenderer::new(self);
-        let mut js_sections = JsRenderSections::default();
         let requires_async_rust_future_hooks = self.requires_async_rust_future_hooks();
-
-        if !self.functions.is_empty() || !self.objects.is_empty() {
-            js_sections.unimplemented_helper =
-                "function uniffiNotImplemented(member) {\n  throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);\n}"
-                    .to_string();
-        }
-
-        if !self.objects.is_empty() || self.has_placeholder_converters() {
-            js_sections.runtime_helpers = render_js_runtime_helpers_fragment(
-                &self.ffi_rustbuffer_from_bytes_identifier,
-                &self.ffi_rustbuffer_free_identifier,
-            )?;
-        }
-
-        if requires_async_rust_future_hooks {
-            js_sections.async_rust_future_helpers = render_js_async_rust_future_helpers_fragment()?;
-        }
-
-        js_sections.flat_enums = self
-            .flat_enums
-            .iter()
-            .map(render_js_flat_enum_fragment)
-            .collect::<Result<_>>()?;
-
-        js_sections.tagged_enums = self
-            .tagged_enums
-            .iter()
-            .map(render_js_tagged_enum_fragment)
-            .collect::<Result<_>>()?;
-
-        js_sections.errors = self
-            .errors
-            .iter()
-            .map(render_js_error_fragment)
-            .collect::<Result<_>>()?;
-
-        if self.has_placeholder_converters() {
-            js_sections.placeholder_converters = self.render_js_placeholder_converters()?;
-        }
-
-        if !self.callback_interfaces.is_empty() || requires_async_rust_future_hooks {
-            js_sections.runtime_hooks = render_js_runtime_hooks_fragment(
-                &self.callback_interfaces,
-                requires_async_rust_future_hooks,
-            )?;
-        }
-
-        js_sections.functions = self
-            .functions
-            .iter()
-            .map(render_js_function_fragment)
-            .collect::<Result<_>>()?;
-
-        js_sections.objects = self
-            .objects
-            .iter()
-            .map(render_js_object_fragment)
-            .collect::<Result<_>>()?;
+        let js_sections = self.build_js_render_sections(requires_async_rust_future_hooks)?;
 
         Ok(RenderedComponentApi {
             js: renderer.render_js(js_sections)?,
@@ -90,167 +33,384 @@ impl ComponentModel {
         })
     }
 
+    fn build_js_render_sections(
+        &self,
+        requires_async_rust_future_hooks: bool,
+    ) -> Result<JsRenderSections> {
+        let mut sections = self.build_js_declaration_sections()?;
+        self.populate_js_runtime_sections(&mut sections, requires_async_rust_future_hooks)?;
+        Ok(sections)
+    }
+
+    fn build_js_declaration_sections(&self) -> Result<JsRenderSections> {
+        Ok(JsRenderSections {
+            unimplemented_helper: self.render_unimplemented_helper(),
+            flat_enums: render_fragments(&self.flat_enums, render_js_flat_enum_fragment)?,
+            tagged_enums: render_fragments(&self.tagged_enums, render_js_tagged_enum_fragment)?,
+            errors: render_fragments(&self.errors, render_js_error_fragment)?,
+            placeholder_converters: self.render_optional_placeholder_converters()?,
+            functions: render_fragments(&self.functions, render_js_function_fragment)?,
+            objects: render_fragments(&self.objects, render_js_object_fragment)?,
+            ..JsRenderSections::default()
+        })
+    }
+
+    fn populate_js_runtime_sections(
+        &self,
+        sections: &mut JsRenderSections,
+        requires_async_rust_future_hooks: bool,
+    ) -> Result<()> {
+        sections.runtime_helpers = self.render_runtime_helpers()?;
+        sections.async_rust_future_helpers =
+            self.render_async_rust_future_helpers(requires_async_rust_future_hooks)?;
+        sections.runtime_hooks = self.render_runtime_hooks(requires_async_rust_future_hooks)?;
+        Ok(())
+    }
+
+    fn render_unimplemented_helper(&self) -> String {
+        if self.functions.is_empty() && self.objects.is_empty() {
+            return String::new();
+        }
+
+        "function uniffiNotImplemented(member) {\n  throw new Error(`${member} is not implemented yet. Koffi-backed bindings are still pending.`);\n}"
+            .to_string()
+    }
+
+    fn render_runtime_helpers(&self) -> Result<String> {
+        if self.objects.is_empty() && !self.has_placeholder_converters() {
+            return Ok(String::new());
+        }
+
+        render_js_runtime_helpers_fragment(
+            &self.ffi_rustbuffer_from_bytes_identifier,
+            &self.ffi_rustbuffer_free_identifier,
+        )
+    }
+
+    fn render_async_rust_future_helpers(
+        &self,
+        requires_async_rust_future_hooks: bool,
+    ) -> Result<String> {
+        if !requires_async_rust_future_hooks {
+            return Ok(String::new());
+        }
+
+        render_js_async_rust_future_helpers_fragment()
+    }
+
+    fn render_optional_placeholder_converters(&self) -> Result<String> {
+        if !self.has_placeholder_converters() {
+            return Ok(String::new());
+        }
+
+        self.render_js_placeholder_converters()
+    }
+
+    fn render_runtime_hooks(&self, requires_async_rust_future_hooks: bool) -> Result<String> {
+        if self.callback_interfaces.is_empty() && !requires_async_rust_future_hooks {
+            return Ok(String::new());
+        }
+
+        render_js_runtime_hooks_fragment(
+            &self.callback_interfaces,
+            requires_async_rust_future_hooks,
+        )
+    }
+
     fn has_placeholder_converters(&self) -> bool {
+        self.has_data_type_placeholder_converters() || !self.callback_interfaces.is_empty()
+    }
+
+    fn has_data_type_placeholder_converters(&self) -> bool {
         !self.records.is_empty()
             || !self.flat_enums.is_empty()
             || !self.tagged_enums.is_empty()
             || !self.errors.is_empty()
-            || !self.callback_interfaces.is_empty()
     }
 
     fn requires_async_rust_future_hooks(&self) -> bool {
+        self.has_async_functions()
+            || self.has_async_objects()
+            || self.has_async_callback_interfaces()
+    }
+
+    fn has_async_functions(&self) -> bool {
         self.functions.iter().any(|function| function.is_async)
-            || self.objects.iter().any(|object| {
-                object
-                    .constructors
-                    .iter()
-                    .any(|constructor| constructor.is_async)
-                    || object.methods.iter().any(|method| method.is_async)
-            })
-            || self.callback_interfaces.iter().any(|callback_interface| {
-                callback_interface
-                    .methods
-                    .iter()
-                    .any(|method| method.is_async)
-            })
+    }
+
+    fn has_async_objects(&self) -> bool {
+        self.objects.iter().any(object_has_async_members)
+    }
+
+    fn has_async_callback_interfaces(&self) -> bool {
+        self.callback_interfaces
+            .iter()
+            .any(callback_interface_has_async_methods)
     }
 
     fn render_js_placeholder_converters(&self) -> Result<String> {
-        let mut lines = Vec::new();
-
-        for record in &self.records {
-            lines.push(render_js_record_converter_fragment(record)?);
-        }
-        for enum_def in &self.flat_enums {
-            lines.push(render_js_flat_enum_converter_fragment(enum_def)?);
-        }
-        for enum_def in &self.tagged_enums {
-            lines.push(render_js_tagged_enum_converter_fragment(enum_def)?);
-        }
-        for error in &self.errors {
-            lines.push(render_js_error_converter_fragment(error)?);
-        }
-        for callback_interface in &self.callback_interfaces {
-            lines.push(render_js_callback_interface_converter_fragment(
-                callback_interface,
-            )?);
-        }
+        let mut lines = render_fragments(&self.records, render_js_record_converter_fragment)?;
+        lines.extend(render_fragments(
+            &self.flat_enums,
+            render_js_flat_enum_converter_fragment,
+        )?);
+        lines.extend(render_fragments(
+            &self.tagged_enums,
+            render_js_tagged_enum_converter_fragment,
+        )?);
+        lines.extend(render_fragments(
+            &self.errors,
+            render_js_error_converter_fragment,
+        )?);
+        lines.extend(render_fragments(
+            &self.callback_interfaces,
+            render_js_callback_interface_converter_fragment,
+        )?);
 
         Ok(lines.join("\n"))
     }
 
     fn validate_renderable_types(&self) -> Result<()> {
-        for function in &self.functions {
-            validate_arguments_renderable(
-                &function.arguments,
-                &format!("function {}", function.name),
-            )?;
-            validate_optional_type_renderable(
-                function.return_type.as_ref(),
-                &format!("function {} return type", function.name),
-            )?;
-            validate_optional_type_renderable(
-                function.throws_type.as_ref(),
-                &format!("function {} error type", function.name),
-            )?;
-        }
-
-        for record in &self.records {
-            for field in &record.fields {
-                validate_type_renderable(
-                    &field.type_,
-                    &format!("record {} field {}", record.name, field.name),
-                )?;
-            }
-        }
-
-        for enum_def in self.flat_enums.iter().chain(&self.tagged_enums) {
-            for variant in &enum_def.variants {
-                for field in &variant.fields {
-                    validate_type_renderable(
-                        &field.type_,
-                        &format!(
-                            "enum {} variant {} field {}",
-                            enum_def.name, variant.name, field.name
-                        ),
-                    )?;
-                }
-            }
-        }
-
-        for error in &self.errors {
-            for variant in &error.variants {
-                for field in &variant.fields {
-                    validate_type_renderable(
-                        &field.type_,
-                        &format!(
-                            "error {} variant {} field {}",
-                            error.name, variant.name, field.name
-                        ),
-                    )?;
-                }
-            }
-        }
-
-        for callback_interface in &self.callback_interfaces {
-            for method in &callback_interface.methods {
-                validate_arguments_renderable(
-                    &method.arguments,
-                    &format!(
-                        "callback interface {}.{}",
-                        callback_interface.name, method.name
-                    ),
-                )?;
-                validate_optional_type_renderable(
-                    method.return_type.as_ref(),
-                    &format!(
-                        "callback interface {}.{} return type",
-                        callback_interface.name, method.name
-                    ),
-                )?;
-                validate_optional_type_renderable(
-                    method.throws_type.as_ref(),
-                    &format!(
-                        "callback interface {}.{} error type",
-                        callback_interface.name, method.name
-                    ),
-                )?;
-            }
-        }
-
-        for object in &self.objects {
-            for constructor in &object.constructors {
-                validate_arguments_renderable(
-                    &constructor.arguments,
-                    &format!("constructor {}.{}", object.name, constructor.name),
-                )?;
-                validate_optional_type_renderable(
-                    constructor.throws_type.as_ref(),
-                    &format!(
-                        "constructor {}.{} error type",
-                        object.name, constructor.name
-                    ),
-                )?;
-            }
-
-            for method in &object.methods {
-                validate_arguments_renderable(
-                    &method.arguments,
-                    &format!("method {}.{}", object.name, method.name),
-                )?;
-                validate_optional_type_renderable(
-                    method.return_type.as_ref(),
-                    &format!("method {}.{} return type", object.name, method.name),
-                )?;
-                validate_optional_type_renderable(
-                    method.throws_type.as_ref(),
-                    &format!("method {}.{} error type", object.name, method.name),
-                )?;
-            }
-        }
-
+        self.validate_renderable_functions()?;
+        self.validate_renderable_data_types()?;
+        self.validate_renderable_callback_interfaces()?;
+        self.validate_renderable_objects()?;
         Ok(())
     }
+
+    fn validate_renderable_functions(&self) -> Result<()> {
+        self.functions
+            .iter()
+            .try_for_each(validate_function_renderable)
+    }
+
+    fn validate_renderable_data_types(&self) -> Result<()> {
+        self.records
+            .iter()
+            .try_for_each(validate_record_renderable)?;
+        self.flat_enums
+            .iter()
+            .try_for_each(validate_enum_renderable)?;
+        self.tagged_enums
+            .iter()
+            .try_for_each(validate_enum_renderable)?;
+        self.errors.iter().try_for_each(validate_error_renderable)
+    }
+
+    fn validate_renderable_callback_interfaces(&self) -> Result<()> {
+        self.callback_interfaces
+            .iter()
+            .try_for_each(validate_callback_interface_renderable)
+    }
+
+    fn validate_renderable_objects(&self) -> Result<()> {
+        self.objects.iter().try_for_each(validate_object_renderable)
+    }
+}
+
+fn render_fragments<T>(items: &[T], render: impl Fn(&T) -> Result<String>) -> Result<Vec<String>> {
+    items.iter().map(render).collect()
+}
+
+fn object_has_async_members(object: &ObjectModel) -> bool {
+    object
+        .constructors
+        .iter()
+        .any(|constructor| constructor.is_async)
+        || object.methods.iter().any(|method| method.is_async)
+}
+
+fn callback_interface_has_async_methods(callback_interface: &CallbackInterfaceModel) -> bool {
+    callback_interface
+        .methods
+        .iter()
+        .any(|method| method.is_async)
+}
+
+fn validate_function_renderable(function: &FunctionModel) -> Result<()> {
+    validate_callable_renderable(
+        &function.arguments,
+        function.return_type.as_ref(),
+        function.throws_type.as_ref(),
+        &format!("function {}", function.name),
+    )
+}
+
+fn validate_record_renderable(record: &RecordModel) -> Result<()> {
+    for field in &record.fields {
+        validate_type_renderable(
+            &field.type_,
+            &format!("record {} field {}", record.name, field.name),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn validate_enum_renderable(enum_def: &EnumModel) -> Result<()> {
+    for variant in &enum_def.variants {
+        for field in &variant.fields {
+            validate_type_renderable(
+                &field.type_,
+                &format!(
+                    "enum {} variant {} field {}",
+                    enum_def.name, variant.name, field.name
+                ),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_error_renderable(error: &ErrorModel) -> Result<()> {
+    for variant in &error.variants {
+        for field in &variant.fields {
+            validate_type_renderable(
+                &field.type_,
+                &format!(
+                    "error {} variant {} field {}",
+                    error.name, variant.name, field.name
+                ),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_callback_interface_renderable(
+    callback_interface: &CallbackInterfaceModel,
+) -> Result<()> {
+    callback_interface.methods.iter().try_for_each(|method| {
+        validate_callable_renderable(
+            &method.arguments,
+            method.return_type.as_ref(),
+            method.throws_type.as_ref(),
+            &format!(
+                "callback interface {}.{}",
+                callback_interface.name, method.name
+            ),
+        )
+    })
+}
+
+fn validate_object_renderable(object: &ObjectModel) -> Result<()> {
+    object.constructors.iter().try_for_each(|constructor| {
+        validate_callable_renderable(
+            &constructor.arguments,
+            None,
+            constructor.throws_type.as_ref(),
+            &format!("constructor {}.{}", object.name, constructor.name),
+        )
+    })?;
+
+    object.methods.iter().try_for_each(|method| {
+        validate_callable_renderable(
+            &method.arguments,
+            method.return_type.as_ref(),
+            method.throws_type.as_ref(),
+            &format!("method {}.{}", object.name, method.name),
+        )
+    })
+}
+
+fn validate_callable_renderable(
+    arguments: &[ArgumentModel],
+    return_type: Option<&Type>,
+    throws_type: Option<&Type>,
+    context: &str,
+) -> Result<()> {
+    validate_arguments_renderable(arguments, context)?;
+    validate_optional_type_renderable(return_type, &format!("{context} return type"))?;
+    validate_optional_type_renderable(throws_type, &format!("{context} error type"))?;
+    Ok(())
+}
+
+fn render_sync_rust_call_lines(
+    indent: &str,
+    ffi_call_expr: String,
+    throws_type: Option<&Type>,
+    result_name: Option<&str>,
+) -> Result<Vec<String>> {
+    let nested_indent = format!("{indent}  ");
+
+    Ok(vec![
+        match result_name {
+            Some(result_name) => {
+                format!("{indent}const {result_name} = uniffiRustCaller.rustCall(")
+            }
+            None => format!("{indent}uniffiRustCaller.rustCall("),
+        },
+        format!("{nested_indent}(status) => {ffi_call_expr},"),
+        format!(
+            "{nested_indent}{},",
+            render_js_rust_call_options_expression(throws_type)?
+        ),
+        format!("{indent});"),
+    ])
+}
+
+fn render_async_rust_call_lines(
+    indent: &str,
+    rust_future_func_expr: String,
+    async_ffi: &AsyncScaffoldingModel,
+    lift_func_expr: String,
+    throws_type: Option<&Type>,
+    complete_before_free: bool,
+) -> Result<Vec<String>> {
+    let nested_indent = format!("{indent}  ");
+    let free_func = format!(
+        "{nested_indent}freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+        async_ffi.free_identifier
+    );
+    let mut lines = vec![
+        format!("{indent}return rustCallAsync({{"),
+        format!("{nested_indent}rustFutureFunc: () => {rust_future_func_expr},"),
+        format!(
+            "{nested_indent}pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
+            async_ffi.poll_identifier
+        ),
+        format!(
+            "{nested_indent}cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
+            async_ffi.cancel_identifier
+        ),
+    ];
+
+    if complete_before_free {
+        lines.push(format!("{nested_indent}completeFunc,"));
+        lines.push(free_func);
+    } else {
+        lines.push(free_func);
+        lines.push(format!("{nested_indent}completeFunc,"));
+    }
+
+    lines.extend([
+        format!("{nested_indent}liftFunc: {lift_func_expr},"),
+        format!(
+            "{nested_indent}...{},",
+            render_js_rust_call_options_expression(throws_type)?
+        ),
+        format!("{indent}}});"),
+    ]);
+
+    Ok(lines)
+}
+
+fn render_object_method_dispatch_lines(
+    factory_name: &str,
+    ffi_func_identifier: &str,
+) -> Vec<String> {
+    vec![
+        format!(
+            "    const loweredSelf = {}.cloneHandle(this);",
+            factory_name
+        ),
+        "    const ffiMethod =".to_string(),
+        format!("      {}.usesGenericAbi(this)", factory_name),
+        format!("        ? ffiFunctions.{}_generic_abi", ffi_func_identifier),
+        format!("        : ffiFunctions.{};", ffi_func_identifier),
+    ]
 }
 
 pub(super) fn render_js_function_body_lines(function: &FunctionModel) -> Result<Vec<String>> {
@@ -307,16 +467,15 @@ fn render_js_sync_constructor_body(
 ) -> Result<Vec<String>> {
     let mut lines = render_js_argument_lowering(&constructor.arguments)?;
     let call_args = render_js_ffi_call_args(&constructor.arguments, Some("status"));
-    lines.push("    const pointer = uniffiRustCaller.rustCall(".to_string());
-    lines.push(format!(
-        "      (status) => ffiFunctions.{}({}),",
-        constructor.ffi_func_identifier, call_args
-    ));
-    lines.push(format!(
-        "      {},",
-        render_js_rust_call_options_expression(constructor.throws_type.as_ref())?
-    ));
-    lines.push("    );".to_string());
+    lines.extend(render_sync_rust_call_lines(
+        "    ",
+        format!(
+            "ffiFunctions.{}({})",
+            constructor.ffi_func_identifier, call_args
+        ),
+        constructor.throws_type.as_ref(),
+        Some("pointer"),
+    )?);
     lines.push(match attach_target {
         Some(target) => format!("    return {}.attach({}, pointer);", factory_name, target),
         None => format!("    return {}.create(pointer);", factory_name),
@@ -341,33 +500,17 @@ fn render_js_async_constructor_body(
         &async_ffi.complete_identifier,
         "    ",
     )?);
-    lines.push("    return rustCallAsync({".to_string());
-    lines.push(format!(
-        "      rustFutureFunc: () => ffiFunctions.{}({}),",
-        constructor.ffi_func_identifier, start_args
-    ));
-    lines.push(format!(
-        "      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
-        async_ffi.poll_identifier
-    ));
-    lines.push(format!(
-        "      cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
-        async_ffi.cancel_identifier
-    ));
-    lines.push(format!(
-        "      freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
-        async_ffi.free_identifier
-    ));
-    lines.push("      completeFunc,".to_string());
-    lines.push(format!(
-        "      liftFunc: (pointer) => {}.createRawExternal(pointer),",
-        factory_name
-    ));
-    lines.push(format!(
-        "      ...{},",
-        render_js_rust_call_options_expression(constructor.throws_type.as_ref())?
-    ));
-    lines.push("    });".to_string());
+    lines.extend(render_async_rust_call_lines(
+        "    ",
+        format!(
+            "ffiFunctions.{}({})",
+            constructor.ffi_func_identifier, start_args
+        ),
+        async_ffi,
+        format!("(pointer) => {}.createRawExternal(pointer)", factory_name),
+        constructor.throws_type.as_ref(),
+        false,
+    )?);
     Ok(lines)
 }
 
@@ -376,20 +519,7 @@ fn render_js_sync_method_body(
     factory_name: &str,
     _object_name: &str,
 ) -> Result<Vec<String>> {
-    let mut lines = vec![format!(
-        "    const loweredSelf = {}.cloneHandle(this);",
-        factory_name
-    )];
-    lines.push("    const ffiMethod =".to_string());
-    lines.push(format!("      {}.usesGenericAbi(this)", factory_name));
-    lines.push(format!(
-        "        ? ffiFunctions.{}_generic_abi",
-        method.ffi_func_identifier
-    ));
-    lines.push(format!(
-        "        : ffiFunctions.{};",
-        method.ffi_func_identifier
-    ));
+    let mut lines = render_object_method_dispatch_lines(factory_name, &method.ffi_func_identifier);
     lines.extend(render_js_argument_lowering(&method.arguments)?);
     let call_args = render_js_ffi_call_args_with_leading(
         &[String::from("loweredSelf")],
@@ -397,26 +527,18 @@ fn render_js_sync_method_body(
         Some("status"),
     );
 
+    lines.extend(render_sync_rust_call_lines(
+        "    ",
+        format!("ffiMethod({call_args})"),
+        method.throws_type.as_ref(),
+        method.return_type.as_ref().map(|_| "uniffiResult"),
+    )?);
+
     if let Some(return_type) = method.return_type.as_ref() {
-        lines.push("    const uniffiResult = uniffiRustCaller.rustCall(".to_string());
-        lines.push(format!("      (status) => ffiMethod({}),", call_args));
-        lines.push(format!(
-            "      {},",
-            render_js_rust_call_options_expression(method.throws_type.as_ref())?
-        ));
-        lines.push("    );".to_string());
         lines.push(format!(
             "    return {};",
             render_js_lift_expression(return_type, "uniffiResult")?
         ));
-    } else {
-        lines.push("    uniffiRustCaller.rustCall(".to_string());
-        lines.push(format!("      (status) => ffiMethod({}),", call_args));
-        lines.push(format!(
-            "      {},",
-            render_js_rust_call_options_expression(method.throws_type.as_ref())?
-        ));
-        lines.push("    );".to_string());
     }
 
     Ok(lines)
@@ -433,20 +555,7 @@ fn render_js_async_method_body(
             object_name, method.name
         )
     })?;
-    let mut lines = vec![format!(
-        "    const loweredSelf = {}.cloneHandle(this);",
-        factory_name
-    )];
-    lines.push("    const ffiMethod =".to_string());
-    lines.push(format!("      {}.usesGenericAbi(this)", factory_name));
-    lines.push(format!(
-        "        ? ffiFunctions.{}_generic_abi",
-        method.ffi_func_identifier
-    ));
-    lines.push(format!(
-        "        : ffiFunctions.{};",
-        method.ffi_func_identifier
-    ));
+    let mut lines = render_object_method_dispatch_lines(factory_name, &method.ffi_func_identifier);
     lines.extend(render_js_argument_lowering(&method.arguments)?);
     let start_args = render_js_ffi_call_args_with_leading(
         &[String::from("loweredSelf")],
@@ -458,34 +567,14 @@ fn render_js_async_method_body(
         &async_ffi.complete_identifier,
         "    ",
     )?);
-
-    lines.push("    return rustCallAsync({".to_string());
-    lines.push(format!(
-        "      rustFutureFunc: () => ffiMethod({}),",
-        start_args
-    ));
-    lines.push(format!(
-        "      pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
-        async_ffi.poll_identifier
-    ));
-    lines.push(format!(
-        "      cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
-        async_ffi.cancel_identifier
-    ));
-    lines.push("      completeFunc,".to_string());
-    lines.push(format!(
-        "      freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
-        async_ffi.free_identifier
-    ));
-    lines.push(format!(
-        "      liftFunc: {},",
-        render_js_async_lift_closure(method.return_type.as_ref())?
-    ));
-    lines.push(format!(
-        "      ...{},",
-        render_js_rust_call_options_expression(method.throws_type.as_ref())?
-    ));
-    lines.push("    });".to_string());
+    lines.extend(render_async_rust_call_lines(
+        "    ",
+        format!("ffiMethod({start_args})"),
+        async_ffi,
+        render_js_async_lift_closure(method.return_type.as_ref())?,
+        method.throws_type.as_ref(),
+        true,
+    )?);
 
     Ok(lines)
 }
@@ -494,32 +583,18 @@ fn render_js_sync_function_body(function: &FunctionModel) -> Result<Vec<String>>
     let mut lines = render_js_argument_lowering(&function.arguments)?;
     let call_args = render_js_ffi_call_args(&function.arguments, Some("status"));
 
+    lines.extend(render_sync_rust_call_lines(
+        "  ",
+        format!("ffiFunctions.{}({call_args})", function.ffi_func_identifier),
+        function.throws_type.as_ref(),
+        function.return_type.as_ref().map(|_| "uniffiResult"),
+    )?);
+
     if let Some(return_type) = function.return_type.as_ref() {
-        lines.push("  const uniffiResult = uniffiRustCaller.rustCall(".to_string());
-        lines.push(format!(
-            "    (status) => ffiFunctions.{}({}),",
-            function.ffi_func_identifier, call_args
-        ));
-        lines.push(format!(
-            "    {},",
-            render_js_rust_call_options_expression(function.throws_type.as_ref())?
-        ));
-        lines.push("  );".to_string());
         lines.push(format!(
             "  return {};",
             render_js_lift_expression(return_type, "uniffiResult")?
         ));
-    } else {
-        lines.push("  uniffiRustCaller.rustCall(".to_string());
-        lines.push(format!(
-            "    (status) => ffiFunctions.{}({}),",
-            function.ffi_func_identifier, call_args
-        ));
-        lines.push(format!(
-            "    {},",
-            render_js_rust_call_options_expression(function.throws_type.as_ref())?
-        ));
-        lines.push("  );".to_string());
     }
 
     Ok(lines)
@@ -539,34 +614,17 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
         &async_ffi.complete_identifier,
         "  ",
     )?);
-
-    lines.push("  return rustCallAsync({".to_string());
-    lines.push(format!(
-        "    rustFutureFunc: () => ffiFunctions.{}({}),",
-        function.ffi_func_identifier, start_args
-    ));
-    lines.push(format!(
-        "    pollFunc: (rustFuture, _continuationCallback, continuationHandle) => ffiFunctions.{}(rustFuture, uniffiGetRustFutureContinuationPointer(), continuationHandle),",
-        async_ffi.poll_identifier
-    ));
-    lines.push(format!(
-        "    cancelFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
-        async_ffi.cancel_identifier
-    ));
-    lines.push("    completeFunc,".to_string());
-    lines.push(format!(
-        "    freeFunc: (rustFuture) => ffiFunctions.{}(rustFuture),",
-        async_ffi.free_identifier
-    ));
-    lines.push(format!(
-        "    liftFunc: {},",
-        render_js_async_lift_closure(function.return_type.as_ref())?
-    ));
-    lines.push(format!(
-        "    ...{},",
-        render_js_rust_call_options_expression(function.throws_type.as_ref())?
-    ));
-    lines.push("  });".to_string());
+    lines.extend(render_async_rust_call_lines(
+        "  ",
+        format!(
+            "ffiFunctions.{}({start_args})",
+            function.ffi_func_identifier
+        ),
+        async_ffi,
+        render_js_async_lift_closure(function.return_type.as_ref())?,
+        function.throws_type.as_ref(),
+        true,
+    )?);
 
     Ok(lines)
 }
@@ -575,9 +633,9 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uniffi_bindgen::interface::Type;
     use uniffi_bindgen::interface::AsType;
     use uniffi_bindgen::interface::ComponentInterface;
+    use uniffi_bindgen::interface::Type;
 
     #[test]
     fn component_model_collects_objects_records_enums_errors_and_functions() {
@@ -835,6 +893,10 @@ mod tests {
         assert_eq!(
             render_js_default_async_callback_return_value_expression(&Type::UInt64),
             "0"
+        );
+        assert_eq!(
+            render_js_default_async_callback_return_value_expression(&Type::String),
+            "EMPTY_RUST_BUFFER"
         );
         assert_eq!(
             render_js_default_async_callback_return_value_expression(&Type::Bytes),
@@ -1929,5 +1991,24 @@ mod tests {
         .expect("callback-trait object lifting should succeed");
 
         assert_eq!(expression, "FfiConverterMergeOperator.lift(handle)");
+    }
+
+    #[test]
+    fn render_js_koffi_type_expression_keeps_buffer_and_handle_mappings() {
+        assert_eq!(
+            render_js_koffi_type_expression(&Type::String, "bindings").unwrap(),
+            "bindings.ffiTypes.RustBuffer"
+        );
+        assert_eq!(
+            render_js_koffi_type_expression(
+                &Type::CallbackInterface {
+                    module_path: "crate".to_string(),
+                    name: "Logger".to_string(),
+                },
+                "bindings",
+            )
+            .unwrap(),
+            "\"uint64_t\""
+        );
     }
 }

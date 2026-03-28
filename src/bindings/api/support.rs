@@ -9,31 +9,19 @@ use super::{ArgumentModel, FieldModel, RecordModel};
 pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()> {
     let mut unsupported = Vec::new();
 
-    let external_types = ci
-        .iter_external_types()
-        .map(describe_type)
-        .collect::<BTreeSet<_>>();
-    if !external_types.is_empty() {
-        unsupported.push(format!(
-            "external types are not supported in v1: {}",
-            external_types.into_iter().collect::<Vec<_>>().join(", ")
-        ));
-    }
-
-    let custom_types = ci
-        .iter_local_types()
-        .chain(ci.iter_external_types())
-        .filter_map(|type_| match type_ {
-            Type::Custom { name, .. } => Some(name.clone()),
-            _ => None,
-        })
-        .collect::<BTreeSet<_>>();
-    if !custom_types.is_empty() {
-        unsupported.push(format!(
-            "custom types are not supported in v1: {}",
-            custom_types.into_iter().collect::<Vec<_>>().join(", ")
-        ));
-    }
+    push_unsupported_feature(
+        &mut unsupported,
+        "external types are not supported in v1",
+        ci.iter_external_types().map(describe_type).collect(),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "custom types are not supported in v1",
+        ci.iter_local_types()
+            .chain(ci.iter_external_types())
+            .filter_map(custom_type_name)
+            .collect(),
+    );
 
     if unsupported.is_empty() {
         return Ok(());
@@ -43,6 +31,28 @@ pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()>
         "unsupported UniFFI features for Node bindings v1:\n- {}",
         unsupported.join("\n- ")
     );
+}
+
+fn push_unsupported_feature(
+    unsupported: &mut Vec<String>,
+    message_prefix: &str,
+    names: BTreeSet<String>,
+) {
+    if names.is_empty() {
+        return;
+    }
+
+    unsupported.push(format!(
+        "{message_prefix}: {}",
+        names.into_iter().collect::<Vec<_>>().join(", ")
+    ));
+}
+
+fn custom_type_name(type_: &Type) -> Option<String> {
+    match type_ {
+        Type::Custom { name, .. } => Some(name.clone()),
+        _ => None,
+    }
 }
 
 fn describe_type(type_: &Type) -> String {
@@ -143,17 +153,18 @@ pub(crate) fn render_js_ffi_call_args(
     arguments: &[ArgumentModel],
     trailing: Option<&str>,
 ) -> String {
-    let mut args = arguments
-        .iter()
-        .map(|argument| lowered_argument_name(&argument.name))
-        .collect::<Vec<_>>();
-    if let Some(trailing) = trailing {
-        args.push(trailing.to_string());
-    }
-    args.join(", ")
+    render_js_ffi_call_args_impl(&[], arguments, trailing)
 }
 
 pub(crate) fn render_js_ffi_call_args_with_leading(
+    leading: &[String],
+    arguments: &[ArgumentModel],
+    trailing: Option<&str>,
+) -> String {
+    render_js_ffi_call_args_impl(leading, arguments, trailing)
+}
+
+fn render_js_ffi_call_args_impl(
     leading: &[String],
     arguments: &[ArgumentModel],
     trailing: Option<&str>,
@@ -170,98 +181,213 @@ pub(crate) fn render_js_ffi_call_args_with_leading(
     args.join(", ")
 }
 
-pub(crate) fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> {
+fn scalar_converter_name(type_: &Type) -> Option<&'static str> {
     match type_ {
-        Type::UInt8 => Ok(format!("FfiConverterUInt8.lower({value_expr})")),
-        Type::Int8 => Ok(format!("FfiConverterInt8.lower({value_expr})")),
-        Type::UInt16 => Ok(format!("FfiConverterUInt16.lower({value_expr})")),
-        Type::Int16 => Ok(format!("FfiConverterInt16.lower({value_expr})")),
-        Type::UInt32 => Ok(format!("FfiConverterUInt32.lower({value_expr})")),
-        Type::Int32 => Ok(format!("FfiConverterInt32.lower({value_expr})")),
-        Type::UInt64 => Ok(format!("FfiConverterUInt64.lower({value_expr})")),
-        Type::Int64 => Ok(format!("FfiConverterInt64.lower({value_expr})")),
-        Type::Float32 => Ok(format!("FfiConverterFloat32.lower({value_expr})")),
-        Type::Float64 => Ok(format!("FfiConverterFloat64.lower({value_expr})")),
-        Type::Boolean => Ok(format!("FfiConverterBool.lower({value_expr})")),
-        Type::String => Ok(format!("uniffiLowerString({value_expr})")),
-        Type::Bytes
-        | Type::Record { .. }
-        | Type::Enum { .. }
-        | Type::Optional { .. }
-        | Type::Sequence { .. }
-        | Type::Map { .. }
-        | Type::Timestamp
-        | Type::Duration => Ok(format!(
-            "uniffiLowerIntoRustBuffer({}, {value_expr})",
-            render_js_type_converter_expression(type_)?
-        )),
-        Type::Object { name, imp, .. } => {
-            if imp.has_callback_interface() {
-                Ok(format!("{}.lower({value_expr})", type_converter_name(name)))
-            } else {
-                Ok(format!(
-                    "{}.cloneHandle({value_expr})",
-                    object_factory_name(name)
-                ))
-            }
-        }
-        Type::CallbackInterface { .. } => Ok(format!(
-            "{}.lower({value_expr})",
-            render_js_type_converter_expression(type_)?
-        )),
-        Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+        Type::UInt8 => Some("FfiConverterUInt8"),
+        Type::Int8 => Some("FfiConverterInt8"),
+        Type::UInt16 => Some("FfiConverterUInt16"),
+        Type::Int16 => Some("FfiConverterInt16"),
+        Type::UInt32 => Some("FfiConverterUInt32"),
+        Type::Int32 => Some("FfiConverterInt32"),
+        Type::UInt64 => Some("FfiConverterUInt64"),
+        Type::Int64 => Some("FfiConverterInt64"),
+        Type::Float32 => Some("FfiConverterFloat32"),
+        Type::Float64 => Some("FfiConverterFloat64"),
+        Type::Boolean => Some("FfiConverterBool"),
+        _ => None,
     }
 }
 
-pub(crate) fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
+fn builtin_converter_name(type_: &Type) -> Option<&'static str> {
     match type_ {
-        Type::UInt8 => Ok(format!("FfiConverterUInt8.lift({value_expr})")),
-        Type::Int8 => Ok(format!("FfiConverterInt8.lift({value_expr})")),
-        Type::UInt16 => Ok(format!("FfiConverterUInt16.lift({value_expr})")),
-        Type::Int16 => Ok(format!("FfiConverterInt16.lift({value_expr})")),
-        Type::UInt32 => Ok(format!("FfiConverterUInt32.lift({value_expr})")),
-        Type::Int32 => Ok(format!("FfiConverterInt32.lift({value_expr})")),
-        Type::UInt64 => Ok(format!("FfiConverterUInt64.lift({value_expr})")),
-        Type::Int64 => Ok(format!("FfiConverterInt64.lift({value_expr})")),
-        Type::Float32 => Ok(format!("FfiConverterFloat32.lift({value_expr})")),
-        Type::Float64 => Ok(format!("FfiConverterFloat64.lift({value_expr})")),
-        Type::Boolean => Ok(format!("FfiConverterBool.lift({value_expr})")),
-        Type::String => Ok(format!("uniffiLiftStringFromRustBuffer({value_expr})")),
+        Type::String => Some("FfiConverterString"),
+        Type::Bytes => Some("FfiConverterBytes"),
+        Type::Timestamp => Some("FfiConverterTimestamp"),
+        Type::Duration => Some("FfiConverterDuration"),
+        _ => scalar_converter_name(type_),
+    }
+}
+
+fn primitive_koffi_type_literal(type_: &Type) -> Option<&'static str> {
+    match type_ {
+        Type::UInt8 => Some("\"uint8_t\""),
+        Type::Int8 => Some("\"int8_t\""),
+        Type::UInt16 => Some("\"uint16_t\""),
+        Type::Int16 => Some("\"int16_t\""),
+        Type::UInt32 => Some("\"uint32_t\""),
+        Type::Int32 => Some("\"int32_t\""),
+        Type::UInt64 | Type::CallbackInterface { .. } => Some("\"uint64_t\""),
+        Type::Int64 => Some("\"int64_t\""),
+        Type::Float32 => Some("\"float\""),
+        Type::Float64 => Some("\"double\""),
+        Type::Boolean => Some("\"int8_t\""),
+        _ => None,
+    }
+}
+
+fn uses_buffer_converter(type_: &Type) -> bool {
+    matches!(
+        type_,
         Type::Bytes
-        | Type::Record { .. }
-        | Type::Enum { .. }
-        | Type::Optional { .. }
-        | Type::Sequence { .. }
-        | Type::Map { .. }
-        | Type::Timestamp
-        | Type::Duration => Ok(format!(
-            "uniffiLiftFromRustBuffer({}, {value_expr})",
-            render_js_type_converter_expression(type_)?
-        )),
-        Type::Object { name, imp, .. } => {
-            if imp.has_callback_interface() {
-                Ok(format!("{}.lift({value_expr})", type_converter_name(name)))
-            } else {
-                Ok(format!(
-                    "{}.create({value_expr})",
-                    object_factory_name(name)
-                ))
-            }
+            | Type::Record { .. }
+            | Type::Enum { .. }
+            | Type::Optional { .. }
+            | Type::Sequence { .. }
+            | Type::Map { .. }
+            | Type::Timestamp
+            | Type::Duration
+    )
+}
+
+fn uses_rust_buffer_ffi(type_: &Type) -> bool {
+    matches!(type_, Type::String) || uses_buffer_converter(type_)
+}
+
+fn render_scalar_converter_call(
+    type_: &Type,
+    value_expr: &str,
+    method_name: &str,
+) -> Option<String> {
+    scalar_converter_name(type_)
+        .map(|converter_name| format!("{converter_name}.{method_name}({value_expr})"))
+}
+
+#[derive(Copy, Clone)]
+enum JsValueTransform {
+    Lower,
+    Lift,
+}
+
+impl JsValueTransform {
+    fn converter_method(self) -> &'static str {
+        match self {
+            Self::Lower => "lower",
+            Self::Lift => "lift",
         }
-        Type::CallbackInterface { .. } => Ok(format!(
-            "{}.lift({value_expr})",
-            render_js_type_converter_expression(type_)?
+    }
+
+    fn buffer_helper(self) -> &'static str {
+        match self {
+            Self::Lower => "uniffiLowerIntoRustBuffer",
+            Self::Lift => "uniffiLiftFromRustBuffer",
+        }
+    }
+
+    fn string_expression(self, value_expr: &str) -> String {
+        match self {
+            Self::Lower => format!("uniffiLowerString({value_expr})"),
+            Self::Lift => format!("uniffiLiftStringFromRustBuffer({value_expr})"),
+        }
+    }
+
+    fn object_factory_method(self) -> &'static str {
+        match self {
+            Self::Lower => "cloneHandle",
+            Self::Lift => "create",
+        }
+    }
+}
+
+fn render_js_buffer_expression(
+    type_: &Type,
+    value_expr: &str,
+    transform: JsValueTransform,
+) -> Result<String> {
+    Ok(format!(
+        "{}({}, {value_expr})",
+        transform.buffer_helper(),
+        render_js_type_converter_expression(type_)?
+    ))
+}
+
+fn render_js_converter_expression(
+    type_: &Type,
+    value_expr: &str,
+    transform: JsValueTransform,
+) -> Result<String> {
+    Ok(format!(
+        "{}.{}({value_expr})",
+        render_js_type_converter_expression(type_)?,
+        transform.converter_method()
+    ))
+}
+
+fn render_js_object_transform(
+    object_name: &str,
+    has_callback_interface: bool,
+    value_expr: &str,
+    transform: JsValueTransform,
+) -> String {
+    if has_callback_interface {
+        return format!(
+            "{}.{}({value_expr})",
+            type_converter_name(object_name),
+            transform.converter_method()
+        );
+    }
+
+    format!(
+        "{}.{}({value_expr})",
+        object_factory_name(object_name),
+        transform.object_factory_method()
+    )
+}
+
+fn render_js_value_transform(
+    type_: &Type,
+    value_expr: &str,
+    transform: JsValueTransform,
+) -> Result<String> {
+    if let Some(expression) =
+        render_scalar_converter_call(type_, value_expr, transform.converter_method())
+    {
+        return Ok(expression);
+    }
+
+    if uses_buffer_converter(type_) {
+        return render_js_buffer_expression(type_, value_expr, transform);
+    }
+
+    match type_ {
+        Type::String => Ok(transform.string_expression(value_expr)),
+        Type::Object { name, imp, .. } => Ok(render_js_object_transform(
+            name,
+            imp.has_callback_interface(),
+            value_expr,
+            transform,
         )),
+        Type::CallbackInterface { .. } => {
+            render_js_converter_expression(type_, value_expr, transform)
+        }
         Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+        _ => unreachable!("all supported value transforms should have been handled"),
+    }
+}
+
+pub(crate) fn render_js_lower_expression(type_: &Type, value_expr: &str) -> Result<String> {
+    render_js_value_transform(type_, value_expr, JsValueTransform::Lower)
+}
+
+pub(crate) fn render_js_lift_expression(type_: &Type, value_expr: &str) -> Result<String> {
+    render_js_value_transform(type_, value_expr, JsValueTransform::Lift)
+}
+
+fn async_opaque_object_name(return_type: Option<&Type>) -> Option<&str> {
+    match return_type {
+        Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Some(name),
+        _ => None,
     }
 }
 
 pub(crate) fn render_js_async_lift_closure(return_type: Option<&Type>) -> Result<String> {
-    match return_type {
-        Some(Type::Object { name, imp, .. }) if !imp.has_callback_interface() => Ok(format!(
+    if let Some(object_name) = async_opaque_object_name(return_type) {
+        return Ok(format!(
             "(uniffiResult) => {}.createRawExternal(uniffiResult)",
-            object_factory_name(name)
-        )),
+            object_factory_name(object_name)
+        ));
+    }
+
+    match return_type {
         Some(return_type) => Ok(format!(
             "(uniffiResult) => {}",
             render_js_lift_expression(return_type, "uniffiResult")?
@@ -275,14 +401,13 @@ pub(crate) fn render_js_async_complete_setup(
     complete_identifier: &str,
     indent: &str,
 ) -> Result<Vec<String>> {
-    match return_type {
-        Some(Type::Object { imp, .. }) if !imp.has_callback_interface() => {
-            render_js_async_object_complete_setup(complete_identifier, indent)
-        }
-        _ => Ok(vec![format!(
-            "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
-        )]),
+    if async_opaque_object_name(return_type).is_some() {
+        return render_js_async_object_complete_setup(complete_identifier, indent);
     }
+
+    Ok(vec![format!(
+        "{indent}const completeFunc = (rustFuture, status) => ffiFunctions.{complete_identifier}(rustFuture, status);"
+    )])
 }
 
 pub(crate) fn render_js_async_object_complete_setup(
@@ -305,20 +430,11 @@ pub(crate) fn render_js_async_object_complete_setup(
 }
 
 pub(crate) fn render_js_type_converter_expression(type_: &Type) -> Result<String> {
+    if let Some(converter_name) = builtin_converter_name(type_) {
+        return Ok(converter_name.to_string());
+    }
+
     match type_ {
-        Type::UInt8 => Ok("FfiConverterUInt8".to_string()),
-        Type::Int8 => Ok("FfiConverterInt8".to_string()),
-        Type::UInt16 => Ok("FfiConverterUInt16".to_string()),
-        Type::Int16 => Ok("FfiConverterInt16".to_string()),
-        Type::UInt32 => Ok("FfiConverterUInt32".to_string()),
-        Type::Int32 => Ok("FfiConverterInt32".to_string()),
-        Type::UInt64 => Ok("FfiConverterUInt64".to_string()),
-        Type::Int64 => Ok("FfiConverterInt64".to_string()),
-        Type::Float32 => Ok("FfiConverterFloat32".to_string()),
-        Type::Float64 => Ok("FfiConverterFloat64".to_string()),
-        Type::Boolean => Ok("FfiConverterBool".to_string()),
-        Type::String => Ok("FfiConverterString".to_string()),
-        Type::Bytes => Ok("FfiConverterBytes".to_string()),
         Type::Optional { inner_type } => Ok(format!(
             "new FfiConverterOptional({})",
             render_js_type_converter_expression(inner_type)?
@@ -339,9 +455,8 @@ pub(crate) fn render_js_type_converter_expression(type_: &Type) -> Result<String
         | Type::Record { name, .. }
         | Type::Enum { name, .. }
         | Type::CallbackInterface { name, .. } => Ok(type_converter_name(name)),
-        Type::Timestamp => Ok("FfiConverterTimestamp".to_string()),
-        Type::Duration => Ok("FfiConverterDuration".to_string()),
         Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+        _ => unreachable!("all supported converter-backed types should have been handled"),
     }
 }
 
@@ -349,61 +464,39 @@ pub(crate) fn render_js_koffi_type_expression(
     type_: &Type,
     ffi_bindings_expr: &str,
 ) -> Result<String> {
+    if let Some(type_literal) = primitive_koffi_type_literal(type_) {
+        return Ok(type_literal.to_string());
+    }
+
+    if uses_rust_buffer_ffi(type_) {
+        return Ok(format!("{ffi_bindings_expr}.ffiTypes.RustBuffer"));
+    }
+
     match type_ {
-        Type::UInt8 => Ok("\"uint8_t\"".to_string()),
-        Type::Int8 => Ok("\"int8_t\"".to_string()),
-        Type::UInt16 => Ok("\"uint16_t\"".to_string()),
-        Type::Int16 => Ok("\"int16_t\"".to_string()),
-        Type::UInt32 => Ok("\"uint32_t\"".to_string()),
-        Type::Int32 => Ok("\"int32_t\"".to_string()),
-        Type::UInt64 | Type::CallbackInterface { .. } => Ok("\"uint64_t\"".to_string()),
-        Type::Int64 => Ok("\"int64_t\"".to_string()),
-        Type::Float32 => Ok("\"float\"".to_string()),
-        Type::Float64 => Ok("\"double\"".to_string()),
-        Type::Boolean => Ok("\"int8_t\"".to_string()),
-        Type::String
-        | Type::Bytes
-        | Type::Record { .. }
-        | Type::Enum { .. }
-        | Type::Optional { .. }
-        | Type::Sequence { .. }
-        | Type::Map { .. }
-        | Type::Timestamp
-        | Type::Duration => Ok(format!("{ffi_bindings_expr}.ffiTypes.RustBuffer")),
         Type::Object { name, .. } => Ok(format!(
             "{ffi_bindings_expr}.ffiTypes.{}",
             ffi_opaque_identifier(name)
         )),
         Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
+        _ => unreachable!("all supported koffi types should have been handled"),
     }
 }
 
 pub(crate) fn render_js_default_async_callback_return_value_expression(type_: &Type) -> String {
+    if scalar_converter_name(type_).is_some() {
+        return "0".to_string();
+    }
+
+    if uses_rust_buffer_ffi(type_) {
+        return "EMPTY_RUST_BUFFER".to_string();
+    }
+
     match type_ {
-        Type::UInt8
-        | Type::Int8
-        | Type::UInt16
-        | Type::Int16
-        | Type::UInt32
-        | Type::Int32
-        | Type::UInt64
-        | Type::Int64
-        | Type::Float32
-        | Type::Float64
-        | Type::Boolean => "0".to_string(),
-        Type::String
-        | Type::Bytes
-        | Type::Record { .. }
-        | Type::Enum { .. }
-        | Type::Optional { .. }
-        | Type::Sequence { .. }
-        | Type::Map { .. }
-        | Type::Timestamp
-        | Type::Duration => "EMPTY_RUST_BUFFER".to_string(),
         Type::Object { .. } | Type::CallbackInterface { .. } => "0n".to_string(),
         Type::Custom { name, .. } => {
             unreachable!("custom type '{name}' should have been rejected before codegen")
         }
+        _ => unreachable!("all supported async callback return types should have been handled"),
     }
 }
 

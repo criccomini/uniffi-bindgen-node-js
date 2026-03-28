@@ -65,24 +65,15 @@ impl NodeBindingCliOverrides {
             override_entry.apply_to(config);
         }
 
-        if let Some(package_name) = &self.package_name {
-            config.package_name = Some(package_name.clone());
-        }
-        if let Some(cdylib_name) = &self.cdylib_name {
-            config.cdylib_name = Some(cdylib_name.clone());
-        }
-        if let Some(node_engine) = &self.node_engine {
-            config.node_engine = node_engine.clone();
-        }
-        if let Some(lib_path_literal) = &self.lib_path_literal {
-            config.lib_path_literal = Some(lib_path_literal.clone());
-        }
-        if self.bundled_prebuilds {
-            config.bundled_prebuilds = true;
-        }
-        if self.manual_load {
-            config.manual_load = true;
-        }
+        apply_optional_string_override(&mut config.package_name, self.package_name.as_ref());
+        apply_optional_string_override(&mut config.cdylib_name, self.cdylib_name.as_ref());
+        apply_optional_value_override(&mut config.node_engine, self.node_engine.as_ref());
+        apply_optional_string_override(
+            &mut config.lib_path_literal,
+            self.lib_path_literal.as_ref(),
+        );
+        enable_override(&mut config.bundled_prebuilds, self.bundled_prebuilds);
+        enable_override(&mut config.manual_load, self.manual_load);
     }
 }
 
@@ -100,53 +91,17 @@ enum NodeBindingConfigOverride {
 
 impl NodeBindingConfigOverride {
     fn parse(raw: String) -> Result<Self> {
-        let (raw_key, raw_value) = raw
-            .split_once('=')
-            .ok_or_else(|| anyhow!("invalid --config-override '{raw}': expected KEY=VALUE"))?;
-        let key = raw_key.trim();
-        if key.is_empty() {
-            bail!("invalid --config-override '{raw}': missing key before '='");
-        }
-        let value = normalize_required_value("--config-override", raw_value.trim())?;
+        let (key, value) = parse_override_parts(&raw)?;
+        let normalized_key = normalize_override_key(key);
 
-        match key {
-            "package_name"
-            | "package-name"
-            | "bindings.node.package_name"
-            | "bindings.node.package-name" => Ok(Self::PackageName(value)),
-            "cdylib_name"
-            | "cdylib-name"
-            | "bindings.node.cdylib_name"
-            | "bindings.node.cdylib-name" => Ok(Self::CdylibName(value)),
-            "node_engine"
-            | "node-engine"
-            | "bindings.node.node_engine"
-            | "bindings.node.node-engine" => Ok(Self::NodeEngine(value)),
-            "lib_path_literal"
-            | "lib-path-literal"
-            | "bindings.node.lib_path_literal"
-            | "bindings.node.lib-path-literal" => Ok(Self::LibPathLiteral(value)),
-            "bundled_prebuilds"
-            | "bundled-prebuilds"
-            | "bindings.node.bundled_prebuilds"
-            | "bindings.node.bundled-prebuilds" => {
-                Ok(Self::BundledPrebuilds(parse_bool_override(&raw, &value)?))
-            }
-            "manual_load"
-            | "manual-load"
-            | "bindings.node.manual_load"
-            | "bindings.node.manual-load" => {
-                Ok(Self::ManualLoad(parse_bool_override(&raw, &value)?))
-            }
-            "module_format"
-            | "module-format"
-            | "bindings.node.module_format"
-            | "bindings.node.module-format" => Ok(Self::ModuleFormat(value)),
-            "commonjs" | "bindings.node.commonjs" => {
-                Ok(Self::Commonjs(parse_bool_override(&raw, &value)?))
-            }
-            _ => bail!("unsupported --config-override key '{key}'"),
+        if let Some(override_entry) = Self::parse_string_override(&normalized_key, &value) {
+            return Ok(override_entry);
         }
+        if let Some(override_entry) = Self::parse_boolean_override(&normalized_key, &raw, &value)? {
+            return Ok(override_entry);
+        }
+
+        bail!("unsupported --config-override key '{key}'");
     }
 
     fn apply_to(&self, config: &mut NodeBindingGeneratorConfig) {
@@ -160,6 +115,32 @@ impl NodeBindingConfigOverride {
             Self::ModuleFormat(value) => config.module_format = Some(value.clone()),
             Self::Commonjs(value) => config.commonjs = Some(*value),
         }
+    }
+
+    fn parse_string_override(normalized_key: &str, value: &str) -> Option<Self> {
+        match normalized_key {
+            "package_name" => Some(Self::PackageName(value.to_string())),
+            "cdylib_name" => Some(Self::CdylibName(value.to_string())),
+            "node_engine" => Some(Self::NodeEngine(value.to_string())),
+            "lib_path_literal" => Some(Self::LibPathLiteral(value.to_string())),
+            "module_format" => Some(Self::ModuleFormat(value.to_string())),
+            _ => None,
+        }
+    }
+
+    fn parse_boolean_override(
+        normalized_key: &str,
+        raw: &str,
+        value: &str,
+    ) -> Result<Option<Self>> {
+        let parsed = match normalized_key {
+            "bundled_prebuilds" => Some(Self::BundledPrebuilds(parse_bool_override(raw, value)?)),
+            "manual_load" => Some(Self::ManualLoad(parse_bool_override(raw, value)?)),
+            "commonjs" => Some(Self::Commonjs(parse_bool_override(raw, value)?)),
+            _ => None,
+        };
+
+        Ok(parsed)
     }
 }
 
@@ -183,6 +164,43 @@ fn normalize_required_value(flag: &str, value: &str) -> Result<String> {
         bail!("{flag} cannot be empty");
     }
     Ok(trimmed.to_string())
+}
+
+fn parse_override_parts<'a>(raw: &'a str) -> Result<(&'a str, String)> {
+    let (raw_key, raw_value) = raw
+        .split_once('=')
+        .ok_or_else(|| anyhow!("invalid --config-override '{raw}': expected KEY=VALUE"))?;
+    let key = raw_key.trim();
+    if key.is_empty() {
+        bail!("invalid --config-override '{raw}': missing key before '='");
+    }
+
+    Ok((
+        key,
+        normalize_required_value("--config-override", raw_value.trim())?,
+    ))
+}
+
+fn normalize_override_key(key: &str) -> String {
+    key.strip_prefix("bindings.node.")
+        .unwrap_or(key)
+        .replace('-', "_")
+}
+
+fn apply_optional_string_override(target: &mut Option<String>, value: Option<&String>) {
+    if let Some(value) = value {
+        *target = Some(value.clone());
+    }
+}
+
+fn apply_optional_value_override(target: &mut String, value: Option<&String>) {
+    if let Some(value) = value {
+        *target = value.clone();
+    }
+}
+
+fn enable_override(target: &mut bool, enabled: bool) {
+    *target |= enabled;
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -216,56 +234,75 @@ impl Default for NodeBindingGeneratorConfig {
 
 impl NodeBindingGeneratorConfig {
     fn validate(&self) -> Result<()> {
-        if self
-            .package_name
-            .as_deref()
-            .is_some_and(|value| value.trim().is_empty())
-        {
-            bail!("node binding package_name cannot be empty");
-        }
-        if self
-            .cdylib_name
-            .as_deref()
-            .is_some_and(|value| value.trim().is_empty())
-        {
-            bail!("node binding cdylib_name cannot be empty");
-        }
-        if self.node_engine.trim().is_empty() {
-            bail!("node binding node_engine cannot be empty");
-        }
-        if self
-            .lib_path_literal
-            .as_deref()
-            .is_some_and(|value| value.trim().is_empty())
-        {
-            bail!("node binding lib_path_literal cannot be empty");
-        }
+        self.validate_required_fields()?;
+        self.validate_library_loading()?;
+        self.validate_module_settings()?;
+        Ok(())
+    }
+
+    fn validate_required_fields(&self) -> Result<()> {
+        validate_optional_non_empty("package_name", self.package_name.as_deref())?;
+        validate_optional_non_empty("cdylib_name", self.cdylib_name.as_deref())?;
+        validate_non_empty("node_engine", &self.node_engine)?;
+        validate_optional_non_empty("lib_path_literal", self.lib_path_literal.as_deref())?;
+        Ok(())
+    }
+
+    fn validate_library_loading(&self) -> Result<()> {
         if self.bundled_prebuilds && self.lib_path_literal.is_some() {
             bail!(
                 "node binding bundled_prebuilds cannot be enabled together with lib_path_literal"
             );
         }
-        if let Some(module_format) = self.module_format.as_deref() {
-            let normalized = module_format.trim();
-            if normalized.is_empty() {
-                bail!("node binding module_format cannot be empty");
-            }
-            if !normalized.eq_ignore_ascii_case("esm") {
-                if normalized.eq_ignore_ascii_case("commonjs")
-                    || normalized.eq_ignore_ascii_case("cjs")
-                {
-                    bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
-                }
-                bail!(
-                    "unsupported node binding module_format '{normalized}': v1 only supports 'esm'"
-                );
-            }
-        }
-        if self.commonjs == Some(true) {
-            bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
-        }
         Ok(())
     }
+
+    fn validate_module_settings(&self) -> Result<()> {
+        validate_module_format(self.module_format.as_deref())?;
+        reject_commonjs(self.commonjs)
+    }
+}
+
+fn validate_optional_non_empty(field_name: &str, value: Option<&str>) -> Result<()> {
+    value
+        .map(|value| validate_non_empty(field_name, value))
+        .transpose()?;
+    Ok(())
+}
+
+fn validate_non_empty(field_name: &str, value: &str) -> Result<()> {
+    if value.trim().is_empty() {
+        bail!("node binding {field_name} cannot be empty");
+    }
+
+    Ok(())
+}
+
+fn validate_module_format(module_format: Option<&str>) -> Result<()> {
+    let Some(module_format) = module_format else {
+        return Ok(());
+    };
+
+    let normalized = module_format.trim();
+    if normalized.is_empty() {
+        bail!("node binding module_format cannot be empty");
+    }
+    if normalized.eq_ignore_ascii_case("esm") {
+        return Ok(());
+    }
+    if normalized.eq_ignore_ascii_case("commonjs") || normalized.eq_ignore_ascii_case("cjs") {
+        bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
+    }
+
+    bail!("unsupported node binding module_format '{normalized}': v1 only supports 'esm'");
+}
+
+fn reject_commonjs(commonjs: Option<bool>) -> Result<()> {
+    if commonjs == Some(true) {
+        bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
+    }
+
+    Ok(())
 }
 
 impl BindingGenerator for NodeBindingGenerator {
@@ -446,133 +483,106 @@ impl GeneratedPackage {
 
     fn write_package_files(&self) -> Result<()> {
         let template_context = TemplateContext::from_package(self)?;
-
-        write_template(
-            &self.layout.package_json_path(),
-            &PackageJsonTemplate {
-                package_name_json: template_context.package_name_json.clone(),
-                node_engine_json: template_context.node_engine_json.clone(),
-            },
-        )?;
-        write_template(
-            &self.layout.index_js_path(),
-            &PackageIndexJsTemplate {
-                namespace: self.layout.namespace.clone(),
-            },
-        )?;
-        write_template(
-            &self.layout.index_dts_path(),
-            &PackageIndexDtsTemplate {
-                namespace: self.layout.namespace.clone(),
-            },
-        )?;
-        write_template(
-            &self.layout.component_js_path(),
-            &ComponentJsTemplate {
-                namespace: self.layout.namespace.clone(),
-                namespace_json: template_context.namespace_json.clone(),
-                package_name_json: template_context.package_name_json.clone(),
-                cdylib_name_json: template_context.cdylib_name_json.clone(),
-                node_engine_json: template_context.node_engine_json.clone(),
-                lib_path_literal_json: template_context.lib_path_literal_json.clone(),
-                bundled_prebuilds: template_context.bundled_prebuilds,
-                manual_load: self.manual_load,
-                requires_async_rust_future_hooks: self.requires_async_rust_future_hooks,
-                public_api_js: self.public_api.js.clone(),
-            },
-        )?;
-        write_template(
-            &self.layout.component_dts_path(),
-            &ComponentDtsTemplate {
-                namespace: self.layout.namespace.clone(),
-                manual_load: self.manual_load,
-                public_api_dts: self.public_api.dts.clone(),
-            },
-        )?;
-        write_template(
-            &self.layout.component_ffi_js_path(),
-            &StringTemplate {
-                contents: self.ffi_api.js.clone(),
-            },
-        )?;
-        write_template(
-            &self.layout.component_ffi_dts_path(),
-            &StringTemplate {
-                contents: self.ffi_api.dts.clone(),
-            },
-        )?;
+        write_files(self.package_files(&template_context)?)?;
         self.write_runtime_files()?;
 
         Ok(())
     }
 
-    fn write_runtime_files(&self) -> Result<()> {
-        write_template(
-            &self.layout.runtime_path("errors.js"),
-            &RuntimeErrorsJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("errors.d.ts"),
-            &RuntimeErrorsDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("ffi-types.js"),
-            &RuntimeFfiTypesJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("ffi-types.d.ts"),
-            &RuntimeFfiTypesDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("ffi-converters.js"),
-            &RuntimeFfiConvertersJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("ffi-converters.d.ts"),
-            &RuntimeFfiConvertersDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("rust-call.js"),
-            &RuntimeRustCallJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("rust-call.d.ts"),
-            &RuntimeRustCallDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("async-rust-call.js"),
-            &RuntimeAsyncRustCallJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("async-rust-call.d.ts"),
-            &RuntimeAsyncRustCallDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("handle-map.js"),
-            &RuntimeHandleMapJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("handle-map.d.ts"),
-            &RuntimeHandleMapDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("callbacks.js"),
-            &RuntimeCallbacksJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("callbacks.d.ts"),
-            &RuntimeCallbacksDtsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("objects.js"),
-            &RuntimeObjectsJsTemplate {},
-        )?;
-        write_template(
-            &self.layout.runtime_path("objects.d.ts"),
-            &RuntimeObjectsDtsTemplate {},
-        )?;
+    fn package_files(
+        &self,
+        template_context: &TemplateContext,
+    ) -> Result<Vec<(Utf8PathBuf, String)>> {
+        let mut files = self.package_metadata_files(template_context)?;
+        files.extend(self.component_api_files(template_context)?);
+        files.extend(self.component_ffi_files()?);
+        Ok(files)
+    }
 
-        Ok(())
+    fn package_metadata_files(
+        &self,
+        template_context: &TemplateContext,
+    ) -> Result<Vec<(Utf8PathBuf, String)>> {
+        Ok(vec![
+            rendered_file(
+                self.layout.package_json_path(),
+                PackageJsonTemplate {
+                    package_name_json: template_context.package_name_json.clone(),
+                    node_engine_json: template_context.node_engine_json.clone(),
+                }
+                .render(),
+            )?,
+            rendered_file(
+                self.layout.index_js_path(),
+                PackageIndexJsTemplate {
+                    namespace: self.layout.namespace.clone(),
+                }
+                .render(),
+            )?,
+            rendered_file(
+                self.layout.index_dts_path(),
+                PackageIndexDtsTemplate {
+                    namespace: self.layout.namespace.clone(),
+                }
+                .render(),
+            )?,
+        ])
+    }
+
+    fn component_api_files(
+        &self,
+        template_context: &TemplateContext,
+    ) -> Result<Vec<(Utf8PathBuf, String)>> {
+        Ok(vec![
+            rendered_file(
+                self.layout.component_js_path(),
+                ComponentJsTemplate {
+                    namespace: self.layout.namespace.clone(),
+                    namespace_json: template_context.namespace_json.clone(),
+                    package_name_json: template_context.package_name_json.clone(),
+                    cdylib_name_json: template_context.cdylib_name_json.clone(),
+                    node_engine_json: template_context.node_engine_json.clone(),
+                    lib_path_literal_json: template_context.lib_path_literal_json.clone(),
+                    bundled_prebuilds: template_context.bundled_prebuilds,
+                    manual_load: self.manual_load,
+                    requires_async_rust_future_hooks: self.requires_async_rust_future_hooks,
+                    public_api_js: self.public_api.js.clone(),
+                }
+                .render(),
+            )?,
+            rendered_file(
+                self.layout.component_dts_path(),
+                ComponentDtsTemplate {
+                    namespace: self.layout.namespace.clone(),
+                    manual_load: self.manual_load,
+                    public_api_dts: self.public_api.dts.clone(),
+                }
+                .render(),
+            )?,
+        ])
+    }
+
+    fn component_ffi_files(&self) -> Result<Vec<(Utf8PathBuf, String)>> {
+        Ok(vec![
+            rendered_file(
+                self.layout.component_ffi_js_path(),
+                StringTemplate {
+                    contents: self.ffi_api.js.clone(),
+                }
+                .render(),
+            )?,
+            rendered_file(
+                self.layout.component_ffi_dts_path(),
+                StringTemplate {
+                    contents: self.ffi_api.dts.clone(),
+                }
+                .render(),
+            )?,
+        ])
+    }
+
+    fn write_runtime_files(&self) -> Result<()> {
+        write_files(runtime_files(&self.layout)?)
     }
 }
 
@@ -599,13 +609,65 @@ impl TemplateContext {
     }
 }
 
-fn write_template<T: Template>(path: &Utf8PathBuf, template: &T) -> Result<()> {
-    let contents = template.render()?;
+fn write_contents(path: &Utf8PathBuf, contents: String) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent.as_std_path())?;
     }
     fs::write(path.as_std_path(), contents)?;
     Ok(())
+}
+
+fn write_files(files: Vec<(Utf8PathBuf, String)>) -> Result<()> {
+    files
+        .into_iter()
+        .try_for_each(|(path, contents)| write_contents(&path, contents))
+}
+
+fn rendered_file(
+    path: Utf8PathBuf,
+    contents: std::result::Result<String, askama::Error>,
+) -> Result<(Utf8PathBuf, String)> {
+    Ok((path, contents?))
+}
+
+type TemplateRenderResult = std::result::Result<String, askama::Error>;
+type RuntimeTemplateRenderer = fn() -> TemplateRenderResult;
+
+struct RuntimeModuleTemplateSet {
+    stem: &'static str,
+    js: RuntimeTemplateRenderer,
+    dts: RuntimeTemplateRenderer,
+}
+
+fn runtime_files(layout: &GeneratedPackageLayout) -> Result<Vec<(Utf8PathBuf, String)>> {
+    runtime_file_contents()?
+        .into_iter()
+        .map(|(file_name, contents)| Ok((layout.runtime_path(&file_name), contents)))
+        .collect::<Result<Vec<_>>>()
+}
+
+fn rendered_runtime_file(
+    file_name: String,
+    contents: TemplateRenderResult,
+) -> Result<(String, String)> {
+    Ok((file_name, contents?))
+}
+
+fn runtime_file_contents() -> Result<Vec<(String, String)>> {
+    let mut files = Vec::with_capacity(RUNTIME_MODULE_TEMPLATES.len() * 2);
+    for templates in RUNTIME_MODULE_TEMPLATES {
+        files.extend(render_runtime_module_files(templates)?);
+    }
+    Ok(files)
+}
+
+fn render_runtime_module_files(
+    templates: &RuntimeModuleTemplateSet,
+) -> Result<[(String, String); 2]> {
+    Ok([
+        rendered_runtime_file(format!("{}.js", templates.stem), (templates.js)())?,
+        rendered_runtime_file(format!("{}.d.ts", templates.stem), (templates.dts)())?,
+    ])
 }
 
 fn json_string(value: &str) -> Result<String> {
@@ -614,6 +676,113 @@ fn json_string(value: &str) -> Result<String> {
 
 fn json_optional_string(value: Option<&str>) -> Result<String> {
     Ok(serde_json::to_string(&value)?)
+}
+
+const RUNTIME_MODULE_TEMPLATES: &[RuntimeModuleTemplateSet] = &[
+    RuntimeModuleTemplateSet {
+        stem: "errors",
+        js: render_runtime_errors_js,
+        dts: render_runtime_errors_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "ffi-types",
+        js: render_runtime_ffi_types_js,
+        dts: render_runtime_ffi_types_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "ffi-converters",
+        js: render_runtime_ffi_converters_js,
+        dts: render_runtime_ffi_converters_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "rust-call",
+        js: render_runtime_rust_call_js,
+        dts: render_runtime_rust_call_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "async-rust-call",
+        js: render_runtime_async_rust_call_js,
+        dts: render_runtime_async_rust_call_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "handle-map",
+        js: render_runtime_handle_map_js,
+        dts: render_runtime_handle_map_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "callbacks",
+        js: render_runtime_callbacks_js,
+        dts: render_runtime_callbacks_dts,
+    },
+    RuntimeModuleTemplateSet {
+        stem: "objects",
+        js: render_runtime_objects_js,
+        dts: render_runtime_objects_dts,
+    },
+];
+
+fn render_runtime_errors_js() -> TemplateRenderResult {
+    RuntimeErrorsJsTemplate {}.render()
+}
+
+fn render_runtime_errors_dts() -> TemplateRenderResult {
+    RuntimeErrorsDtsTemplate {}.render()
+}
+
+fn render_runtime_ffi_types_js() -> TemplateRenderResult {
+    RuntimeFfiTypesJsTemplate {}.render()
+}
+
+fn render_runtime_ffi_types_dts() -> TemplateRenderResult {
+    RuntimeFfiTypesDtsTemplate {}.render()
+}
+
+fn render_runtime_ffi_converters_js() -> TemplateRenderResult {
+    RuntimeFfiConvertersJsTemplate {}.render()
+}
+
+fn render_runtime_ffi_converters_dts() -> TemplateRenderResult {
+    RuntimeFfiConvertersDtsTemplate {}.render()
+}
+
+fn render_runtime_rust_call_js() -> TemplateRenderResult {
+    RuntimeRustCallJsTemplate {}.render()
+}
+
+fn render_runtime_rust_call_dts() -> TemplateRenderResult {
+    RuntimeRustCallDtsTemplate {}.render()
+}
+
+fn render_runtime_async_rust_call_js() -> TemplateRenderResult {
+    RuntimeAsyncRustCallJsTemplate {}.render()
+}
+
+fn render_runtime_async_rust_call_dts() -> TemplateRenderResult {
+    RuntimeAsyncRustCallDtsTemplate {}.render()
+}
+
+fn render_runtime_handle_map_js() -> TemplateRenderResult {
+    RuntimeHandleMapJsTemplate {}.render()
+}
+
+fn render_runtime_handle_map_dts() -> TemplateRenderResult {
+    RuntimeHandleMapDtsTemplate {}.render()
+}
+
+fn render_runtime_callbacks_js() -> TemplateRenderResult {
+    RuntimeCallbacksJsTemplate {}.render()
+}
+
+fn render_runtime_callbacks_dts() -> TemplateRenderResult {
+    RuntimeCallbacksDtsTemplate {}.render()
+}
+
+fn render_runtime_objects_js() -> TemplateRenderResult {
+    RuntimeObjectsJsTemplate {}.render()
+}
+
+fn render_runtime_objects_dts() -> TemplateRenderResult {
+    RuntimeObjectsDtsTemplate {}.render()
 }
 
 #[derive(Template)]

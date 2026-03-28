@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use askama::Template;
 
-use super::model::VariantModel;
+use super::model::{AsyncCallbackMethodModel, VariantModel};
 use super::{
     CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel, FieldModel,
     FunctionModel, MethodModel, ObjectModel, RecordModel, callback_interface_factory_name,
@@ -11,12 +11,11 @@ use super::{
     js_member_identifier, json_string_literal, object_converter_name, object_factory_name,
     quoted_property_name, render_dts_fields_as_params, render_dts_params,
     render_js_fields_as_params, render_js_function_body_lines, render_js_koffi_type_expression,
-    render_js_lift_expression, render_js_lower_expression,
-    render_js_object_constructor_body_lines, render_js_object_method_body_lines,
-    render_js_params, render_js_primary_constructor_body_lines, render_js_property_access,
-    render_js_record_allocation_size_expression, render_js_type_converter_expression,
-    render_named_return_type, render_public_type, render_return_type, type_converter_name,
-    variant_type_name,
+    render_js_lift_expression, render_js_lower_expression, render_js_object_constructor_body_lines,
+    render_js_object_method_body_lines, render_js_params, render_js_primary_constructor_body_lines,
+    render_js_property_access, render_js_record_allocation_size_expression,
+    render_js_type_converter_expression, render_named_return_type, render_public_type,
+    render_return_type, type_converter_name, variant_type_name,
 };
 use uniffi_bindgen::interface::Type;
 
@@ -55,74 +54,71 @@ impl JsRenderSections {
         !self.runtime_hooks.is_empty()
     }
 
+    fn section_presence(&self) -> [bool; 10] {
+        [
+            self.has_unimplemented_helper(),
+            self.has_runtime_helpers(),
+            self.has_async_rust_future_helpers(),
+            !self.flat_enums.is_empty(),
+            !self.tagged_enums.is_empty(),
+            !self.errors.is_empty(),
+            self.has_placeholder_converters(),
+            self.has_runtime_hooks(),
+            !self.functions.is_empty(),
+            !self.objects.is_empty(),
+        ]
+    }
+
     fn has_sections_after_unimplemented_helper(&self) -> bool {
-        self.has_runtime_helpers()
-            || self.has_async_rust_future_helpers()
-            || !self.flat_enums.is_empty()
-            || !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-            || self.has_placeholder_converters()
-            || self.has_runtime_hooks()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 0)
     }
 
     fn has_sections_after_runtime_helpers(&self) -> bool {
-        self.has_async_rust_future_helpers()
-            || !self.flat_enums.is_empty()
-            || !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-            || self.has_placeholder_converters()
-            || self.has_runtime_hooks()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 1)
     }
 
     fn has_sections_after_async_rust_future_helpers(&self) -> bool {
-        !self.flat_enums.is_empty()
-            || !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-            || self.has_placeholder_converters()
-            || self.has_runtime_hooks()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 2)
     }
 
     fn has_sections_after_flat_enums(&self) -> bool {
-        !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-            || self.has_placeholder_converters()
-            || self.has_runtime_hooks()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 3)
     }
 
     fn has_sections_after_tagged_enums(&self) -> bool {
-        !self.errors.is_empty()
-            || self.has_placeholder_converters()
-            || self.has_runtime_hooks()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 4)
     }
 
     fn has_sections_after_errors(&self) -> bool {
-        self.has_placeholder_converters()
-            || self.has_runtime_hooks()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 5)
     }
 
     fn has_sections_after_placeholder_converters(&self) -> bool {
-        self.has_runtime_hooks() || !self.functions.is_empty() || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 6)
     }
 
     fn has_sections_after_runtime_hooks(&self) -> bool {
-        !self.functions.is_empty() || !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 7)
     }
 
     fn has_sections_after_functions(&self) -> bool {
-        !self.objects.is_empty()
+        has_content_after(&self.section_presence(), 8)
     }
+}
+
+fn has_content_after(presence: &[bool], current_index: usize) -> bool {
+    presence
+        .iter()
+        .skip(current_index + 1)
+        .any(|present| *present)
+}
+
+fn collect_results<T, U>(items: &[T], render: impl Fn(&T) -> Result<U>) -> Result<Vec<U>> {
+    items.iter().map(render).collect()
+}
+
+fn render_trimmed_template<T: Template>(template: T) -> Result<String> {
+    Ok(template.render()?.trim_end().to_string())
 }
 
 pub(crate) struct PublicApiRenderer<'a> {
@@ -160,80 +156,53 @@ struct DtsRenderer {
 impl DtsRenderer {
     fn new(model: &ComponentModel) -> Result<Self> {
         Ok(Self {
-            records: model
-                .records
-                .iter()
-                .map(render_dts_record_fragment)
-                .collect::<Result<_>>()?,
-            flat_enums: model
-                .flat_enums
-                .iter()
-                .map(render_dts_flat_enum_fragment)
-                .collect::<Result<_>>()?,
-            tagged_enums: model
-                .tagged_enums
-                .iter()
-                .map(render_dts_tagged_enum_fragment)
-                .collect::<Result<_>>()?,
-            errors: model
-                .errors
-                .iter()
-                .map(render_dts_error_fragment)
-                .collect::<Result<_>>()?,
-            callback_interfaces: model
-                .callback_interfaces
-                .iter()
-                .map(render_dts_callback_interface_fragment)
-                .collect::<Result<_>>()?,
-            functions: model
-                .functions
-                .iter()
-                .map(render_dts_function_fragment)
-                .collect::<Result<_>>()?,
-            objects: model
-                .objects
-                .iter()
-                .map(render_dts_object_fragment)
-                .collect::<Result<_>>()?,
+            records: collect_results(&model.records, render_dts_record_fragment)?,
+            flat_enums: collect_results(&model.flat_enums, render_dts_flat_enum_fragment)?,
+            tagged_enums: collect_results(&model.tagged_enums, render_dts_tagged_enum_fragment)?,
+            errors: collect_results(&model.errors, render_dts_error_fragment)?,
+            callback_interfaces: collect_results(
+                &model.callback_interfaces,
+                render_dts_callback_interface_fragment,
+            )?,
+            functions: collect_results(&model.functions, render_dts_function_fragment)?,
+            objects: collect_results(&model.objects, render_dts_object_fragment)?,
         })
     }
 
+    fn declaration_presence(&self) -> [bool; 7] {
+        [
+            !self.records.is_empty(),
+            !self.flat_enums.is_empty(),
+            !self.tagged_enums.is_empty(),
+            !self.errors.is_empty(),
+            !self.callback_interfaces.is_empty(),
+            !self.functions.is_empty(),
+            !self.objects.is_empty(),
+        ]
+    }
+
     fn has_declarations_after_records(&self) -> bool {
-        !self.flat_enums.is_empty()
-            || !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-            || !self.callback_interfaces.is_empty()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.declaration_presence(), 0)
     }
 
     fn has_declarations_after_flat_enums(&self) -> bool {
-        !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-            || !self.callback_interfaces.is_empty()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.declaration_presence(), 1)
     }
 
     fn has_declarations_after_tagged_enums(&self) -> bool {
-        !self.errors.is_empty()
-            || !self.callback_interfaces.is_empty()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.declaration_presence(), 2)
     }
 
     fn has_declarations_after_errors(&self) -> bool {
-        !self.callback_interfaces.is_empty()
-            || !self.functions.is_empty()
-            || !self.objects.is_empty()
+        has_content_after(&self.declaration_presence(), 3)
     }
 
     fn has_declarations_after_callback_interfaces(&self) -> bool {
-        !self.functions.is_empty() || !self.objects.is_empty()
+        has_content_after(&self.declaration_presence(), 4)
     }
 
     fn has_declarations_after_functions(&self) -> bool {
-        !self.objects.is_empty()
+        has_content_after(&self.declaration_presence(), 5)
     }
 }
 
@@ -256,12 +225,9 @@ impl FunctionJsView {
 }
 
 pub(crate) fn render_js_function_fragment(function: &FunctionModel) -> Result<String> {
-    Ok(JsFunctionTemplate {
+    render_trimmed_template(JsFunctionTemplate {
         function: FunctionJsView::from_function(function)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct ObjectJsView {
@@ -282,13 +248,59 @@ struct ObjectJsView {
     methods: Vec<ObjectMethodJsView>,
 }
 
+#[derive(Default)]
+struct PrimaryConstructorJsView {
+    has_primary_constructor: bool,
+    params: String,
+    body_lines: Vec<String>,
+}
+
+impl PrimaryConstructorJsView {
+    fn from_object(object: &ObjectModel, factory_name: &str) -> Result<Self> {
+        let Some(constructor) = primary_sync_constructor(object) else {
+            return Ok(Self::default());
+        };
+
+        Ok(Self {
+            has_primary_constructor: true,
+            params: render_js_params(&constructor.arguments),
+            body_lines: render_js_primary_constructor_body_lines(constructor, factory_name)?,
+        })
+    }
+}
+
+fn is_sync_primary_constructor(constructor: &ConstructorModel) -> bool {
+    constructor.is_primary && !constructor.is_async
+}
+
+fn primary_sync_constructor(object: &ObjectModel) -> Option<&ConstructorModel> {
+    object
+        .constructors
+        .iter()
+        .find(|constructor| is_sync_primary_constructor(constructor))
+}
+
+fn render_secondary_constructors(object: &ObjectModel) -> Result<Vec<ConstructorJsView>> {
+    object
+        .constructors
+        .iter()
+        .filter(|constructor| !is_sync_primary_constructor(constructor))
+        .map(|constructor| ConstructorJsView::from_constructor(object, constructor))
+        .collect()
+}
+
+fn render_object_method_views(object: &ObjectModel) -> Result<Vec<ObjectMethodJsView>> {
+    object
+        .methods
+        .iter()
+        .map(|method| ObjectMethodJsView::from_method(object, method))
+        .collect()
+}
+
 impl ObjectJsView {
     fn from_object(object: &ObjectModel) -> Result<Self> {
         let factory_name = object_factory_name(&object.name);
-        let primary_constructor = object
-            .constructors
-            .iter()
-            .find(|constructor| constructor.is_primary && !constructor.is_async);
+        let primary_constructor = PrimaryConstructorJsView::from_object(object, &factory_name)?;
 
         Ok(Self {
             name: object.name.clone(),
@@ -300,31 +312,15 @@ impl ObjectJsView {
             ffi_object_clone_identifier: object.ffi_object_clone_identifier.clone(),
             ffi_object_free_symbol: json_string_literal(&object.ffi_object_free_identifier)?,
             ffi_object_free_identifier: object.ffi_object_free_identifier.clone(),
-            has_primary_constructor: primary_constructor.is_some(),
-            primary_constructor_params: primary_constructor
-                .map(|constructor| render_js_params(&constructor.arguments))
-                .unwrap_or_default(),
-            primary_constructor_body_lines: primary_constructor
-                .map(|constructor| {
-                    render_js_primary_constructor_body_lines(constructor, &factory_name)
-                })
-                .transpose()?
-                .unwrap_or_default(),
+            has_primary_constructor: primary_constructor.has_primary_constructor,
+            primary_constructor_params: primary_constructor.params,
+            primary_constructor_body_lines: primary_constructor.body_lines,
             unimplemented_constructor_member: json_string_literal(&format!(
                 "{}.constructor",
                 object.name
             ))?,
-            constructors: object
-                .constructors
-                .iter()
-                .filter(|constructor| !(constructor.is_primary && !constructor.is_async))
-                .map(|constructor| ConstructorJsView::from_constructor(object, constructor))
-                .collect::<Result<_>>()?,
-            methods: object
-                .methods
-                .iter()
-                .map(|method| ObjectMethodJsView::from_method(object, method))
-                .collect::<Result<_>>()?,
+            constructors: render_secondary_constructors(object)?,
+            methods: render_object_method_views(object)?,
         })
     }
 }
@@ -374,12 +370,9 @@ impl ObjectMethodJsView {
 }
 
 pub(crate) fn render_js_object_fragment(object: &ObjectModel) -> Result<String> {
-    Ok(JsObjectTemplate {
+    render_trimmed_template(JsObjectTemplate {
         object: ObjectJsView::from_object(object)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct FlatEnumJsView {
@@ -415,12 +408,9 @@ impl FlatEnumVariantJsView {
 }
 
 pub(crate) fn render_js_flat_enum_fragment(enum_def: &EnumModel) -> Result<String> {
-    Ok(JsFlatEnumTemplate {
+    render_trimmed_template(JsFlatEnumTemplate {
         enum_def: FlatEnumJsView::from_enum(enum_def)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct TaggedEnumJsView {
@@ -478,12 +468,9 @@ impl TaggedEnumFieldJsView {
 }
 
 pub(crate) fn render_js_tagged_enum_fragment(enum_def: &EnumModel) -> Result<String> {
-    Ok(JsTaggedEnumTemplate {
+    render_trimmed_template(JsTaggedEnumTemplate {
         enum_def: TaggedEnumJsView::from_enum(enum_def)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct ErrorJsView {
@@ -553,12 +540,9 @@ impl ErrorFieldAssignmentJsView {
 }
 
 pub(crate) fn render_js_error_fragment(error: &ErrorModel) -> Result<String> {
-    Ok(JsErrorTemplate {
+    render_trimmed_template(JsErrorTemplate {
         error: ErrorJsView::from_error(error)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct ConverterWriteFieldJsView {
@@ -592,6 +576,57 @@ impl ConverterReadFieldJsView {
     }
 }
 
+fn render_converter_write_fields(
+    fields: &[FieldModel],
+    value_expr: &str,
+) -> Result<Vec<ConverterWriteFieldJsView>> {
+    fields
+        .iter()
+        .map(|field| ConverterWriteFieldJsView::from_field(field, value_expr))
+        .collect()
+}
+
+fn render_converter_read_fields(fields: &[FieldModel]) -> Result<Vec<ConverterReadFieldJsView>> {
+    fields
+        .iter()
+        .map(ConverterReadFieldJsView::from_field)
+        .collect()
+}
+
+fn render_converter_read_expressions(fields: &[FieldModel]) -> Result<Vec<String>> {
+    fields
+        .iter()
+        .map(|field| {
+            Ok(format!(
+                "{}.read(reader)",
+                render_js_type_converter_expression(&field.type_)?
+            ))
+        })
+        .collect()
+}
+
+fn render_buffered_variant_allocation_size_expression(
+    fields: &[FieldModel],
+    value_expr: &str,
+) -> Result<String> {
+    let allocation_terms = fields
+        .iter()
+        .map(|field| {
+            Ok(format!(
+                "{}.allocationSize({})",
+                render_js_type_converter_expression(&field.type_)?,
+                render_js_property_access(value_expr, &field.name)?
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    if allocation_terms.is_empty() {
+        Ok("4".to_string())
+    } else {
+        Ok(format!("4 + {}", allocation_terms.join(" + ")))
+    }
+}
+
 struct RecordConverterJsView {
     converter_name: String,
     record_type_name: String,
@@ -606,27 +641,16 @@ impl RecordConverterJsView {
             converter_name: type_converter_name(&record.name),
             record_type_name: json_string_literal(&record.name)?,
             allocation_size_expr: render_js_record_allocation_size_expression(record)?,
-            write_fields: record
-                .fields
-                .iter()
-                .map(|field| ConverterWriteFieldJsView::from_field(field, "recordValue"))
-                .collect::<Result<_>>()?,
-            read_fields: record
-                .fields
-                .iter()
-                .map(ConverterReadFieldJsView::from_field)
-                .collect::<Result<_>>()?,
+            write_fields: render_converter_write_fields(&record.fields, "recordValue")?,
+            read_fields: render_converter_read_fields(&record.fields)?,
         })
     }
 }
 
 pub(crate) fn render_js_record_converter_fragment(record: &RecordModel) -> Result<String> {
-    Ok(JsRecordConverterTemplate {
+    render_trimmed_template(JsRecordConverterTemplate {
         converter: RecordConverterJsView::from_record(record)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct FlatEnumConverterJsView {
@@ -669,12 +693,9 @@ impl FlatEnumConverterVariantJsView {
 }
 
 pub(crate) fn render_js_flat_enum_converter_fragment(enum_def: &EnumModel) -> Result<String> {
-    Ok(JsFlatEnumConverterTemplate {
+    render_trimmed_template(JsFlatEnumConverterTemplate {
         converter: FlatEnumConverterJsView::from_enum(enum_def)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct TaggedEnumConverterJsView {
@@ -716,41 +737,16 @@ struct TaggedEnumConverterVariantJsView {
 
 impl TaggedEnumConverterVariantJsView {
     fn from_variant(enum_name: &str, variant: &VariantModel, tag_index: usize) -> Result<Self> {
-        let allocation_terms = variant
-            .fields
-            .iter()
-            .map(|field| {
-                Ok(format!(
-                    "{}.allocationSize({})",
-                    render_js_type_converter_expression(&field.type_)?,
-                    render_js_property_access("enumValue", &field.name)?
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let read_values = variant
-            .fields
-            .iter()
-            .map(|field| {
-                Ok(format!(
-                    "{}.read(reader)",
-                    render_js_type_converter_expression(&field.type_)?
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let read_values = render_converter_read_expressions(&variant.fields)?;
 
         Ok(Self {
             tag_literal: json_string_literal(&variant.name)?,
             tag_index,
-            allocation_size_expr: if allocation_terms.is_empty() {
-                "4".to_string()
-            } else {
-                format!("4 + {}", allocation_terms.join(" + "))
-            },
-            write_fields: variant
-                .fields
-                .iter()
-                .map(|field| ConverterWriteFieldJsView::from_field(field, "enumValue"))
-                .collect::<Result<_>>()?,
+            allocation_size_expr: render_buffered_variant_allocation_size_expression(
+                &variant.fields,
+                "enumValue",
+            )?,
+            write_fields: render_converter_write_fields(&variant.fields, "enumValue")?,
             read_return_expr: format!(
                 "{}.{}({})",
                 enum_name,
@@ -762,12 +758,9 @@ impl TaggedEnumConverterVariantJsView {
 }
 
 pub(crate) fn render_js_tagged_enum_converter_fragment(enum_def: &EnumModel) -> Result<String> {
-    Ok(JsTaggedEnumConverterTemplate {
+    render_trimmed_template(JsTaggedEnumConverterTemplate {
         converter: TaggedEnumConverterJsView::from_enum(enum_def)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct ErrorConverterJsView {
@@ -816,21 +809,10 @@ struct ErrorConverterVariantJsView {
 impl ErrorConverterVariantJsView {
     fn from_variant(error: &ErrorModel, variant: &VariantModel, tag_index: usize) -> Result<Self> {
         let class_name = variant_type_name(&error.name, &variant.name);
-        let allocation_size_expr = if error.is_flat || variant.fields.is_empty() {
+        let allocation_size_expr = if error.is_flat {
             "4".to_string()
         } else {
-            let field_terms = variant
-                .fields
-                .iter()
-                .map(|field| {
-                    Ok(format!(
-                        "{}.allocationSize({})",
-                        render_js_type_converter_expression(&field.type_)?,
-                        render_js_property_access("value", &field.name)?
-                    ))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            format!("4 + {}", field_terms.join(" + "))
+            render_buffered_variant_allocation_size_expression(&variant.fields, "value")?
         };
         let read_expr = if error.is_flat {
             format!(
@@ -839,16 +821,7 @@ impl ErrorConverterVariantJsView {
                 render_js_type_converter_expression(&Type::String)?
             )
         } else {
-            let field_values = variant
-                .fields
-                .iter()
-                .map(|field| {
-                    Ok(format!(
-                        "{}.read(reader)",
-                        render_js_type_converter_expression(&field.type_)?
-                    ))
-                })
-                .collect::<Result<Vec<_>>>()?;
+            let field_values = render_converter_read_expressions(&variant.fields)?;
             format!("new {}({})", class_name, field_values.join(", "))
         };
 
@@ -859,11 +832,7 @@ impl ErrorConverterVariantJsView {
             write_fields: if error.is_flat {
                 Vec::new()
             } else {
-                variant
-                    .fields
-                    .iter()
-                    .map(|field| ConverterWriteFieldJsView::from_field(field, "value"))
-                    .collect::<Result<_>>()?
+                render_converter_write_fields(&variant.fields, "value")?
             },
             read_expr,
         })
@@ -871,12 +840,9 @@ impl ErrorConverterVariantJsView {
 }
 
 pub(crate) fn render_js_error_converter_fragment(error: &ErrorModel) -> Result<String> {
-    Ok(JsErrorConverterTemplate {
+    render_trimmed_template(JsErrorConverterTemplate {
         converter: ErrorConverterJsView::from_error(error)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct CallbackInterfaceConverterJsView {
@@ -972,12 +938,9 @@ impl CallbackInterfaceMethodJsView {
 pub(crate) fn render_js_callback_interface_converter_fragment(
     callback_interface: &CallbackInterfaceModel,
 ) -> Result<String> {
-    Ok(JsCallbackInterfaceConverterTemplate {
+    render_trimmed_template(JsCallbackInterfaceConverterTemplate {
         converter: CallbackInterfaceConverterJsView::from_callback_interface(callback_interface)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct RuntimeHelpersJsView {
@@ -989,19 +952,16 @@ pub(crate) fn render_js_runtime_helpers_fragment(
     ffi_rustbuffer_from_bytes_identifier: &str,
     ffi_rustbuffer_free_identifier: &str,
 ) -> Result<String> {
-    Ok(JsRuntimeHelpersTemplate {
+    render_trimmed_template(JsRuntimeHelpersTemplate {
         helpers: RuntimeHelpersJsView {
             ffi_rustbuffer_from_bytes_identifier: ffi_rustbuffer_from_bytes_identifier.to_string(),
             ffi_rustbuffer_free_identifier: ffi_rustbuffer_free_identifier.to_string(),
         },
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 pub(crate) fn render_js_async_rust_future_helpers_fragment() -> Result<String> {
-    Ok(JsAsyncRustFutureHelpersTemplate.render()?.trim_end().to_string())
+    render_trimmed_template(JsAsyncRustFutureHelpersTemplate)
 }
 
 struct RuntimeHooksJsView {
@@ -1019,11 +979,15 @@ impl RuntimeHooksJsView {
         Self {
             callback_register_names: callback_interfaces
                 .iter()
-                .map(|callback_interface| callback_interface_register_name(&callback_interface.name))
+                .map(|callback_interface| {
+                    callback_interface_register_name(&callback_interface.name)
+                })
                 .collect(),
             callback_registry_names: callback_interfaces
                 .iter()
-                .map(|callback_interface| callback_interface_registry_name(&callback_interface.name))
+                .map(|callback_interface| {
+                    callback_interface_registry_name(&callback_interface.name)
+                })
                 .collect(),
             has_callback_interfaces: !callback_interfaces.is_empty(),
             needs_async_rust_future_hooks,
@@ -1035,15 +999,220 @@ pub(crate) fn render_js_runtime_hooks_fragment(
     callback_interfaces: &[CallbackInterfaceModel],
     needs_async_rust_future_hooks: bool,
 ) -> Result<String> {
-    Ok(JsRuntimeHooksTemplate {
+    render_trimmed_template(JsRuntimeHooksTemplate {
         hooks: RuntimeHooksJsView::from_callback_interfaces(
             callback_interfaces,
             needs_async_rust_future_hooks,
         ),
+    })
+}
+
+#[derive(Default)]
+struct CallbackErrorLowering {
+    lower_error_type: String,
+    lower_error_converter_expr: String,
+    has_lower_error: bool,
+}
+
+impl CallbackErrorLowering {
+    fn from_method(method: &MethodModel) -> Result<Self> {
+        let Some(throws_type) = method.throws_type.as_ref() else {
+            return Ok(Self::default());
+        };
+
+        Ok(Self {
+            lower_error_type: render_public_type(throws_type)?,
+            lower_error_converter_expr: render_js_type_converter_expression(throws_type)?,
+            has_lower_error: true,
+        })
     }
-    .render()?
-    .trim_end()
-    .to_string())
+}
+
+#[derive(Default)]
+struct SyncCallbackReturnLowering {
+    lowered_return_expr: String,
+    return_koffi_type_expr: String,
+    has_return_value: bool,
+}
+
+impl SyncCallbackReturnLowering {
+    fn from_method(method: &MethodModel) -> Result<Self> {
+        let Some(return_type) = method.return_type.as_ref() else {
+            return Ok(Self::default());
+        };
+
+        Ok(Self {
+            lowered_return_expr: render_js_lower_expression(return_type, "uniffiResult")?,
+            return_koffi_type_expr: render_js_koffi_type_expression(return_type, "bindings")?,
+            has_return_value: true,
+        })
+    }
+}
+
+#[derive(Default)]
+struct AsyncCallbackReturnLowering {
+    lower_return_expr: String,
+    default_return_value_expr: String,
+    has_lower_return: bool,
+}
+
+impl AsyncCallbackReturnLowering {
+    fn from_method(
+        callback_interface: &CallbackInterfaceModel,
+        method: &MethodModel,
+        async_callback_ffi: &AsyncCallbackMethodModel,
+    ) -> Result<Self> {
+        if !async_callback_ffi.result_struct_has_return_value {
+            return Ok(Self::default());
+        }
+
+        Ok(Self {
+            lower_return_expr: render_js_lower_expression(
+                async_callback_return_type(callback_interface, method)?,
+                "value",
+            )?,
+            default_return_value_expr: async_callback_default_return_value(
+                callback_interface,
+                method,
+                async_callback_ffi,
+            )?
+            .to_string(),
+            has_lower_return: true,
+        })
+    }
+}
+
+fn async_callback_return_type<'a>(
+    callback_interface: &CallbackInterfaceModel,
+    method: &'a MethodModel,
+) -> Result<&'a Type> {
+    method.return_type.as_ref().with_context(|| {
+        format!(
+            "async callback interface {}.{} is missing a return type",
+            callback_interface.name, method.name
+        )
+    })
+}
+
+fn async_callback_default_return_value<'a>(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    async_callback_ffi: &'a AsyncCallbackMethodModel,
+) -> Result<&'a str> {
+    async_callback_ffi
+        .default_error_return_value_expression
+        .as_deref()
+        .with_context(|| {
+            format!(
+                "async callback interface {}.{} is missing a default error return value",
+                callback_interface.name, method.name
+            )
+        })
+}
+
+fn callback_registration_name(method: &MethodModel) -> String {
+    format!("{}Callback", js_member_identifier(&method.name))
+}
+
+fn callback_registration_params(method: &MethodModel, trailing: &[&str]) -> String {
+    method
+        .arguments
+        .iter()
+        .map(|argument| js_identifier(&argument.name))
+        .chain(trailing.iter().map(|name| (*name).to_string()))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn callback_registration_lifted_args(method: &MethodModel) -> Result<Vec<String>> {
+    method
+        .arguments
+        .iter()
+        .map(|argument| render_js_lift_expression(&argument.type_, &js_identifier(&argument.name)))
+        .collect()
+}
+
+fn callback_ffi_identifier<'a>(
+    callback_interface: &CallbackInterfaceModel,
+    method: &'a MethodModel,
+) -> Result<&'a str> {
+    method.ffi_callback_identifier.as_deref().with_context(|| {
+        format!(
+            "callback interface {}.{} is missing an FFI callback identifier",
+            callback_interface.name, method.name
+        )
+    })
+}
+
+fn callback_async_metadata<'a>(
+    callback_interface: &CallbackInterfaceModel,
+    method: &'a MethodModel,
+) -> Result<&'a AsyncCallbackMethodModel> {
+    method.async_callback_ffi.as_ref().with_context(|| {
+        format!(
+            "async callback interface {}.{} is missing ForeignFuture metadata",
+            callback_interface.name, method.name
+        )
+    })
+}
+
+struct CallbackVtableRegistrationCommon {
+    callback_name: String,
+    callback_params: String,
+    registry_name: String,
+    method_name_literal: String,
+    lifted_args: Vec<String>,
+    ffi_callback_identifier: String,
+}
+
+impl CallbackVtableRegistrationCommon {
+    fn from_method(
+        callback_interface: &CallbackInterfaceModel,
+        method: &MethodModel,
+        registry_name: &str,
+        trailing_params: &[&str],
+    ) -> Result<Self> {
+        Ok(Self {
+            callback_name: callback_registration_name(method),
+            callback_params: callback_registration_params(method, trailing_params),
+            registry_name: registry_name.to_string(),
+            method_name_literal: json_string_literal(&method.name)?,
+            lifted_args: callback_registration_lifted_args(method)?,
+            ffi_callback_identifier: callback_ffi_identifier(callback_interface, method)?
+                .to_string(),
+        })
+    }
+}
+
+struct CallbackVtableRegistrationBase {
+    common: CallbackVtableRegistrationCommon,
+    error_lowering: CallbackErrorLowering,
+}
+
+const SYNC_CALLBACK_TRAILING_PARAMS: &[&str] = &["uniffiOutReturn", "callStatus"];
+const ASYNC_CALLBACK_TRAILING_PARAMS: &[&str] = &[
+    "uniffiFutureCallback",
+    "uniffiCallbackData",
+    "uniffiOutReturn",
+];
+
+impl CallbackVtableRegistrationBase {
+    fn from_method(
+        callback_interface: &CallbackInterfaceModel,
+        method: &MethodModel,
+        registry_name: &str,
+        trailing_params: &[&str],
+    ) -> Result<Self> {
+        Ok(Self {
+            common: CallbackVtableRegistrationCommon::from_method(
+                callback_interface,
+                method,
+                registry_name,
+                trailing_params,
+            )?,
+            error_lowering: CallbackErrorLowering::from_method(method)?,
+        })
+    }
 }
 
 struct SyncCallbackVtableRegistrationJsView {
@@ -1067,61 +1236,41 @@ impl SyncCallbackVtableRegistrationJsView {
         method: &MethodModel,
         registry_name: &str,
     ) -> Result<Self> {
-        let callback_name = format!("{}Callback", js_member_identifier(&method.name));
-        let ffi_callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
-            format!(
-                "callback interface {}.{} is missing an FFI callback identifier",
-                callback_interface.name, method.name
-            )
-        })?;
-        let lifted_args = method
-            .arguments
-            .iter()
-            .map(|argument| {
-                render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let (has_return_value, lowered_return_expr, return_koffi_type_expr) =
-            if let Some(return_type) = method.return_type.as_ref() {
-                (
-                    true,
-                    render_js_lower_expression(return_type, "uniffiResult")?,
-                    render_js_koffi_type_expression(return_type, "bindings")?,
-                )
-            } else {
-                (false, String::new(), String::new())
-            };
-        let (has_lower_error, lower_error_type, lower_error_converter_expr) =
-            if let Some(throws_type) = method.throws_type.as_ref() {
-                (
-                    true,
-                    render_public_type(throws_type)?,
-                    render_js_type_converter_expression(throws_type)?,
-                )
-            } else {
-                (false, String::new(), String::new())
-            };
+        let base = CallbackVtableRegistrationBase::from_method(
+            callback_interface,
+            method,
+            registry_name,
+            SYNC_CALLBACK_TRAILING_PARAMS,
+        )?;
+        Ok(Self::from_parts(
+            base,
+            SyncCallbackReturnLowering::from_method(method)?,
+        ))
+    }
 
-        Ok(Self {
-            callback_name,
-            callback_params: method
-                .arguments
-                .iter()
-                .map(|argument| js_identifier(&argument.name))
-                .chain(["uniffiOutReturn".to_string(), "callStatus".to_string()].into_iter())
-                .collect::<Vec<_>>()
-                .join(", "),
-            registry_name: registry_name.to_string(),
-            method_name_literal: json_string_literal(&method.name)?,
-            lifted_args,
-            ffi_callback_identifier: ffi_callback_identifier.to_string(),
-            lowered_return_expr,
-            return_koffi_type_expr,
-            has_return_value,
-            lower_error_type,
-            lower_error_converter_expr,
-            has_lower_error,
-        })
+    fn from_parts(
+        base: CallbackVtableRegistrationBase,
+        return_lowering: SyncCallbackReturnLowering,
+    ) -> Self {
+        let CallbackVtableRegistrationBase {
+            common: registration,
+            error_lowering,
+        } = base;
+
+        Self {
+            callback_name: registration.callback_name,
+            callback_params: registration.callback_params,
+            registry_name: registration.registry_name,
+            method_name_literal: registration.method_name_literal,
+            lifted_args: registration.lifted_args,
+            ffi_callback_identifier: registration.ffi_callback_identifier,
+            lowered_return_expr: return_lowering.lowered_return_expr,
+            return_koffi_type_expr: return_lowering.return_koffi_type_expr,
+            has_return_value: return_lowering.has_return_value,
+            lower_error_type: error_lowering.lower_error_type,
+            lower_error_converter_expr: error_lowering.lower_error_converter_expr,
+            has_lower_error: error_lowering.has_lower_error,
+        }
     }
 }
 
@@ -1142,97 +1291,70 @@ struct AsyncCallbackVtableRegistrationJsView {
     has_lower_return: bool,
 }
 
+struct AsyncCallbackRegistrationMetadata {
+    future_free_name: String,
+    complete_callback_identifier: String,
+}
+
+impl AsyncCallbackRegistrationMetadata {
+    fn from_method(method: &MethodModel, async_callback_ffi: &AsyncCallbackMethodModel) -> Self {
+        Self {
+            future_free_name: format!("{}FutureFree", js_identifier(&method.name)),
+            complete_callback_identifier: async_callback_ffi.complete_identifier.clone(),
+        }
+    }
+}
+
 impl AsyncCallbackVtableRegistrationJsView {
     fn from_method(
         callback_interface: &CallbackInterfaceModel,
         method: &MethodModel,
         registry_name: &str,
     ) -> Result<Self> {
-        let ffi_callback_identifier = method.ffi_callback_identifier.as_deref().with_context(|| {
-            format!(
-                "callback interface {}.{} is missing an FFI callback identifier",
-                callback_interface.name, method.name
-            )
-        })?;
-        let async_callback_ffi = method.async_callback_ffi.as_ref().with_context(|| {
-            format!(
-                "async callback interface {}.{} is missing ForeignFuture metadata",
-                callback_interface.name, method.name
-            )
-        })?;
-        let method_identifier = js_identifier(&method.name);
-        let (has_lower_error, lower_error_type, lower_error_converter_expr) =
-            if let Some(throws_type) = method.throws_type.as_ref() {
-                (
-                    true,
-                    render_public_type(throws_type)?,
-                    render_js_type_converter_expression(throws_type)?,
-                )
-            } else {
-                (false, String::new(), String::new())
-            };
-        let (has_lower_return, lower_return_expr, default_return_value_expr) =
-            if async_callback_ffi.result_struct_has_return_value {
-                let return_type = method.return_type.as_ref().with_context(|| {
-                    format!(
-                        "async callback interface {}.{} is missing a return type",
-                        callback_interface.name, method.name
-                    )
-                })?;
-                let default_return_value_expr = async_callback_ffi
-                    .default_error_return_value_expression
-                    .as_deref()
-                    .with_context(|| {
-                        format!(
-                            "async callback interface {}.{} is missing a default error return value",
-                            callback_interface.name, method.name
-                        )
-                    })?;
+        let base = CallbackVtableRegistrationBase::from_method(
+            callback_interface,
+            method,
+            registry_name,
+            ASYNC_CALLBACK_TRAILING_PARAMS,
+        )?;
+        let async_callback_ffi = callback_async_metadata(callback_interface, method)?;
+        let async_metadata =
+            AsyncCallbackRegistrationMetadata::from_method(method, async_callback_ffi);
+        let return_lowering = AsyncCallbackReturnLowering::from_method(
+            callback_interface,
+            method,
+            async_callback_ffi,
+        )?;
 
-                (
-                    true,
-                    render_js_lower_expression(return_type, "value")?,
-                    default_return_value_expr.to_string(),
-                )
-            } else {
-                (false, String::new(), String::new())
-            };
+        Ok(Self::from_parts(base, async_metadata, return_lowering))
+    }
 
-        Ok(Self {
-            future_free_name: format!("{method_identifier}FutureFree"),
-            callback_name: format!("{}Callback", js_member_identifier(&method.name)),
-            callback_params: method
-                .arguments
-                .iter()
-                .map(|argument| js_identifier(&argument.name))
-                .chain(
-                    [
-                        "uniffiFutureCallback".to_string(),
-                        "uniffiCallbackData".to_string(),
-                        "uniffiOutReturn".to_string(),
-                    ]
-                    .into_iter(),
-                )
-                .collect::<Vec<_>>()
-                .join(", "),
-            registry_name: registry_name.to_string(),
-            method_name_literal: json_string_literal(&method.name)?,
-            lifted_args: method
-                .arguments
-                .iter()
-                .map(|argument| {
-                    render_js_lift_expression(&argument.type_, &js_identifier(&argument.name))
-                })
-                .collect::<Result<Vec<_>>>()?,
-            complete_callback_identifier: async_callback_ffi.complete_identifier.clone(),
-            ffi_callback_identifier: ffi_callback_identifier.to_string(),
-            lower_error_type,
-            lower_error_converter_expr,
-            has_lower_error,
-            lower_return_expr,
-            default_return_value_expr,
-            has_lower_return,
-        })
+    fn from_parts(
+        base: CallbackVtableRegistrationBase,
+        async_metadata: AsyncCallbackRegistrationMetadata,
+        return_lowering: AsyncCallbackReturnLowering,
+    ) -> Self {
+        let CallbackVtableRegistrationBase {
+            common: registration,
+            error_lowering,
+        } = base;
+
+        Self {
+            future_free_name: async_metadata.future_free_name,
+            callback_name: registration.callback_name,
+            callback_params: registration.callback_params,
+            registry_name: registration.registry_name,
+            method_name_literal: registration.method_name_literal,
+            lifted_args: registration.lifted_args,
+            complete_callback_identifier: async_metadata.complete_callback_identifier,
+            ffi_callback_identifier: registration.ffi_callback_identifier,
+            lower_error_type: error_lowering.lower_error_type,
+            lower_error_converter_expr: error_lowering.lower_error_converter_expr,
+            has_lower_error: error_lowering.has_lower_error,
+            lower_return_expr: return_lowering.lower_return_expr,
+            default_return_value_expr: return_lowering.default_return_value_expr,
+            has_lower_return: return_lowering.has_lower_return,
+        }
     }
 }
 
@@ -1242,28 +1364,42 @@ fn render_js_callback_vtable_registration_fragment(
     registry_name: &str,
 ) -> Result<String> {
     if method.is_async {
-        Ok(JsAsyncCallbackVtableRegistrationTemplate {
-            registration: AsyncCallbackVtableRegistrationJsView::from_method(
-                callback_interface,
-                method,
-                registry_name,
-            )?,
-        }
-        .render()?
-        .trim_end()
-        .to_string())
-    } else {
-        Ok(JsSyncCallbackVtableRegistrationTemplate {
-            registration: SyncCallbackVtableRegistrationJsView::from_method(
-                callback_interface,
-                method,
-                registry_name,
-            )?,
-        }
-        .render()?
-        .trim_end()
-        .to_string())
+        return render_js_async_callback_vtable_registration_fragment(
+            callback_interface,
+            method,
+            registry_name,
+        );
     }
+
+    render_js_sync_callback_vtable_registration_fragment(callback_interface, method, registry_name)
+}
+
+fn render_js_sync_callback_vtable_registration_fragment(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    registry_name: &str,
+) -> Result<String> {
+    render_trimmed_template(JsSyncCallbackVtableRegistrationTemplate {
+        registration: SyncCallbackVtableRegistrationJsView::from_method(
+            callback_interface,
+            method,
+            registry_name,
+        )?,
+    })
+}
+
+fn render_js_async_callback_vtable_registration_fragment(
+    callback_interface: &CallbackInterfaceModel,
+    method: &MethodModel,
+    registry_name: &str,
+) -> Result<String> {
+    render_trimmed_template(JsAsyncCallbackVtableRegistrationTemplate {
+        registration: AsyncCallbackVtableRegistrationJsView::from_method(
+            callback_interface,
+            method,
+            registry_name,
+        )?,
+    })
 }
 
 struct RecordDtsView {
@@ -1299,12 +1435,9 @@ impl FieldDtsView {
 }
 
 fn render_dts_record_fragment(record: &RecordModel) -> Result<String> {
-    Ok(DtsRecordTemplate {
+    render_trimmed_template(DtsRecordTemplate {
         record: RecordDtsView::from_record(record)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct CallbackInterfaceDtsView {
@@ -1344,12 +1477,9 @@ impl CallbackMethodDtsView {
 fn render_dts_callback_interface_fragment(
     callback_interface: &CallbackInterfaceModel,
 ) -> Result<String> {
-    Ok(DtsCallbackInterfaceTemplate {
+    render_trimmed_template(DtsCallbackInterfaceTemplate {
         callback_interface: CallbackInterfaceDtsView::from_callback_interface(callback_interface)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct FunctionDtsView {
@@ -1369,12 +1499,9 @@ impl FunctionDtsView {
 }
 
 fn render_dts_function_fragment(function: &FunctionModel) -> Result<String> {
-    Ok(DtsFunctionTemplate {
+    render_trimmed_template(DtsFunctionTemplate {
         function: FunctionDtsView::from_function(function)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct FlatEnumDtsView {
@@ -1410,12 +1537,9 @@ impl FlatEnumVariantDtsView {
 }
 
 fn render_dts_flat_enum_fragment(enum_def: &EnumModel) -> Result<String> {
-    Ok(DtsFlatEnumTemplate {
+    render_trimmed_template(DtsFlatEnumTemplate {
         enum_def: FlatEnumDtsView::from_enum(enum_def)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct TaggedEnumDtsView {
@@ -1470,12 +1594,9 @@ impl TaggedEnumVariantDtsView {
 }
 
 fn render_dts_tagged_enum_fragment(enum_def: &EnumModel) -> Result<String> {
-    Ok(DtsTaggedEnumTemplate {
+    render_trimmed_template(DtsTaggedEnumTemplate {
         enum_def: TaggedEnumDtsView::from_enum(enum_def)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct ErrorDtsView {
@@ -1523,12 +1644,9 @@ impl ErrorVariantDtsView {
 }
 
 fn render_dts_error_fragment(error: &ErrorModel) -> Result<String> {
-    Ok(DtsErrorTemplate {
+    render_trimmed_template(DtsErrorTemplate {
         error: ErrorDtsView::from_error(error)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 struct ObjectDtsView {
@@ -1601,12 +1719,9 @@ impl ObjectMethodDtsView {
 }
 
 fn render_dts_object_fragment(object: &ObjectModel) -> Result<String> {
-    Ok(DtsObjectTemplate {
+    render_trimmed_template(DtsObjectTemplate {
         object: ObjectDtsView::from_object(object)?,
-    }
-    .render()?
-    .trim_end()
-    .to_string())
+    })
 }
 
 #[derive(Template)]
@@ -1692,13 +1807,19 @@ struct JsRuntimeHooksTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "api/js/sync-callback-vtable-registration.js.j2", escape = "none")]
+#[template(
+    path = "api/js/sync-callback-vtable-registration.js.j2",
+    escape = "none"
+)]
 struct JsSyncCallbackVtableRegistrationTemplate {
     registration: SyncCallbackVtableRegistrationJsView,
 }
 
 #[derive(Template)]
-#[template(path = "api/js/async-callback-vtable-registration.js.j2", escape = "none")]
+#[template(
+    path = "api/js/async-callback-vtable-registration.js.j2",
+    escape = "none"
+)]
 struct JsAsyncCallbackVtableRegistrationTemplate {
     registration: AsyncCallbackVtableRegistrationJsView,
 }

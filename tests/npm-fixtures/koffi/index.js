@@ -1936,7 +1936,10 @@ const koffi = {
   registeredCallbackCount() {
     return REGISTERED_CALLBACKS.size;
   },
-  decode(value, _type) {
+  decode(value, type) {
+    if (value instanceof BigUint64Array && isOpaquePointerType(type)) {
+      return wrapPointerCast(wrapExternalPointerValue(value[0]), type);
+    }
     return readEncodedValue(value);
   },
   encode(target, _type, value) {

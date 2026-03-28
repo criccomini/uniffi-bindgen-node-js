@@ -6845,7 +6845,12 @@ export class UniffiObjectFactory {
     if (handleType == null) {
       return this._normalizeHandle(handle);
     }
-    return koffi.as(this._normalizeHandle(handle), handleType);
+
+    const normalizedHandle = this._normalizeHandle(handle);
+    if (typeof normalizedHandle === "bigint" || typeof normalizedHandle === "number") {
+      return koffi.decode(new BigUint64Array([normalizeUInt64(normalizedHandle)]), handleType);
+    }
+    return koffi.as(normalizedHandle, handleType);
   }
 
   attach(instance, handle, options = undefined) {
@@ -7100,7 +7105,8 @@ export class FfiConverterObject {
   }
 
   read(reader) {
-    return this.lift(this.factory.deserializeHandle(reader.readUInt64()));
+    const handle = this.factory.deserializeHandle(reader.readUInt64());
+    return this.factory.createRetyped(handle);
   }
 
   allocationSize() {

@@ -3850,7 +3850,7 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("return uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult);"),
+                .contains("return uniffiLiftStringFromRustBuffer(uniffiResult);"),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -3998,7 +3998,9 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("function uniffiRegisterLogCallbackVtable(bindings, registrations) {"),
+                .contains(
+                    "function uniffiRegisterLogCallbackVtable(bindings, registrations, vtableReferences) {"
+                ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -4082,7 +4084,7 @@ mod tests {
         );
         assert!(
             rendered.js.contains(
-                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(FfiConverterString, uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiLiftStringFromRustBuffer(uniffiResult),"
             ),
             "unexpected JS output: {}",
             rendered.js

@@ -252,6 +252,182 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
 }
 
 #[test]
+fn runtime_object_factory_decodes_numeric_handles_before_pointer_cast() {
+    let settings = generation_settings("runtime-object-factory-numeric-handles");
+    let output_dir = settings.out_dir.clone();
+
+    generator()
+        .write_bindings(&settings, &[component_with_namespace("example")])
+        .expect("write_bindings should succeed");
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"const koffi = {
+  opaque() {
+    return { kind: "opaque" };
+  },
+  pointer(typeOrName, maybeType) {
+    return {
+      kind: "pointer",
+      name: maybeType == null ? null : typeOrName,
+      to: maybeType ?? typeOrName,
+    };
+  },
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  as(value, _type) {
+    if (typeof value === "bigint" || typeof value === "number") {
+      throw new TypeError("Invalid argument");
+    }
+    return value;
+  },
+  decode(value, type) {
+    if (!(value instanceof BigUint64Array)) {
+      throw new TypeError("expected BigUint64Array");
+    }
+    return {
+      __addr: value[0],
+      __decoded: true,
+      __type: type,
+    };
+  },
+  address(pointer) {
+    return pointer?.__addr ?? BigInt(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-numeric-handle-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import koffi from "koffi";
+import { createObjectFactory } from "./runtime/objects.js";
+
+const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+
+class Resource {}
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  handleType: () => resourceHandleType,
+});
+
+const resource = resourceFactory.create(42n);
+const typedHandle = resourceFactory.handle(resource);
+assert.equal(typedHandle.__decoded, true);
+assert.equal(typedHandle.__addr, 42n);
+assert.equal(typedHandle.__type?.name, "RustArcPtrResource");
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+}
+
+#[test]
+fn runtime_object_converter_retypes_deserialized_handles() {
+    let settings = generation_settings("runtime-object-converter-deserialized-handles");
+    let output_dir = settings.out_dir.clone();
+
+    generator()
+        .write_bindings(&settings, &[component_with_namespace("example")])
+        .expect("write_bindings should succeed");
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"const koffi = {
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  address(pointer) {
+    return pointer?.__addr ?? BigInt(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-converter-deserialized-handle-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import { createObjectConverter, createObjectFactory } from "./runtime/objects.js";
+
+class Resource {}
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  cloneHandle() {
+    throw new Error("typed clone should not be used for deserialized handles");
+  },
+  cloneHandleGeneric(handle) {
+    assert.equal(handle, 42n);
+    return 43n;
+  },
+});
+
+const converter = createObjectConverter(resourceFactory);
+const resource = converter.read({
+  readUInt64() {
+    return 42n;
+  },
+});
+
+assert.equal(resourceFactory.usesGenericAbi(resource), true);
+assert.equal(resourceFactory.peekHandle(resource), 42n);
+assert.equal(resourceFactory.cloneHandle(resource), 43n);
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+}
+
+#[test]
 fn runtime_object_factory_keeps_raw_external_handles_for_follow_up_calls() {
     let settings = generation_settings("runtime-object-factory-raw-external-handles");
     let output_dir = settings.out_dir.clone();

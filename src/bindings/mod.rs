@@ -1173,7 +1173,13 @@ mod tests {
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
-            objects_js.contains("return koffi.as(this._normalizeHandle(handle), handleType);"),
+            objects_js.contains(
+                "return koffi.decode(new BigUint64Array([normalizeUInt64(normalizedHandle)]), handleType);",
+            ),
+            "unexpected runtime objects JS contents: {objects_js}"
+        );
+        assert!(
+            objects_js.contains("return this.factory.createRetyped(handle);"),
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
@@ -1254,12 +1260,16 @@ mod tests {
         );
         assert!(
             component_js
-                .contains("function uniffiRegisterLogCallbackVtable(bindings, registrations) {"),
+                .contains(
+                    "function uniffiRegisterLogCallbackVtable(bindings, registrations, vtableReferences) {"
+                ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
             component_js
-                .contains("function uniffiRegisterMergeOperatorVtable(bindings, registrations) {"),
+                .contains(
+                    "function uniffiRegisterMergeOperatorVtable(bindings, registrations, vtableReferences) {"
+                ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(

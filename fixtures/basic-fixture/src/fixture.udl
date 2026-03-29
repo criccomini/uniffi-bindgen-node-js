@@ -1,6 +1,8 @@
 namespace fixture {
     BlobRecord echo_record(BlobRecord record);
     bytes echo_bytes(bytes value);
+    timestamp echo_timestamp(timestamp when);
+    duration echo_duration(duration delay_ms);
     record<string, bytes> echo_byte_map(record<string, bytes> value);
 };
 

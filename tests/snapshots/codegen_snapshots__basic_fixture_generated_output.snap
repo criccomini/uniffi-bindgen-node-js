@@ -5583,6 +5583,7 @@ import {
 import { FfiConverterString } from "./ffi-converters.js";
 import {
   EMPTY_RUST_BUFFER,
+  EMPTY_RUST_CALL_STATUS,
   RustBufferValue,
   RustCallStatusCodes,
   normalizeRustBuffer,
@@ -5736,7 +5737,7 @@ export class UniffiRustCaller {
   }
 
   createCallStatus() {
-    return this._writeStatus(this._createStatus(), createRustCallStatus());
+    return this._writeStatus(this._createStatus(), EMPTY_RUST_CALL_STATUS);
   }
 
   createErrorStatus(code = CALL_ERROR, error_buf = EMPTY_RUST_BUFFER) {

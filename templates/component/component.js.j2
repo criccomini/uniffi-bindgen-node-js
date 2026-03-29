@@ -5,57 +5,55 @@ import {
   getFfiBindings,
   load as loadFfi,
 } from "./{{ namespace }}-ffi.js";
+{% if !ffi_types_imports.is_empty() %}
 import {
-  createForeignBytes,
-  EMPTY_RUST_BUFFER,
-  RustBufferValue,
+{% for item in ffi_types_imports %}
+  {{ item }},
+{% endfor %}
 } from "./runtime/ffi-types.js";
-import {
-  AbstractFfiConverterByteArray,
-  FfiConverterArray,
-  FfiConverterBool,
-  FfiConverterBytes,
-  FfiConverterDuration,
-  FfiConverterFloat32,
-  FfiConverterFloat64,
-  FfiConverterInt8,
-  FfiConverterInt16,
-  FfiConverterInt32,
-  FfiConverterInt64,
-  FfiConverterMap,
-  FfiConverterOptional,
-  FfiConverterString,
-  FfiConverterTimestamp,
-  FfiConverterUInt8,
-  FfiConverterUInt16,
-  FfiConverterUInt32,
-  FfiConverterUInt64,
-} from "./runtime/ffi-converters.js";
-import { UnexpectedEnumCase } from "./runtime/errors.js";
-import {
-  rustCallAsync,
-{% if requires_async_rust_future_hooks %}
-  rustFutureContinuationCallback,
 {% endif %}
+{% if !ffi_converter_imports.is_empty() %}
+import {
+{% for item in ffi_converter_imports %}
+  {{ item }},
+{% endfor %}
+} from "./runtime/ffi-converters.js";
+{% endif %}
+{% if !error_imports.is_empty() %}
+import {
+{% for item in error_imports %}
+  {{ item }},
+{% endfor %}
+} from "./runtime/errors.js";
+{% endif %}
+{% if !async_rust_call_imports.is_empty() %}
+import {
+{% for item in async_rust_call_imports %}
+  {{ item }},
+{% endfor %}
 } from "./runtime/async-rust-call.js";
+{% endif %}
+{% if !callback_imports.is_empty() %}
 import {
-  clearPendingForeignFutures,
-  createCallbackRegistry,
-  freePendingForeignFuture,
-  invokeAsyncCallbackMethod,
-  invokeCallbackMethod,
+{% for item in callback_imports %}
+  {{ item }},
+{% endfor %}
 } from "./runtime/callbacks.js";
+{% endif %}
+{% if !object_imports.is_empty() %}
 import {
-  createObjectConverter,
-  createObjectFactory,
-  UniffiObjectBase,
-  UNIFFI_OBJECT_HANDLE_SIZE,
+{% for item in object_imports %}
+  {{ item }},
+{% endfor %}
 } from "./runtime/objects.js";
+{% endif %}
+{% if !rust_call_imports.is_empty() %}
 import {
-  CALL_SUCCESS,
-  UniffiRustCaller,
-  createRustCallStatus,
+{% for item in rust_call_imports %}
+  {{ item }},
+{% endfor %}
 } from "./runtime/rust-call.js";
+{% endif %}
 
 export const componentMetadata = Object.freeze({
   namespace: {{ namespace_json }},

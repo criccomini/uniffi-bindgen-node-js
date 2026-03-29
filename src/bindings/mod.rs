@@ -437,7 +437,6 @@ struct GeneratedPackage {
     lib_path_literal: Option<String>,
     bundled_prebuilds: bool,
     manual_load: bool,
-    requires_async_rust_future_hooks: bool,
     public_api: RenderedComponentApi,
     ffi_api: RenderedComponentFfi,
 }
@@ -471,7 +470,6 @@ impl GeneratedPackage {
             lib_path_literal: component.config.lib_path_literal.clone(),
             bundled_prebuilds: component.config.bundled_prebuilds,
             manual_load: component.config.manual_load,
-            requires_async_rust_future_hooks: public_api.requires_async_rust_future_hooks,
             public_api,
             ffi_api,
         })
@@ -533,6 +531,7 @@ impl GeneratedPackage {
         &self,
         template_context: &TemplateContext,
     ) -> Result<Vec<(Utf8PathBuf, String)>> {
+        let component_js_imports = ComponentJsImports::from_public_api(&self.public_api.js);
         Ok(vec![
             rendered_file(
                 self.layout.component_js_path(),
@@ -545,7 +544,13 @@ impl GeneratedPackage {
                     lib_path_literal_json: template_context.lib_path_literal_json.clone(),
                     bundled_prebuilds: template_context.bundled_prebuilds,
                     manual_load: self.manual_load,
-                    requires_async_rust_future_hooks: self.requires_async_rust_future_hooks,
+                    ffi_types_imports: component_js_imports.ffi_types_imports,
+                    ffi_converter_imports: component_js_imports.ffi_converter_imports,
+                    error_imports: component_js_imports.error_imports,
+                    async_rust_call_imports: component_js_imports.async_rust_call_imports,
+                    callback_imports: component_js_imports.callback_imports,
+                    object_imports: component_js_imports.object_imports,
+                    rust_call_imports: component_js_imports.rust_call_imports,
                     public_api_js: self.public_api.js.clone(),
                 }
                 .render(),
@@ -584,6 +589,87 @@ impl GeneratedPackage {
     fn write_runtime_files(&self) -> Result<()> {
         write_files(runtime_files(&self.layout)?)
     }
+}
+
+struct ComponentJsImports {
+    ffi_types_imports: Vec<String>,
+    ffi_converter_imports: Vec<String>,
+    error_imports: Vec<String>,
+    async_rust_call_imports: Vec<String>,
+    callback_imports: Vec<String>,
+    object_imports: Vec<String>,
+    rust_call_imports: Vec<String>,
+}
+
+impl ComponentJsImports {
+    fn from_public_api(public_api_js: &str) -> Self {
+        Self {
+            ffi_types_imports: collect_used_js_imports(
+                public_api_js,
+                &["createForeignBytes", "EMPTY_RUST_BUFFER", "RustBufferValue"],
+            ),
+            ffi_converter_imports: collect_used_js_imports(
+                public_api_js,
+                &[
+                    "AbstractFfiConverterByteArray",
+                    "FfiConverterArray",
+                    "FfiConverterBool",
+                    "FfiConverterBytes",
+                    "FfiConverterDuration",
+                    "FfiConverterFloat32",
+                    "FfiConverterFloat64",
+                    "FfiConverterInt8",
+                    "FfiConverterInt16",
+                    "FfiConverterInt32",
+                    "FfiConverterInt64",
+                    "FfiConverterMap",
+                    "FfiConverterOptional",
+                    "FfiConverterString",
+                    "FfiConverterTimestamp",
+                    "FfiConverterUInt8",
+                    "FfiConverterUInt16",
+                    "FfiConverterUInt32",
+                    "FfiConverterUInt64",
+                ],
+            ),
+            error_imports: collect_used_js_imports(public_api_js, &["UnexpectedEnumCase"]),
+            async_rust_call_imports: collect_used_js_imports(
+                public_api_js,
+                &["rustCallAsync", "rustFutureContinuationCallback"],
+            ),
+            callback_imports: collect_used_js_imports(
+                public_api_js,
+                &[
+                    "clearPendingForeignFutures",
+                    "createCallbackRegistry",
+                    "freePendingForeignFuture",
+                    "invokeAsyncCallbackMethod",
+                    "invokeCallbackMethod",
+                ],
+            ),
+            object_imports: collect_used_js_imports(
+                public_api_js,
+                &[
+                    "createObjectConverter",
+                    "createObjectFactory",
+                    "UniffiObjectBase",
+                    "UNIFFI_OBJECT_HANDLE_SIZE",
+                ],
+            ),
+            rust_call_imports: collect_used_js_imports(
+                public_api_js,
+                &["CALL_SUCCESS", "UniffiRustCaller", "createRustCallStatus"],
+            ),
+        }
+    }
+}
+
+fn collect_used_js_imports(source: &str, identifiers: &[&str]) -> Vec<String> {
+    identifiers
+        .iter()
+        .filter(|identifier| source.contains(**identifier))
+        .map(|identifier| (*identifier).to_string())
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -815,7 +901,13 @@ struct ComponentJsTemplate {
     lib_path_literal_json: String,
     bundled_prebuilds: bool,
     manual_load: bool,
-    requires_async_rust_future_hooks: bool,
+    ffi_types_imports: Vec<String>,
+    ffi_converter_imports: Vec<String>,
+    error_imports: Vec<String>,
+    async_rust_call_imports: Vec<String>,
+    callback_imports: Vec<String>,
+    object_imports: Vec<String>,
+    rust_call_imports: Vec<String>,
     public_api_js: String,
 }
 

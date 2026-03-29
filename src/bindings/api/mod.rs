@@ -642,7 +642,9 @@ mod tests {
 
         for expected in expected {
             assert!(
-                imports.ffi_converter_imports.contains(&expected.to_string()),
+                imports
+                    .ffi_converter_imports
+                    .contains(&expected.to_string()),
                 "missing {expected} in {:?}",
                 imports.ffi_converter_imports
             );
@@ -1383,9 +1385,9 @@ mod tests {
             rendered.dts
         );
         assert!(
-            rendered
-                .js
-                .contains("const loweredWhen = uniffiLowerIntoRustBuffer(FfiConverterTimestamp, when);"),
+            rendered.js.contains(
+                "const loweredWhen = uniffiLowerIntoRustBuffer(FfiConverterTimestamp, when);"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -1397,9 +1399,9 @@ mod tests {
             rendered.js
         );
         assert!(
-            rendered
-                .js
-                .contains("const loweredDelayMs = uniffiLowerIntoRustBuffer(FfiConverterDuration, delay_ms);"),
+            rendered.js.contains(
+                "const loweredDelayMs = uniffiLowerIntoRustBuffer(FfiConverterDuration, delay_ms);"
+            ),
             "unexpected JS output: {}",
             rendered.js
         );

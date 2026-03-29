@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -36,11 +35,15 @@ import {
 
   FfiConverterBytes,
 
+  FfiConverterDuration,
+
   FfiConverterMap,
 
   FfiConverterOptional,
 
   FfiConverterString,
+
+  FfiConverterTimestamp,
 
 } from "./runtime/ffi-converters.js";
 
@@ -370,6 +373,31 @@ const FfiConverterBlobRecord = new (class extends AbstractFfiConverterByteArray 
     };
   }
 })();
+const FfiConverterTemporalRecord = new (class extends AbstractFfiConverterByteArray {
+  allocationSize(value) {
+    const recordValue = uniffiRequireRecordObject("TemporalRecord", value);
+    return FfiConverterTimestamp.allocationSize(recordValue["when"]) + FfiConverterDuration.allocationSize(recordValue["delay_ms"]) + uniffiOptionalConverter(FfiConverterTimestamp).allocationSize(recordValue["maybe_when"]) + uniffiArrayConverter(FfiConverterDuration).allocationSize(recordValue["delays_ms"]) + new FfiConverterMap(FfiConverterString, FfiConverterTimestamp).allocationSize(recordValue["reminders"]);
+  }
+
+  write(value, writer) {
+    const recordValue = uniffiRequireRecordObject("TemporalRecord", value);
+    FfiConverterTimestamp.write(recordValue["when"], writer);
+    FfiConverterDuration.write(recordValue["delay_ms"], writer);
+    uniffiOptionalConverter(FfiConverterTimestamp).write(recordValue["maybe_when"], writer);
+    uniffiArrayConverter(FfiConverterDuration).write(recordValue["delays_ms"], writer);
+    new FfiConverterMap(FfiConverterString, FfiConverterTimestamp).write(recordValue["reminders"], writer);
+  }
+
+  read(reader) {
+    return {
+      "when": FfiConverterTimestamp.read(reader),
+      "delay_ms": FfiConverterDuration.read(reader),
+      "maybe_when": uniffiOptionalConverter(FfiConverterTimestamp).read(reader),
+      "delays_ms": uniffiArrayConverter(FfiConverterDuration).read(reader),
+      "reminders": new FfiConverterMap(FfiConverterString, FfiConverterTimestamp).read(reader),
+    };
+  }
+})();
 const FfiConverterFlavor = new (class extends AbstractFfiConverterByteArray {
   allocationSize(value) {
     uniffiRequireFlatEnumValue(Flavor, "Flavor", value);
@@ -534,6 +562,15 @@ export function echo_bytes(value) {
   return uniffiLiftFromRustBuffer(FfiConverterBytes, uniffiResult);
 }
 
+export function echo_duration(delay_ms) {
+    const loweredDelayMs = uniffiLowerIntoRustBuffer(FfiConverterDuration, delay_ms);
+  const uniffiResult = uniffiRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_basic_fn_func_echo_duration(loweredDelayMs, status),
+    uniffiRustCallOptions(),
+  );
+  return uniffiLiftFromRustBuffer(FfiConverterDuration, uniffiResult);
+}
+
 export function echo_record(record) {
     const loweredRecord = uniffiLowerIntoRustBuffer(FfiConverterBlobRecord, record);
   const uniffiResult = uniffiRustCaller.rustCall(
@@ -541,6 +578,24 @@ export function echo_record(record) {
     uniffiRustCallOptions(),
   );
   return uniffiLiftFromRustBuffer(FfiConverterBlobRecord, uniffiResult);
+}
+
+export function echo_temporal_record(record) {
+    const loweredRecord = uniffiLowerIntoRustBuffer(FfiConverterTemporalRecord, record);
+  const uniffiResult = uniffiRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_basic_fn_func_echo_temporal_record(loweredRecord, status),
+    uniffiRustCallOptions(),
+  );
+  return uniffiLiftFromRustBuffer(FfiConverterTemporalRecord, uniffiResult);
+}
+
+export function echo_timestamp(when) {
+    const loweredWhen = uniffiLowerIntoRustBuffer(FfiConverterTimestamp, when);
+  const uniffiResult = uniffiRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_basic_fn_func_echo_timestamp(loweredWhen, status),
+    uniffiRustCallOptions(),
+  );
+  return uniffiLiftFromRustBuffer(FfiConverterTimestamp, uniffiResult);
 }
 
 export class Config extends UniffiObjectBase {
@@ -908,6 +963,21 @@ export class Store extends UniffiObjectBase {
     );
     return uniffiLiftFromRustBuffer(FfiConverterBytes, uniffiResult);
   }
+
+  schedule(when, delay_ms) {
+    const loweredSelf = uniffiStoreObjectFactory.cloneHandle(this);
+    const ffiMethod =
+      uniffiStoreObjectFactory.usesGenericAbi(this)
+        ? ffiFunctions.uniffi_fixture_basic_fn_method_store_schedule_generic_abi
+        : ffiFunctions.uniffi_fixture_basic_fn_method_store_schedule;
+    const loweredWhen = uniffiLowerIntoRustBuffer(FfiConverterTimestamp, when);
+    const loweredDelayMs = uniffiLowerIntoRustBuffer(FfiConverterDuration, delay_ms);
+    const uniffiResult = uniffiRustCaller.rustCall(
+      (status) => ffiMethod(loweredSelf, loweredWhen, loweredDelayMs, status),
+      uniffiRustCallOptions(),
+    );
+    return uniffiLiftFromRustBuffer(FfiConverterTemporalRecord, uniffiResult);
+  }
 }
 
 const uniffiStoreObjectFactory = createObjectFactory({
@@ -999,6 +1069,14 @@ export interface BlobRecord {
   "chunks": Array<Uint8Array>;
 }
 
+export interface TemporalRecord {
+  "when": Date;
+  "delay_ms": number;
+  "maybe_when": Date | undefined;
+  "delays_ms": Array<number>;
+  "reminders": Map<string, Date>;
+}
+
 export declare const Flavor: Readonly<{
   "vanilla": "vanilla";
   "chocolate": "chocolate";
@@ -1046,7 +1124,13 @@ export declare function echo_byte_map(value: Map<string, Uint8Array>): Map<strin
 
 export declare function echo_bytes(value: Uint8Array): Uint8Array;
 
+export declare function echo_duration(delay_ms: number): number;
+
 export declare function echo_record(record: BlobRecord): BlobRecord;
+
+export declare function echo_temporal_record(record: TemporalRecord): TemporalRecord;
+
+export declare function echo_timestamp(when: Date): Date;
 
 export declare class Config extends UniffiObjectBase {
   protected constructor();
@@ -1072,6 +1156,7 @@ export declare class Store extends UniffiObjectBase {
   inspect(include_payload: boolean): ScanResult;
   replace(next_value: Uint8Array): Uint8Array;
   require_value(present: boolean): Uint8Array;
+  schedule(when: Date, delay_ms: number): TemporalRecord;
 }
 === fixture-ffi.js ===
 import { existsSync } from "node:fs";
@@ -1116,7 +1201,13 @@ export const ffiIntegrity = Object.freeze({
 
     "uniffi_fixture_basic_checksum_func_echo_bytes": 49245,
 
+    "uniffi_fixture_basic_checksum_func_echo_duration": 26219,
+
     "uniffi_fixture_basic_checksum_func_echo_record": 53928,
+
+    "uniffi_fixture_basic_checksum_func_echo_temporal_record": 43558,
+
+    "uniffi_fixture_basic_checksum_func_echo_timestamp": 14714,
 
     "uniffi_fixture_basic_checksum_method_config_value": 50455,
 
@@ -1135,6 +1226,8 @@ export const ffiIntegrity = Object.freeze({
     "uniffi_fixture_basic_checksum_method_store_replace": 62944,
 
     "uniffi_fixture_basic_checksum_method_store_require_value": 19024,
+
+    "uniffi_fixture_basic_checksum_method_store_schedule": 49213,
 
     "uniffi_fixture_basic_checksum_constructor_config_from_json": 11430,
 
@@ -1560,13 +1653,27 @@ function createBindings(libraryPath) {
     uniffi_fixture_basic_fn_method_store_require_value_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_require_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, "int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
+    uniffi_fixture_basic_fn_method_store_schedule: library.func("uniffi_fixture_basic_fn_method_store_schedule", ffiTypes.RustBuffer, [ffiTypes.RustArcPtrStore, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+    uniffi_fixture_basic_fn_method_store_schedule_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_schedule", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, ffiTypes.RustBuffer, ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_func_echo_byte_map: library.func("uniffi_fixture_basic_fn_func_echo_byte_map", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
     uniffi_fixture_basic_fn_func_echo_bytes: library.func("uniffi_fixture_basic_fn_func_echo_bytes", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
+    uniffi_fixture_basic_fn_func_echo_duration: library.func("uniffi_fixture_basic_fn_func_echo_duration", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_func_echo_record: library.func("uniffi_fixture_basic_fn_func_echo_record", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
+    uniffi_fixture_basic_fn_func_echo_temporal_record: library.func("uniffi_fixture_basic_fn_func_echo_temporal_record", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
+    uniffi_fixture_basic_fn_func_echo_timestamp: library.func("uniffi_fixture_basic_fn_func_echo_timestamp", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
     ffi_fixture_basic_rustbuffer_alloc: library.func("ffi_fixture_basic_rustbuffer_alloc", ffiTypes.RustBuffer, ["uint64_t", koffi.pointer(ffiTypes.RustCallStatus)]),
@@ -1743,7 +1850,16 @@ function createBindings(libraryPath) {
     uniffi_fixture_basic_checksum_func_echo_bytes: library.func("uniffi_fixture_basic_checksum_func_echo_bytes", "uint16_t", []),
 
 
+    uniffi_fixture_basic_checksum_func_echo_duration: library.func("uniffi_fixture_basic_checksum_func_echo_duration", "uint16_t", []),
+
+
     uniffi_fixture_basic_checksum_func_echo_record: library.func("uniffi_fixture_basic_checksum_func_echo_record", "uint16_t", []),
+
+
+    uniffi_fixture_basic_checksum_func_echo_temporal_record: library.func("uniffi_fixture_basic_checksum_func_echo_temporal_record", "uint16_t", []),
+
+
+    uniffi_fixture_basic_checksum_func_echo_timestamp: library.func("uniffi_fixture_basic_checksum_func_echo_timestamp", "uint16_t", []),
 
 
     uniffi_fixture_basic_checksum_method_config_value: library.func("uniffi_fixture_basic_checksum_method_config_value", "uint16_t", []),
@@ -1771,6 +1887,9 @@ function createBindings(libraryPath) {
 
 
     uniffi_fixture_basic_checksum_method_store_require_value: library.func("uniffi_fixture_basic_checksum_method_store_require_value", "uint16_t", []),
+
+
+    uniffi_fixture_basic_checksum_method_store_schedule: library.func("uniffi_fixture_basic_checksum_method_store_schedule", "uint16_t", []),
 
 
     uniffi_fixture_basic_checksum_constructor_config_from_json: library.func("uniffi_fixture_basic_checksum_constructor_config_from_json", "uint16_t", []),
@@ -1922,7 +2041,13 @@ export function getChecksums(bindings = getFfiBindings()) {
 
     "uniffi_fixture_basic_checksum_func_echo_bytes": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_bytes(),
 
+    "uniffi_fixture_basic_checksum_func_echo_duration": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_duration(),
+
     "uniffi_fixture_basic_checksum_func_echo_record": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(),
+
+    "uniffi_fixture_basic_checksum_func_echo_temporal_record": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_temporal_record(),
+
+    "uniffi_fixture_basic_checksum_func_echo_timestamp": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_timestamp(),
 
     "uniffi_fixture_basic_checksum_method_config_value": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_config_value(),
 
@@ -1941,6 +2066,8 @@ export function getChecksums(bindings = getFfiBindings()) {
     "uniffi_fixture_basic_checksum_method_store_replace": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_replace(),
 
     "uniffi_fixture_basic_checksum_method_store_require_value": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_require_value(),
+
+    "uniffi_fixture_basic_checksum_method_store_schedule": bindings.ffiFunctions.uniffi_fixture_basic_checksum_method_store_schedule(),
 
     "uniffi_fixture_basic_checksum_constructor_config_from_json": bindings.ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(),
 
@@ -1971,10 +2098,34 @@ export function validateChecksums(bindings = getFfiBindings()) {
   }
 
   {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_func_echo_duration"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_func_echo_duration"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_func_echo_duration", expected, actual);
+    }
+  }
+
+  {
     const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_func_echo_record"];
     const actual = actualChecksums["uniffi_fixture_basic_checksum_func_echo_record"];
     if (actual !== expected) {
       throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_func_echo_record", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_func_echo_temporal_record"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_func_echo_temporal_record"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_func_echo_temporal_record", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_func_echo_timestamp"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_func_echo_timestamp"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_func_echo_timestamp", expected, actual);
     }
   }
 
@@ -2047,6 +2198,14 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const actual = actualChecksums["uniffi_fixture_basic_checksum_method_store_require_value"];
     if (actual !== expected) {
       throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_method_store_require_value", expected, actual);
+    }
+  }
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_method_store_schedule"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_method_store_schedule"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_method_store_schedule", expected, actual);
     }
   }
 
@@ -2375,6 +2534,22 @@ export const ffiFunctions = Object.freeze({
   },
 
 
+  uniffi_fixture_basic_fn_method_store_schedule(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_schedule(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
+  uniffi_fixture_basic_fn_method_store_schedule_generic_abi(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_schedule_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_func_echo_byte_map(...args) {
     const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_byte_map(...args);
 
@@ -2391,8 +2566,32 @@ export const ffiFunctions = Object.freeze({
   },
 
 
+  uniffi_fixture_basic_fn_func_echo_duration(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_duration(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
   uniffi_fixture_basic_fn_func_echo_record(...args) {
     const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_record(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
+  uniffi_fixture_basic_fn_func_echo_temporal_record(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_temporal_record(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
+  uniffi_fixture_basic_fn_func_echo_timestamp(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_timestamp(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2863,8 +3062,32 @@ export const ffiFunctions = Object.freeze({
   },
 
 
+  uniffi_fixture_basic_checksum_func_echo_duration(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_duration(...args);
+
+    return result;
+
+  },
+
+
   uniffi_fixture_basic_checksum_func_echo_record(...args) {
     const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_record(...args);
+
+    return result;
+
+  },
+
+
+  uniffi_fixture_basic_checksum_func_echo_temporal_record(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_temporal_record(...args);
+
+    return result;
+
+  },
+
+
+  uniffi_fixture_basic_checksum_func_echo_timestamp(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_timestamp(...args);
 
     return result;
 
@@ -2937,6 +3160,14 @@ export const ffiFunctions = Object.freeze({
 
   uniffi_fixture_basic_checksum_method_store_require_value(...args) {
     const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_require_value(...args);
+
+    return result;
+
+  },
+
+
+  uniffi_fixture_basic_checksum_method_store_schedule(...args) {
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_schedule(...args);
 
     return result;
 
@@ -3183,6 +3414,17 @@ export function uniffi_fixture_basic_fn_method_store_require_value_generic_abi(.
 
 
 
+export function uniffi_fixture_basic_fn_method_store_schedule(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_schedule(...args);
+}
+
+
+export function uniffi_fixture_basic_fn_method_store_schedule_generic_abi(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_method_store_schedule_generic_abi(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_func_echo_byte_map(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_func_echo_byte_map(...args);
 }
@@ -3195,8 +3437,26 @@ export function uniffi_fixture_basic_fn_func_echo_bytes(...args) {
 
 
 
+export function uniffi_fixture_basic_fn_func_echo_duration(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_func_echo_duration(...args);
+}
+
+
+
 export function uniffi_fixture_basic_fn_func_echo_record(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_func_echo_record(...args);
+}
+
+
+
+export function uniffi_fixture_basic_fn_func_echo_temporal_record(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_func_echo_temporal_record(...args);
+}
+
+
+
+export function uniffi_fixture_basic_fn_func_echo_timestamp(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_func_echo_timestamp(...args);
 }
 
 
@@ -3549,8 +3809,26 @@ export function uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
 
 
 
+export function uniffi_fixture_basic_checksum_func_echo_duration(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_duration(...args);
+}
+
+
+
 export function uniffi_fixture_basic_checksum_func_echo_record(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(...args);
+}
+
+
+
+export function uniffi_fixture_basic_checksum_func_echo_temporal_record(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_temporal_record(...args);
+}
+
+
+
+export function uniffi_fixture_basic_checksum_func_echo_timestamp(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_timestamp(...args);
 }
 
 
@@ -3605,6 +3883,12 @@ export function uniffi_fixture_basic_checksum_method_store_replace(...args) {
 
 export function uniffi_fixture_basic_checksum_method_store_require_value(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_method_store_require_value(...args);
+}
+
+
+
+export function uniffi_fixture_basic_checksum_method_store_schedule(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_method_store_schedule(...args);
 }
 
 
@@ -3721,11 +4005,19 @@ export declare function uniffi_fixture_basic_fn_method_store_replace(...args: an
 
 export declare function uniffi_fixture_basic_fn_method_store_require_value(...args: any[]): any;
 
+export declare function uniffi_fixture_basic_fn_method_store_schedule(...args: any[]): any;
+
 export declare function uniffi_fixture_basic_fn_func_echo_byte_map(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_fn_func_echo_bytes(...args: any[]): any;
 
+export declare function uniffi_fixture_basic_fn_func_echo_duration(...args: any[]): any;
+
 export declare function uniffi_fixture_basic_fn_func_echo_record(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_func_echo_temporal_record(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_fn_func_echo_timestamp(...args: any[]): any;
 
 export declare function ffi_fixture_basic_rustbuffer_alloc(...args: any[]): any;
 
@@ -3843,7 +4135,13 @@ export declare function uniffi_fixture_basic_checksum_func_echo_byte_map(...args
 
 export declare function uniffi_fixture_basic_checksum_func_echo_bytes(...args: any[]): any;
 
+export declare function uniffi_fixture_basic_checksum_func_echo_duration(...args: any[]): any;
+
 export declare function uniffi_fixture_basic_checksum_func_echo_record(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_func_echo_temporal_record(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_func_echo_timestamp(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_method_config_value(...args: any[]): any;
 
@@ -3862,6 +4160,8 @@ export declare function uniffi_fixture_basic_checksum_method_store_inspect(...ar
 export declare function uniffi_fixture_basic_checksum_method_store_replace(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_method_store_require_value(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_method_store_schedule(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_constructor_config_from_json(...args: any[]): any;
 

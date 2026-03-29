@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -148,15 +147,39 @@ function uniffiFreeRustBuffer(buffer) {
   );
 }
 
+const uniffiDefaultRustCallOptions = Object.freeze({
+  freeRustBuffer: uniffiFreeRustBuffer,
+  liftString: uniffiLiftString,
+  rustCaller: uniffiRustCaller,
+});
+const uniffiRustCallOptionsByErrorConverter = new WeakMap();
+
 function uniffiRustCallOptions(errorConverter = undefined) {
-  const options = {
+  if (errorConverter == null) {
+    return uniffiDefaultRustCallOptions;
+  }
+
+  if (typeof errorConverter !== "object" && typeof errorConverter !== "function") {
+    return Object.freeze({
+      errorHandler: (errorBytes) => errorConverter.lift(errorBytes),
+      freeRustBuffer: uniffiFreeRustBuffer,
+      liftString: uniffiLiftString,
+      rustCaller: uniffiRustCaller,
+    });
+  }
+
+  const cachedOptions = uniffiRustCallOptionsByErrorConverter.get(errorConverter);
+  if (cachedOptions != null) {
+    return cachedOptions;
+  }
+
+  const options = Object.freeze({
+    errorHandler: (errorBytes) => errorConverter.lift(errorBytes),
     freeRustBuffer: uniffiFreeRustBuffer,
     liftString: uniffiLiftString,
     rustCaller: uniffiRustCaller,
-  };
-  if (errorConverter != null) {
-    options.errorHandler = (errorBytes) => errorConverter.lift(errorBytes);
-  }
+  });
+  uniffiRustCallOptionsByErrorConverter.set(errorConverter, options);
   return options;
 }
 
@@ -5910,20 +5933,24 @@ export function createRustErrorStatus(
   return createRustCallStatus(code, error_buf);
 }
 
-export function checkRustCallStatus(status, options = {}) {
+function checkRustCallStatusImpl(
+  status,
+  options,
+  freeRustBuffer,
+  liftString,
+  errorHandlerOverride = undefined,
+) {
   const normalized = normalizeRustCallStatus(status) ?? createRustCallStatus();
-  const {
-    errorHandler,
-    freeRustBuffer,
-    liftString = defaultLiftString,
-  } = options;
+  const errorHandler = errorHandlerOverride ?? options?.errorHandler;
+  const resolvedFreeRustBuffer = options?.freeRustBuffer ?? freeRustBuffer;
+  const resolvedLiftString = options?.liftString ?? liftString;
 
   switch (normalized.code) {
     case CALL_SUCCESS:
       return normalized;
 
     case CALL_ERROR: {
-      const errorBytes = consumeRustBuffer(normalized.error_buf, freeRustBuffer);
+      const errorBytes = consumeRustBuffer(normalized.error_buf, resolvedFreeRustBuffer);
       if (typeof errorHandler === "function") {
         throw errorHandler(errorBytes, normalized);
       }
@@ -5931,11 +5958,11 @@ export function checkRustCallStatus(status, options = {}) {
     }
 
     case CALL_UNEXPECTED_ERROR: {
-      const errorBytes = consumeRustBuffer(normalized.error_buf, freeRustBuffer);
+      const errorBytes = consumeRustBuffer(normalized.error_buf, resolvedFreeRustBuffer);
       const message =
         errorBytes.byteLength === 0
           ? "Rust panic"
-          : liftString(errorBytes);
+          : resolvedLiftString(errorBytes);
       throw new RustPanic(message);
     }
 
@@ -5947,18 +5974,33 @@ export function checkRustCallStatus(status, options = {}) {
   }
 }
 
-export function rustCall(caller, options = {}) {
+export function checkRustCallStatus(status, options = undefined) {
+  return checkRustCallStatusImpl(
+    status,
+    options,
+    undefined,
+    defaultLiftString,
+  );
+}
+
+export function rustCall(caller, options = undefined) {
   const status = createRustCallStatus();
   const result = caller(status);
-  checkRustCallStatus(status, options);
+  checkRustCallStatusImpl(status, options, undefined, defaultLiftString);
   return result;
 }
 
-export function rustCallWithError(errorHandler, caller, options = {}) {
-  return rustCall(caller, {
-    ...options,
+export function rustCallWithError(errorHandler, caller, options = undefined) {
+  const status = createRustCallStatus();
+  const result = caller(status);
+  checkRustCallStatusImpl(
+    status,
+    options,
+    undefined,
+    defaultLiftString,
     errorHandler,
-  });
+  );
+  return result;
 }
 
 export class UniffiRustCaller {
@@ -5987,26 +6029,33 @@ export class UniffiRustCaller {
     );
   }
 
-  makeRustCall(caller, options = {}) {
+  makeRustCall(caller, options = undefined) {
     const status = this.createCallStatus();
     const result = caller(status);
-    checkRustCallStatus(this._readStatus(status), {
-      ...options,
-      freeRustBuffer: options.freeRustBuffer ?? this._freeRustBuffer,
-      liftString: options.liftString ?? this._liftString,
-    });
+    checkRustCallStatusImpl(
+      this._readStatus(status),
+      options,
+      this._freeRustBuffer,
+      this._liftString,
+    );
     return result;
   }
 
-  rustCall(caller, options = {}) {
+  rustCall(caller, options = undefined) {
     return this.makeRustCall(caller, options);
   }
 
-  rustCallWithError(errorHandler, caller, options = {}) {
-    return this.makeRustCall(caller, {
-      ...options,
+  rustCallWithError(errorHandler, caller, options = undefined) {
+    const status = this.createCallStatus();
+    const result = caller(status);
+    checkRustCallStatusImpl(
+      this._readStatus(status),
+      options,
+      this._freeRustBuffer,
+      this._liftString,
       errorHandler,
-    });
+    );
+    return result;
   }
 }
 

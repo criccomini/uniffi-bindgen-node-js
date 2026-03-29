@@ -44,7 +44,7 @@ cargo test --locked --test node_real_koffi_tests -- --ignored
 
 ## CI And Publishing
 
-GitHub Actions runs the full suite on pull requests, pushes to `main`, and version tags matching `v*`.
+GitHub Actions runs the full suite on pull requests and on every push to `main`.
 
 The Linux workflow uses Node 22 because the callback benchmarks currently abort on newer Node releases, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
 
@@ -62,7 +62,23 @@ cargo clippy --all-targets -- -D warnings
 
 Separate macOS and Windows jobs run generated-package smoke coverage from `tests/node_smoke_tests.rs` for the basic, callback, bundled-prebuild, manual-load, and missing-prebuild cases.
 
-Publishing only runs on `v*` tag pushes after the CI jobs pass. Set the repository secret `CARGO_REGISTRY_TOKEN` to a crates.io API token before using the publish path.
+After those CI jobs pass on a `main` push, a serialized release job decides whether to publish from that commit:
+
+- the job fetches `origin/main` and only releases from the current tip of `main`
+- if `Cargo.toml` contains an unpublished version, automation releases that exact version
+- if the current version is already on crates.io, automation increments only the patch version, updates `Cargo.lock`, commits `chore(release): vX.Y.Z`, pushes that commit back to `main`, and releases from that release commit
+- manual major or minor bumps are preserved; to request one, edit `[package].version` in `Cargo.toml` in a normal PR before merging to `main`
+- the workflow tags the release commit as `vX.Y.Z`, runs `cargo publish --locked`, and then creates the matching GitHub release
+- release commits re-run CI on `main`, but the release job treats them as reconciliation runs so they do not keep auto-bumping forever
+
+Repository prerequisites for the automated release path:
+
+- set `CARGO_REGISTRY_TOKEN` to a crates.io API token with publish access for `uniffi-bindgen-node-js`
+- allow `github-actions[bot]` to push the automated `chore(release): vX.Y.Z` commit to `main`
+- allow the workflow token to create `v*` tags and GitHub releases
+- keep the root crate version in `Cargo.toml` as plain `X.Y.Z` semver, because the release job computes patch bumps numerically
+
+Contributors do not need to push release tags by hand anymore. Merging to `main` is the release trigger.
 
 ## What The Tests Cover
 

@@ -36,6 +36,19 @@ Run a single test target while iterating:
 cargo test --test node_package_generation
 ```
 
+## CI And Publishing
+
+GitHub Actions runs the full suite on pull requests, pushes to `main`, and version tags matching `v*`.
+
+The workflow uses Node 22 because the callback benchmarks currently abort on newer Node releases, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
+
+```sh
+cargo test --locked
+cargo test --locked -- --ignored
+```
+
+Publishing only runs on `v*` tag pushes after the test job passes. Set the repository secret `CARGO_REGISTRY_TOKEN` to a crates.io API token before using the publish path.
+
 ## What The Tests Cover
 
 Local tests cover:

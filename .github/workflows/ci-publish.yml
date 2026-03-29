@@ -1,0 +1,78 @@
+name: CI and Publish
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          # The callback benchmarks currently abort on Node >22 in koffi.
+          node-version: 22
+
+      - name: Install TypeScript CLI
+        run: npm install --global typescript@5
+
+      - name: Prefetch crate dependencies
+        run: |
+          cargo fetch --locked
+          cargo fetch --manifest-path fixtures/basic-fixture/Cargo.toml
+          cargo fetch --manifest-path fixtures/callback-fixture/Cargo.toml
+
+      - name: Run default test suite
+        run: cargo test --locked
+
+      - name: Run ignored runtime and benchmark tests
+        run: cargo test --locked -- --ignored
+
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify tag matches crate version
+        run: |
+          crate_version="$(cargo pkgid | sed 's/.*#//')"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$crate_version" != "$tag_version" ]; then
+            echo "tag version $tag_version does not match crate version $crate_version" >&2
+            exit 1
+          fi
+
+      - name: Publish crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked --token "$CARGO_REGISTRY_TOKEN"

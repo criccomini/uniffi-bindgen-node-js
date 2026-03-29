@@ -12,6 +12,7 @@ import {
   configureRuntimeHooks,
   ffiFunctions,
   getFfiBindings,
+  getFfiTypes,
   load as loadFfi,
 } from "./fixture-ffi.js";
 
@@ -113,18 +114,18 @@ function uniffiLiftString(bytes) {
 function uniffiDecodeRustCallStatus(status) {
   return status == null
     ? createRustCallStatus()
-    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);
+    : koffi.decode(status, getFfiTypes().RustCallStatus);
 }
 
 function uniffiWriteRustCallStatus(status, value) {
   if (status != null) {
-    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);
+    koffi.encode(status, getFfiTypes().RustCallStatus, value);
   }
   return status;
 }
 
 const uniffiRustCaller = new UniffiRustCaller({
-  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),
+  createStatus: () => koffi.alloc(getFfiTypes().RustCallStatus, 1),
   readStatus: uniffiDecodeRustCallStatus,
   writeStatus: uniffiWriteRustCallStatus,
   liftString: uniffiLiftString,
@@ -1113,9 +1114,13 @@ export const ffiIntegrity = Object.freeze({
 });
 
 let loadedBindings = null;
+let loadedFfiTypes = null;
+let loadedFfiFunctions = null;
 let runtimeHooks = Object.freeze({});
 const moduleFilename = fileURLToPath(import.meta.url);
 const moduleDirectory = dirname(moduleFilename);
+const libraryNotLoadedMessage =
+  "The native library is not loaded. Call load(libraryPath) first.";
 
 function defaultSiblingLibraryFilename() {
   const extensionByPlatform = {
@@ -1801,6 +1806,8 @@ export function load(libraryPath = undefined) {
   }
 
   loadedBindings = bindings;
+  loadedFfiTypes = bindings.ffiTypes;
+  loadedFfiFunctions = bindings.ffiFunctions;
   return loadedBindings;
 }
 
@@ -1817,6 +1824,8 @@ export function unload() {
   }
   loadedBindings.library.unload();
   loadedBindings = null;
+  loadedFfiTypes = null;
+  loadedFfiFunctions = null;
   if (hookError != null) {
     throw hookError;
   }
@@ -1833,14 +1842,32 @@ export function configureRuntimeHooks(hooks = undefined) {
 
 
 
+function throwLibraryNotLoaded() {
+  throw new LibraryNotLoadedError(libraryNotLoadedMessage);
+}
+
 export function getFfiBindings() {
   if (loadedBindings === null) {
-    throw new LibraryNotLoadedError(
-      "The native library is not loaded. Call load(libraryPath) first.",
-    );
+    throwLibraryNotLoaded();
   }
 
   return loadedBindings;
+}
+
+export function getFfiTypes() {
+  if (loadedFfiTypes === null) {
+    throwLibraryNotLoaded();
+  }
+
+  return loadedFfiTypes;
+}
+
+function getLoadedFfiFunctions() {
+  if (loadedFfiFunctions === null) {
+    throwLibraryNotLoaded();
+  }
+
+  return loadedFfiFunctions;
 }
 
 export function getContractVersion(bindings = getFfiBindings()) {
@@ -2021,7 +2048,7 @@ export function validateChecksums(bindings = getFfiBindings()) {
 export const ffiFunctions = Object.freeze({
 
   uniffi_fixture_basic_fn_clone_config(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_config(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_config(...args);
 
     return result;
 
@@ -2029,7 +2056,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_config_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_config_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_config_generic_abi(...args);
 
     return result;
 
@@ -2037,7 +2064,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_config(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_config(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_config(...args);
 
     return result;
 
@@ -2045,7 +2072,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_config_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_config_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_config_generic_abi(...args);
 
     return result;
 
@@ -2053,7 +2080,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_constructor_config_from_json(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_config_from_json(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_constructor_config_from_json(...args);
 
     return result;
 
@@ -2061,7 +2088,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_config_value(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_config_value(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_config_value(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2069,7 +2096,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_config_value_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_config_value_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_config_value_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2077,7 +2104,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_reader(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_reader(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_reader(...args);
 
     return result;
 
@@ -2085,7 +2112,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_reader_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_reader_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_reader_generic_abi(...args);
 
     return result;
 
@@ -2093,7 +2120,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_reader(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_reader(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_reader(...args);
 
     return result;
 
@@ -2101,7 +2128,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_reader_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_reader_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_reader_generic_abi(...args);
 
     return result;
 
@@ -2109,7 +2136,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_reader_label(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_reader_label(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_reader_label(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2117,7 +2144,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_reader_label_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2125,7 +2152,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_readerbuilder(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_readerbuilder(...args);
 
     return result;
 
@@ -2133,7 +2160,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_readerbuilder_generic_abi(...args);
 
     return result;
 
@@ -2141,7 +2168,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_readerbuilder(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_readerbuilder(...args);
 
     return result;
 
@@ -2149,7 +2176,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_readerbuilder_generic_abi(...args);
 
     return result;
 
@@ -2157,7 +2184,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_constructor_readerbuilder_new(...args);
 
     return result;
 
@@ -2165,7 +2192,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_readerbuilder_build(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_readerbuilder_build(...args);
 
     return normalizeHandle(result);
 
@@ -2173,7 +2200,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_readerbuilder_build_generic_abi(...args);
 
     return normalizeHandle(result);
 
@@ -2181,7 +2208,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_store(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_store(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_store(...args);
 
     return result;
 
@@ -2189,7 +2216,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_clone_store_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_clone_store_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_clone_store_generic_abi(...args);
 
     return result;
 
@@ -2197,7 +2224,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_store(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_store(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_store(...args);
 
     return result;
 
@@ -2205,7 +2232,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_free_store_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_free_store_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_free_store_generic_abi(...args);
 
     return result;
 
@@ -2213,7 +2240,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_constructor_store_new(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_constructor_store_new(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_constructor_store_new(...args);
 
     return result;
 
@@ -2221,7 +2248,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_current(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_current(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_current(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2229,7 +2256,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_current_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_current_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_current_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2237,7 +2264,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_fetch_async(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_fetch_async(...args);
 
     return normalizeHandle(result);
 
@@ -2245,7 +2272,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_fetch_async_generic_abi(...args);
 
     return normalizeHandle(result);
 
@@ -2253,7 +2280,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_flavor(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_flavor(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2261,7 +2288,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_flavor_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2269,7 +2296,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_inspect(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_inspect(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2277,7 +2304,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_inspect_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2285,7 +2312,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_replace(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_replace(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_replace(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2293,7 +2320,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_replace_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2301,7 +2328,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_require_value(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_require_value(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2309,7 +2336,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2317,7 +2344,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_func_echo_byte_map(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_func_echo_byte_map(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_byte_map(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2325,7 +2352,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_func_echo_bytes(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_func_echo_bytes(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_bytes(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2333,7 +2360,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_fn_func_echo_record(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_func_echo_record(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_fn_func_echo_record(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2341,7 +2368,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rustbuffer_alloc(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_alloc(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rustbuffer_alloc(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2349,7 +2376,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rustbuffer_from_bytes(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_from_bytes(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rustbuffer_from_bytes(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2357,7 +2384,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rustbuffer_free(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_free(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rustbuffer_free(...args);
 
     return result;
 
@@ -2365,7 +2392,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rustbuffer_reserve(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rustbuffer_reserve(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rustbuffer_reserve(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2373,7 +2400,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_u8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_u8(...args);
 
     return result;
 
@@ -2381,7 +2408,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_u8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_u8(...args);
 
     return result;
 
@@ -2389,7 +2416,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_u8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_u8(...args);
 
     return result;
 
@@ -2397,7 +2424,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_u8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_u8(...args);
 
     return result;
 
@@ -2405,7 +2432,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_i8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_i8(...args);
 
     return result;
 
@@ -2413,7 +2440,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_i8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_i8(...args);
 
     return result;
 
@@ -2421,7 +2448,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_i8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_i8(...args);
 
     return result;
 
@@ -2429,7 +2456,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_i8(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i8(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_i8(...args);
 
     return result;
 
@@ -2437,7 +2464,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_u16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_u16(...args);
 
     return result;
 
@@ -2445,7 +2472,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_u16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_u16(...args);
 
     return result;
 
@@ -2453,7 +2480,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_u16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_u16(...args);
 
     return result;
 
@@ -2461,7 +2488,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_u16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_u16(...args);
 
     return result;
 
@@ -2469,7 +2496,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_i16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_i16(...args);
 
     return result;
 
@@ -2477,7 +2504,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_i16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_i16(...args);
 
     return result;
 
@@ -2485,7 +2512,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_i16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_i16(...args);
 
     return result;
 
@@ -2493,7 +2520,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_i16(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i16(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_i16(...args);
 
     return result;
 
@@ -2501,7 +2528,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_u32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_u32(...args);
 
     return result;
 
@@ -2509,7 +2536,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_u32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_u32(...args);
 
     return result;
 
@@ -2517,7 +2544,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_u32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_u32(...args);
 
     return result;
 
@@ -2525,7 +2552,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_u32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_u32(...args);
 
     return result;
 
@@ -2533,7 +2560,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_i32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_i32(...args);
 
     return result;
 
@@ -2541,7 +2568,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_i32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_i32(...args);
 
     return result;
 
@@ -2549,7 +2576,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_i32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_i32(...args);
 
     return result;
 
@@ -2557,7 +2584,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_i32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_i32(...args);
 
     return result;
 
@@ -2565,7 +2592,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_u64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_u64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_u64(...args);
 
     return result;
 
@@ -2573,7 +2600,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_u64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_u64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_u64(...args);
 
     return result;
 
@@ -2581,7 +2608,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_u64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_u64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_u64(...args);
 
     return result;
 
@@ -2589,7 +2616,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_u64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_u64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_u64(...args);
 
     return normalizeUInt64(result);
 
@@ -2597,7 +2624,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_i64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_i64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_i64(...args);
 
     return result;
 
@@ -2605,7 +2632,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_i64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_i64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_i64(...args);
 
     return result;
 
@@ -2613,7 +2640,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_i64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_i64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_i64(...args);
 
     return result;
 
@@ -2621,7 +2648,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_i64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_i64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_i64(...args);
 
     return normalizeInt64(result);
 
@@ -2629,7 +2656,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_f32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_f32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_f32(...args);
 
     return result;
 
@@ -2637,7 +2664,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_f32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_f32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_f32(...args);
 
     return result;
 
@@ -2645,7 +2672,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_f32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_f32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_f32(...args);
 
     return result;
 
@@ -2653,7 +2680,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_f32(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_f32(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_f32(...args);
 
     return result;
 
@@ -2661,7 +2688,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_f64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_f64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_f64(...args);
 
     return result;
 
@@ -2669,7 +2696,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_f64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_f64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_f64(...args);
 
     return result;
 
@@ -2677,7 +2704,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_f64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_f64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_f64(...args);
 
     return result;
 
@@ -2685,7 +2712,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_f64(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_f64(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_f64(...args);
 
     return result;
 
@@ -2693,7 +2720,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_pointer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_pointer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_pointer(...args);
 
     return result;
 
@@ -2701,7 +2728,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_pointer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_pointer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_pointer(...args);
 
     return result;
 
@@ -2709,7 +2736,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_pointer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_pointer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_pointer(...args);
 
     return result;
 
@@ -2717,7 +2744,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_pointer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_pointer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_pointer(...args);
 
     return result;
 
@@ -2725,7 +2752,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_rust_buffer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_rust_buffer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_rust_buffer(...args);
 
     return result;
 
@@ -2733,7 +2760,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_rust_buffer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_rust_buffer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_rust_buffer(...args);
 
     return result;
 
@@ -2741,7 +2768,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_rust_buffer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_rust_buffer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_rust_buffer(...args);
 
     return result;
 
@@ -2749,7 +2776,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_rust_buffer(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_rust_buffer(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_rust_buffer(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2757,7 +2784,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_poll_void(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_poll_void(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_poll_void(...args);
 
     return result;
 
@@ -2765,7 +2792,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_cancel_void(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_cancel_void(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_cancel_void(...args);
 
     return result;
 
@@ -2773,7 +2800,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_free_void(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_free_void(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_free_void(...args);
 
     return result;
 
@@ -2781,7 +2808,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_rust_future_complete_void(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_rust_future_complete_void(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_rust_future_complete_void(...args);
 
     return result;
 
@@ -2789,7 +2816,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_func_echo_byte_map(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_byte_map(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_byte_map(...args);
 
     return result;
 
@@ -2797,7 +2824,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_bytes(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_bytes(...args);
 
     return result;
 
@@ -2805,7 +2832,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_func_echo_record(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_func_echo_record(...args);
 
     return result;
 
@@ -2813,7 +2840,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_config_value(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_config_value(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_config_value(...args);
 
     return result;
 
@@ -2821,7 +2848,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_reader_label(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_reader_label(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_reader_label(...args);
 
     return result;
 
@@ -2829,7 +2856,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_readerbuilder_build(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_readerbuilder_build(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_readerbuilder_build(...args);
 
     return result;
 
@@ -2837,7 +2864,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_store_current(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_current(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_current(...args);
 
     return result;
 
@@ -2845,7 +2872,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_store_fetch_async(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_fetch_async(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_fetch_async(...args);
 
     return result;
 
@@ -2853,7 +2880,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_store_flavor(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_flavor(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_flavor(...args);
 
     return result;
 
@@ -2861,7 +2888,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_store_inspect(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_inspect(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_inspect(...args);
 
     return result;
 
@@ -2869,7 +2896,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_store_replace(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_replace(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_replace(...args);
 
     return result;
 
@@ -2877,7 +2904,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_method_store_require_value(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_method_store_require_value(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_method_store_require_value(...args);
 
     return result;
 
@@ -2885,7 +2912,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_constructor_config_from_json(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_config_from_json(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_constructor_config_from_json(...args);
 
     return result;
 
@@ -2893,7 +2920,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_constructor_readerbuilder_new(...args);
 
     return result;
 
@@ -2901,7 +2928,7 @@ export const ffiFunctions = Object.freeze({
 
 
   uniffi_fixture_basic_checksum_constructor_store_new(...args) {
-    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_constructor_store_new(...args);
+    const result = getLoadedFfiFunctions().uniffi_fixture_basic_checksum_constructor_store_new(...args);
 
     return result;
 
@@ -2909,7 +2936,7 @@ export const ffiFunctions = Object.freeze({
 
 
   ffi_fixture_basic_uniffi_contract_version(...args) {
-    const result = getFfiBindings().ffiFunctions.ffi_fixture_basic_uniffi_contract_version(...args);
+    const result = getLoadedFfiFunctions().ffi_fixture_basic_uniffi_contract_version(...args);
 
     return result;
 
@@ -3610,6 +3637,7 @@ export declare function load(libraryPath?: string | null): Readonly<FfiBindings>
 export declare function unload(): boolean;
 export declare function isLoaded(): boolean;
 export declare function getFfiBindings(): Readonly<FfiBindings>;
+export declare function getFfiTypes(): Readonly<Record<string, unknown>>;
 export declare function getContractVersion(bindings?: Readonly<FfiBindings>): number;
 export declare function validateContractVersion(bindings?: Readonly<FfiBindings>): number;
 export declare function getChecksums(

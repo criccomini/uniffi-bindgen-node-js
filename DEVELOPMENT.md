@@ -42,6 +42,110 @@ Run the ignored real-Koffi callback smoke test locally with Node 22 active and n
 cargo test --locked --test node_real_koffi_tests -- --ignored
 ```
 
+## Leak Investigation
+
+The repository includes manual leak probes for the generated Node runtime and the Rust generator process.
+
+Runtime prep:
+
+```sh
+cargo run --example runtime_leak_prep -- basic --out-dir /tmp/uniffi-basic-leaks
+cargo run --example runtime_leak_prep -- callbacks --out-dir /tmp/uniffi-callback-leaks
+cargo run --example runtime_leak_prep -- basic --manual-load --out-dir /tmp/uniffi-basic-manual-leaks
+```
+
+Those commands build the fixture cdylib in a temporary workspace, generate a package into `--out-dir`, stage the native library next to the generated JavaScript files, and run `npm install --no-package-lock` unless you pass `--skip-npm-install`.
+
+Run the runtime probes with Node 22 and `--expose-gc`:
+
+```sh
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario bytes
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario objects
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario async
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-callback-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-callback-soak.mjs
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-manual-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-load-unload-soak.mjs
+```
+
+Use `--baseline-only` to capture an idle baseline and `--pause` to stop the process for live `leaks <pid>` inspection before exit.
+
+`runtime-basic-soak.mjs` defaults to `--scenario full`. Use `--scenario bytes`, `--scenario objects`, or `--scenario async` to isolate the major operation families inside the basic fixture workload.
+
+For a smaller second-level bisect inside the basic probe:
+
+```sh
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case echo-bytes
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case echo-record
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case echo-byte-map
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case temporal
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario async --case store-fetch
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario async --case reader-build
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs --scenario async --case reader-label
+```
+
+For at-exit leak reports on macOS:
+
+```sh
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
+  leaks --atExit -- \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-basic-soak.mjs
+```
+
+Generator leak probe:
+
+```sh
+cargo run --example generator_leak_probe -- both --pause-after-warmup --pause-at-end
+```
+
+That example builds the fixture cdylibs once, loops generation inside one long-lived Rust process, prints the process ID for `leaks <pid>`, and removes the per-iteration output directories after each cycle.
+
+To inspect the normal CLI path at exit:
+
+```sh
+leaks --atExit -- cargo run -- generate \
+  target/debug/libyour_fixture.dylib \
+  --crate-name your_fixture \
+  --out-dir /tmp/uniffi-generate-leaks
+```
+
 ## CI And Publishing
 
 GitHub Actions runs the full suite on pull requests and on every push to `main`.

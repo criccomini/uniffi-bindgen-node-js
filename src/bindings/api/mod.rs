@@ -1026,12 +1026,29 @@ mod tests {
     }
 
     #[test]
-    fn render_public_type_rejects_timestamp_until_runtime_exists() {
-        let error = render_public_type(&Type::Timestamp)
-            .expect_err("timestamps should be rejected until the runtime exists");
-        assert!(
-            error.to_string().contains("timestamps are not supported"),
-            "unexpected error: {error}"
+    fn render_public_type_maps_timestamp_to_date() {
+        assert_eq!(render_public_type(&Type::Timestamp).unwrap(), "Date");
+    }
+
+    #[test]
+    fn render_public_type_maps_nested_timestamp_shapes() {
+        assert_eq!(
+            render_public_type(&Type::Optional {
+                inner_type: Box::new(Type::Sequence {
+                    inner_type: Box::new(Type::Timestamp),
+                }),
+            })
+            .unwrap(),
+            "Array<Date> | undefined"
+        );
+        assert_eq!(
+            render_public_type(&Type::Sequence {
+                inner_type: Box::new(Type::Optional {
+                    inner_type: Box::new(Type::Timestamp),
+                }),
+            })
+            .unwrap(),
+            "Array<Date | undefined>"
         );
     }
 

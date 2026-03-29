@@ -1,115 +1,75 @@
-You are working in the `uniffi-bindgen-node-js` repo. Iteratively improve performance, and use the repo’s existing perf tests as the only scoring mechanism for whether a
-change helped.
+# Public Node Temporal Types
 
-Use these files as the source of truth:
-- `tests/node_benchmarks.rs`
-- `tests/benchmarks/basic-hot-path.mjs`
-- `tests/benchmarks/callback-hot-path.mjs`
-- `tests/benchmarks/startup-lifecycle.mjs`
-- `tests/benchmarks/common.mjs`
-- `tests/support/mod.rs`
+## Summary
 
-How perf tests actually run:
-- Use the Rust test harness for measurement, not ad hoc scripts from the repo root.
-- The harness builds fixture `cdylib`s, generates temporary npm packages, stages `tests/benchmarks` into those packages, runs `npm install --no-package-lock`, and executes
-Node with `--expose-gc`.
-- These perf tests are `#[ignore]` by default because they require npm registry access to install real `koffi` and `tinybench`.
+- Expose UniFFI timestamp as Date and duration as number in the public Node API, matching the runtime aliases that already exist in templates/runtime/ffi-
+  converters.d.ts.j2:1.
+- Keep scope limited to public API wiring, tests, snapshots, and docs. Do not redesign the existing runtime or wire representation in this pass.
 
-Perf commands:
-- List available perf tests:
-  `cargo test --test node_benchmarks -- --ignored --list`
-- Run the full perf suite:
-  `cargo test --test node_benchmarks -- --ignored --nocapture`
-- Run individual suites:
-  `cargo test --test node_benchmarks benchmarks_basic_generated_package_hot_paths -- --ignored --exact --nocapture`
-  `cargo test --test node_benchmarks benchmarks_callback_generated_package_hot_paths -- --ignored --exact --nocapture`
-  `cargo test --test node_benchmarks benchmarks_generated_package_startup_and_lifecycle -- --ignored --exact --nocapture`
+## Key Changes
 
-What each suite measures:
-- `benchmarks_basic_generated_package_hot_paths`: generated-package runtime hot paths for bytes, records, maps, object construction/methods, async methods, typed-error paths,
-builders, and readers.
-- `benchmarks_callback_generated_package_hot_paths`: generated-package callback/runtime hot paths for sync sinks, async sinks, settings serialization, and write-batch
-operations.
-- `benchmarks_generated_package_startup_and_lifecycle`: cold-process startup/lifecycle for eager import, manual `load()`, and `load() + unload()`.
+- Update src/bindings/api/support.rs:93 so render_public_type returns Date for Type::Timestamp and number for Type::Duration instead of rejecting them.
+- Let that shared mapping flow through every public surface that already depends on render_public_type: function params and returns, object constructors and methods, record
+  fields, enum and error payloads, and callback interface signatures.
+- Replace the rejection coverage in src/bindings/api/mod.rs:1029 with positive unit tests for direct and nested timestamp/duration rendering, plus at least one
+  render_public_api() case that proves the generated API imports and uses FfiConverterTimestamp and FfiConverterDuration.
+- Extend the existing basic fixture rather than creating a new fixture. Add a minimal temporal API surface that covers direct echo functions, one record carrying temporal
+  fields, and one object path that accepts or returns temporal values.
+- Update README.md:211 to remove timestamps and durations from current limitations and document the new public Node mappings.
 
-Benchmark knobs:
-- Hot-path suites use:
-  `UNIFFI_BENCH_TIME_MS`
-  `UNIFFI_BENCH_ITERATIONS`
-  `UNIFFI_BENCH_WARMUP_TIME_MS`
-  `UNIFFI_BENCH_WARMUP_ITERATIONS`
-- Startup suite uses:
-  `UNIFFI_BENCH_STARTUP_TIME_MS`
-  `UNIFFI_BENCH_STARTUP_ITERATIONS`
-- Keep env vars identical between baseline and comparison runs, and report the exact values used.
+## Test Plan
 
-How to evaluate performance:
-- Establish a baseline with the exact suite you are targeting.
-- After each code change, rerun the same suite with the same command and same env.
-- Compare only the same named benchmark rows before vs. after from the printed `tinybench` table.
-- Treat results as relative before/after measurements on the same machine and same harness.
-- Rerun the full perf suite before stopping.
-- If one row improves and another regresses, report that tradeoff explicitly.
-- Do not change the benchmark harness, fixtures, or benchmark parameters just to improve reported numbers.
-
-Hotspot visibility is mandatory:
-- Do not rely only on benchmark deltas. For every targeted perf test, capture hotspot data before changing code and again after a material performance shift.
-- Save a raw `.cpuprofile` artifact and also provide a terminal summary of the hottest files, functions, and call stacks.
-- Use Node’s built-in CPU profiler with `--cpu-prof --cpu-prof-dir <dir> --cpu-prof-name <name>.cpuprofile`.
-
-How to profile without changing the measurement harness:
-- Use the Rust perf harness for scoring.
-- For profiling, reproduce the same generated-package setup in a retained temp directory by following `tests/support/mod.rs`: build the relevant fixture `cdylib`, generate the
-package, stage `tests/benchmarks` into it, run `npm install --no-package-lock`, and execute the benchmark logic from inside that generated package.
-- For hot-path suites, if you need per-benchmark visibility, create a temporary profiling driver that mirrors the exact setup and body of the specific `bench.add(...)` case
-you are investigating, then run that driver under `node --cpu-prof`. Do not treat that driver as the scoring harness; it is only for hotspot diagnosis.
-- For the startup suite, profile the child scripts directly rather than `benchmarks/startup-lifecycle.mjs`, because that benchmark measures fresh child processes:
-  `benchmarks/children/cold-import.mjs`
-  `benchmarks/children/cold-manual-load.mjs`
-  `benchmarks/children/load-unload.mjs`
-- Report the saved profile path for each targeted test and summarize the hottest stacks/files/functions from the profile output.
-
-Working loop:
-1. Run a baseline benchmark.
-2. Capture hotspot visibility for the targeted test.
-3. Make one focused performance change.
-4. Rerun the same benchmark suite and compare against baseline.
-5. Refresh hotspot visibility if the bottleneck moved or the result materially changed.
-6. Repeat while measured results improve.
-7. Rerun the full perf suite before stopping.
-8. If you made code changes, run `cargo test` last.
-
-Reporting requirements:
-- Show the benchmark command(s) used.
-- Show the exact env var values used for benchmark timing.
-- Show before/after results for benchmark rows that materially changed.
-- Show the hotspot artifact path(s) and a concise hotspot summary for each targeted test.
-- Call out regressions, noisy results, and inconclusive runs explicitly.
-- State whether the full perf suite was rerun.
-- State whether `cargo test` was run last and whether it passed.
-- If benchmarks cannot run because npm registry access is unavailable, say so explicitly and do not claim unmeasured performance improvements.
-
-Constraints:
-- Use the current perf harness as-is.
-- Do not add new perf tests or redefine success criteria unless explicitly asked.
-- Do not claim a performance improvement without benchmark evidence from this repo’s existing perf suite.
-
-## Scenarios
-
-- Basic hot-path suite
-- Callback hot-path suite
-- Startup/lifecycle suite, with direct child-process profiling for hotspot visibility
+- Rust unit tests:
+    - render_public_type accepts timestamp and duration directly.
+    - Nested public types containing them render correctly for optional, sequence, and map shapes.
+    - render_public_api() emits Date and number signatures and pulls in the temporal converters for both normal API and callback paths.
+- Snapshot coverage:
+    - refresh the existing basic fixture snapshot after adding temporal APIs.
+- TypeScript declaration coverage:
+    - typecheck direct, optional, nested, record, and object-method temporal usage in the generated package.
+- Node smoke coverage:
+    - roundtrip valid Date and non-negative duration values through the generated package and fixture cdylib.
+    - verify invalid Date inputs and negative durations still fail at the runtime converter boundary.
 
 ## Assumptions
 
-- Node’s built-in CPU profiler is available via node --cpu-prof.
-- Raw .cpuprofile artifacts plus CLI hotspot summaries are required.
-- Perf claims stay scoped to this repo’s existing generated-package benchmark coverage.
+- Use the existing Node-facing representation already implied by the runtime: Date for timestamps and millisecond number for durations.
+- Do not introduce Temporal, bigint-based durations, or structured wrapper types in this work.
+- Preserve current runtime semantics and document their limits rather than changing them here: timestamps remain millisecond-precision via Date, durations remain
+  millisecond-based numbers, and inherited UniFFI edge cases stay out of scope.
 
 ## Instructions
 
-- commit after each change
-- use conventional commit syntax for commit messages
+You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO` section below.
 
-Append a ✅ to the end of PROMPT.md when you have completed the instructions.
-✅
+- update PROMPT.md with an updated TODO list after each change
+- never ever change any PROMPT.md text _except_ the items in the `## TODO` section
+- you may update the TODO items as you see fit--remove outdated items, add new items, mark items as completed
+- commit after each completed TODO
+- use conventional commit syntax for commit messages
+- if you run for more than 10 minutes, take a step back, break up the TODO into more parts, and stop
+- if there are no items left in the TODO, append a new line to the end of the file that simply contains ✅
+
+## TODO
+
+- [x] Change render_public_type to map Type::Timestamp to Date.
+- [ ] Change render_public_type to map Type::Duration to number.
+- [x] Replace the timestamp rejection unit test with positive timestamp rendering assertions.
+- [x] Add unit tests for nested optional and sequence shapes containing timestamps.
+- [ ] Add unit tests for nested map shapes containing durations.
+- [ ] Add a render_public_api() test that exercises timestamp converter imports.
+- [ ] Add a render_public_api() test that exercises duration converter imports.
+- [ ] Add timestamp echo APIs to the basic fixture Rust source.
+- [ ] Add duration echo APIs to the basic fixture Rust source.
+- [ ] Add temporal declarations to the basic fixture UDL.
+- [ ] Add a fixture record that includes timestamp and duration fields.
+- [ ] Add one object constructor or method in the fixture that accepts or returns temporal values.
+- [ ] Update the TypeScript smoke test to typecheck Date timestamp usage.
+- [ ] Update the TypeScript smoke test to typecheck numeric duration usage.
+- [ ] Add a JS smoke assertion that timestamp roundtrips return Date instances.
+- [ ] Add a JS smoke assertion that duration roundtrips return numeric values.
+- [ ] Add a JS smoke assertion that invalid Date inputs throw.
+- [ ] Add a JS smoke assertion that negative duration inputs throw.
+- [ ] Refresh the basic fixture snapshot to capture the new API surface.
+- [ ] Update the README public API conventions to document timestamp and duration mappings.
+- [ ] Remove timestamp and duration entries from the README limitations list.

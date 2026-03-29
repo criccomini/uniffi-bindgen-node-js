@@ -415,13 +415,18 @@ pub(crate) fn render_js_async_object_complete_setup(
     indent: &str,
 ) -> Result<Vec<String>> {
     Ok(vec![
-        format!("{indent}const bindings = getFfiBindings();"),
-        format!("{indent}const completePointer = bindings.library.func("),
-        format!("{indent}  {},", json_string_literal(complete_identifier)?),
-        format!("{indent}  bindings.ffiTypes.VoidPointer,"),
+        format!("{indent}const completePointer = uniffiGetCachedLibraryFunction("),
         format!(
-            "{indent}  [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+            "{indent}  {},",
+            json_string_literal(&format!("complete:{complete_identifier}"))?
         ),
+        format!("{indent}  (bindings) => bindings.library.func("),
+        format!("{indent}    {},", json_string_literal(complete_identifier)?),
+        format!("{indent}    bindings.ffiTypes.VoidPointer,"),
+        format!(
+            "{indent}    [bindings.ffiTypes.UniffiHandle, koffi.pointer(bindings.ffiTypes.RustCallStatus)],"
+        ),
+        format!("{indent}  ),"),
         format!("{indent});"),
         format!(
             "{indent}const completeFunc = (rustFuture, status) => completePointer(rustFuture, status);"

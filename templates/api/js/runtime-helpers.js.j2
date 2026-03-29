@@ -51,6 +51,7 @@ const uniffiDefaultRustCallOptions = Object.freeze({
 const uniffiRustCallOptionsByErrorConverter = new WeakMap();
 const uniffiOptionalConverterCache = new WeakMap();
 const uniffiArrayConverterCache = new WeakMap();
+const uniffiLibraryFunctionCache = new WeakMap();
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   if (errorConverter == null) {
@@ -97,6 +98,22 @@ function uniffiArrayConverter(innerConverter) {
     uniffiArrayConverterCache.set(innerConverter, converter);
   }
   return converter;
+}
+
+function uniffiGetCachedLibraryFunction(cacheKey, create) {
+  const bindings = getFfiBindings();
+  let bindingCache = uniffiLibraryFunctionCache.get(bindings);
+  if (bindingCache == null) {
+    bindingCache = new Map();
+    uniffiLibraryFunctionCache.set(bindings, bindingCache);
+  }
+
+  let cachedFunction = bindingCache.get(cacheKey);
+  if (cachedFunction == null) {
+    cachedFunction = create(bindings);
+    bindingCache.set(cacheKey, cachedFunction);
+  }
+  return cachedFunction;
 }
 
 function uniffiCopyIntoRustBuffer(bytes) {

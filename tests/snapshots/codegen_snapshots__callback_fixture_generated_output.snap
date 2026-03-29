@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -170,6 +169,7 @@ const uniffiDefaultRustCallOptions = Object.freeze({
 const uniffiRustCallOptionsByErrorConverter = new WeakMap();
 const uniffiOptionalConverterCache = new WeakMap();
 const uniffiArrayConverterCache = new WeakMap();
+const uniffiLibraryFunctionCache = new WeakMap();
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   if (errorConverter == null) {
@@ -216,6 +216,22 @@ function uniffiArrayConverter(innerConverter) {
     uniffiArrayConverterCache.set(innerConverter, converter);
   }
   return converter;
+}
+
+function uniffiGetCachedLibraryFunction(cacheKey, create) {
+  const bindings = getFfiBindings();
+  let bindingCache = uniffiLibraryFunctionCache.get(bindings);
+  if (bindingCache == null) {
+    bindingCache = new Map();
+    uniffiLibraryFunctionCache.set(bindings, bindingCache);
+  }
+
+  let cachedFunction = bindingCache.get(cacheKey);
+  if (cachedFunction == null) {
+    cachedFunction = create(bindings);
+    bindingCache.set(cacheKey, cachedFunction);
+  }
+  return cachedFunction;
 }
 
 function uniffiCopyIntoRustBuffer(bytes) {
@@ -1082,11 +1098,13 @@ const uniffiSettingsObjectFactory = createObjectFactory({
   createInstance: () => Object.create(Settings.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrSettings,
   cloneHandleGeneric(handle) {
-    const bindings = getFfiBindings();
-    const genericCloneHandle = bindings.library.func(
-      "uniffi_fixture_callbacks_fn_clone_settings",
-      bindings.ffiTypes.RustArcPtr,
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    const genericCloneHandle = uniffiGetCachedLibraryFunction(
+      "uniffi_fixture_callbacks_fn_clone_settings:generic",
+      (bindings) => bindings.library.func(
+        "uniffi_fixture_callbacks_fn_clone_settings",
+        bindings.ffiTypes.RustArcPtr,
+        [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+      ),
     );
     return uniffiRustCaller.rustCall(
       (status) => genericCloneHandle(handle, status),
@@ -1094,11 +1112,13 @@ const uniffiSettingsObjectFactory = createObjectFactory({
     );
   },
   cloneHandleRawExternal(handle) {
-    const bindings = getFfiBindings();
-    const rawExternalCloneHandle = bindings.library.func(
-      "uniffi_fixture_callbacks_fn_clone_settings",
-      bindings.ffiTypes.VoidPointer,
-      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    const rawExternalCloneHandle = uniffiGetCachedLibraryFunction(
+      "uniffi_fixture_callbacks_fn_clone_settings:raw-external",
+      (bindings) => bindings.library.func(
+        "uniffi_fixture_callbacks_fn_clone_settings",
+        bindings.ffiTypes.VoidPointer,
+        [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+      ),
     );
     return uniffiRustCaller.rustCall(
       (status) => rawExternalCloneHandle(handle, status),
@@ -1118,11 +1138,13 @@ const uniffiSettingsObjectFactory = createObjectFactory({
     );
   },
   freeHandleRawExternal(handle) {
-    const bindings = getFfiBindings();
-    const rawExternalFreeHandle = bindings.library.func(
-      "uniffi_fixture_callbacks_fn_free_settings",
-      "void",
-      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    const rawExternalFreeHandle = uniffiGetCachedLibraryFunction(
+      "uniffi_fixture_callbacks_fn_free_settings:raw-external",
+      (bindings) => bindings.library.func(
+        "uniffi_fixture_callbacks_fn_free_settings",
+        "void",
+        [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+      ),
     );
     uniffiRustCaller.rustCall(
       (status) => rawExternalFreeHandle(handle, status),
@@ -1194,11 +1216,13 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
   createInstance: () => Object.create(WriteBatch.prototype),
   handleType: () => getFfiBindings().ffiTypes.RustArcPtrWriteBatch,
   cloneHandleGeneric(handle) {
-    const bindings = getFfiBindings();
-    const genericCloneHandle = bindings.library.func(
-      "uniffi_fixture_callbacks_fn_clone_writebatch",
-      bindings.ffiTypes.RustArcPtr,
-      [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    const genericCloneHandle = uniffiGetCachedLibraryFunction(
+      "uniffi_fixture_callbacks_fn_clone_writebatch:generic",
+      (bindings) => bindings.library.func(
+        "uniffi_fixture_callbacks_fn_clone_writebatch",
+        bindings.ffiTypes.RustArcPtr,
+        [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+      ),
     );
     return uniffiRustCaller.rustCall(
       (status) => genericCloneHandle(handle, status),
@@ -1206,11 +1230,13 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
     );
   },
   cloneHandleRawExternal(handle) {
-    const bindings = getFfiBindings();
-    const rawExternalCloneHandle = bindings.library.func(
-      "uniffi_fixture_callbacks_fn_clone_writebatch",
-      bindings.ffiTypes.VoidPointer,
-      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    const rawExternalCloneHandle = uniffiGetCachedLibraryFunction(
+      "uniffi_fixture_callbacks_fn_clone_writebatch:raw-external",
+      (bindings) => bindings.library.func(
+        "uniffi_fixture_callbacks_fn_clone_writebatch",
+        bindings.ffiTypes.VoidPointer,
+        [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+      ),
     );
     return uniffiRustCaller.rustCall(
       (status) => rawExternalCloneHandle(handle, status),
@@ -1230,11 +1256,13 @@ const uniffiWriteBatchObjectFactory = createObjectFactory({
     );
   },
   freeHandleRawExternal(handle) {
-    const bindings = getFfiBindings();
-    const rawExternalFreeHandle = bindings.library.func(
-      "uniffi_fixture_callbacks_fn_free_writebatch",
-      "void",
-      [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+    const rawExternalFreeHandle = uniffiGetCachedLibraryFunction(
+      "uniffi_fixture_callbacks_fn_free_writebatch:raw-external",
+      (bindings) => bindings.library.func(
+        "uniffi_fixture_callbacks_fn_free_writebatch",
+        "void",
+        [bindings.ffiTypes.VoidPointer, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
+      ),
     );
     uniffiRustCaller.rustCall(
       (status) => rawExternalFreeHandle(handle, status),

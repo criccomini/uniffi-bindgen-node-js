@@ -238,8 +238,11 @@ struct ObjectJsView {
     ffi_opaque_identifier: String,
     ffi_object_clone_symbol: String,
     ffi_object_clone_identifier: String,
+    ffi_object_clone_generic_cache_key: String,
+    ffi_object_clone_raw_external_cache_key: String,
     ffi_object_free_symbol: String,
     ffi_object_free_identifier: String,
+    ffi_object_free_raw_external_cache_key: String,
     has_primary_constructor: bool,
     primary_constructor_params: String,
     primary_constructor_body_lines: Vec<String>,
@@ -310,8 +313,20 @@ impl ObjectJsView {
             ffi_opaque_identifier: ffi_opaque_identifier(&object.name),
             ffi_object_clone_symbol: json_string_literal(&object.ffi_object_clone_identifier)?,
             ffi_object_clone_identifier: object.ffi_object_clone_identifier.clone(),
+            ffi_object_clone_generic_cache_key: json_string_literal(&format!(
+                "{}:generic",
+                object.ffi_object_clone_identifier
+            ))?,
+            ffi_object_clone_raw_external_cache_key: json_string_literal(&format!(
+                "{}:raw-external",
+                object.ffi_object_clone_identifier
+            ))?,
             ffi_object_free_symbol: json_string_literal(&object.ffi_object_free_identifier)?,
             ffi_object_free_identifier: object.ffi_object_free_identifier.clone(),
+            ffi_object_free_raw_external_cache_key: json_string_literal(&format!(
+                "{}:raw-external",
+                object.ffi_object_free_identifier
+            ))?,
             has_primary_constructor: primary_constructor.has_primary_constructor,
             primary_constructor_params: primary_constructor.params,
             primary_constructor_body_lines: primary_constructor.body_lines,

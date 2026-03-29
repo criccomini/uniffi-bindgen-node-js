@@ -1592,7 +1592,7 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("const completePointer = bindings.library.func("),
+                .contains("const completePointer = uniffiGetCachedLibraryFunction("),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -1691,7 +1691,7 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("const completePointer = bindings.library.func("),
+                .contains("const completePointer = uniffiGetCachedLibraryFunction("),
             "unexpected JS output: {}",
             rendered.js
         );
@@ -1731,7 +1731,7 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("const completePointer = bindings.library.func("),
+                .contains("const completePointer = uniffiGetCachedLibraryFunction("),
             "unexpected JS output: {}",
             rendered.js
         );

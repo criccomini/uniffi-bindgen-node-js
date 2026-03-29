@@ -1158,11 +1158,11 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("createObjectConverter"),
+            component_js.contains("export { ffiMetadata }"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("createObjectFactory"),
+            component_js.contains("loadFfi()"),
             "unexpected component JS contents: {component_js}"
         );
 

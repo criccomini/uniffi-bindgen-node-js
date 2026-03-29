@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -152,6 +153,8 @@ const uniffiDefaultRustCallOptions = Object.freeze({
   rustCaller: uniffiRustCaller,
 });
 const uniffiRustCallOptionsByErrorConverter = new WeakMap();
+const uniffiOptionalConverterCache = new WeakMap();
+const uniffiArrayConverterCache = new WeakMap();
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   if (errorConverter == null) {
@@ -180,6 +183,24 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   });
   uniffiRustCallOptionsByErrorConverter.set(errorConverter, options);
   return options;
+}
+
+function uniffiOptionalConverter(innerConverter) {
+  let converter = uniffiOptionalConverterCache.get(innerConverter);
+  if (converter == null) {
+    converter = new FfiConverterOptional(innerConverter);
+    uniffiOptionalConverterCache.set(innerConverter, converter);
+  }
+  return converter;
+}
+
+function uniffiArrayConverter(innerConverter) {
+  let converter = uniffiArrayConverterCache.get(innerConverter);
+  if (converter == null) {
+    converter = new FfiConverterArray(innerConverter);
+    uniffiArrayConverterCache.set(innerConverter, converter);
+  }
+  return converter;
 }
 
 function uniffiCopyIntoRustBuffer(bytes) {
@@ -326,23 +347,23 @@ export class FixtureErrorParse extends FixtureError {
 const FfiConverterBlobRecord = new (class extends AbstractFfiConverterByteArray {
   allocationSize(value) {
     const recordValue = uniffiRequireRecordObject("BlobRecord", value);
-    return FfiConverterString.allocationSize(recordValue["name"]) + FfiConverterBytes.allocationSize(recordValue["value"]) + new FfiConverterOptional(FfiConverterBytes).allocationSize(recordValue["maybe_value"]) + new FfiConverterArray(FfiConverterBytes).allocationSize(recordValue["chunks"]);
+    return FfiConverterString.allocationSize(recordValue["name"]) + FfiConverterBytes.allocationSize(recordValue["value"]) + uniffiOptionalConverter(FfiConverterBytes).allocationSize(recordValue["maybe_value"]) + uniffiArrayConverter(FfiConverterBytes).allocationSize(recordValue["chunks"]);
   }
 
   write(value, writer) {
     const recordValue = uniffiRequireRecordObject("BlobRecord", value);
     FfiConverterString.write(recordValue["name"], writer);
     FfiConverterBytes.write(recordValue["value"], writer);
-    new FfiConverterOptional(FfiConverterBytes).write(recordValue["maybe_value"], writer);
-    new FfiConverterArray(FfiConverterBytes).write(recordValue["chunks"], writer);
+    uniffiOptionalConverter(FfiConverterBytes).write(recordValue["maybe_value"], writer);
+    uniffiArrayConverter(FfiConverterBytes).write(recordValue["chunks"], writer);
   }
 
   read(reader) {
     return {
       "name": FfiConverterString.read(reader),
       "value": FfiConverterBytes.read(reader),
-      "maybe_value": new FfiConverterOptional(FfiConverterBytes).read(reader),
-      "chunks": new FfiConverterArray(FfiConverterBytes).read(reader),
+      "maybe_value": uniffiOptionalConverter(FfiConverterBytes).read(reader),
+      "chunks": uniffiArrayConverter(FfiConverterBytes).read(reader),
     };
   }
 })();

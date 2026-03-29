@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 96
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -30,6 +31,8 @@ import {
 import {
 
   AbstractFfiConverterByteArray,
+
+  FfiConverterArray,
 
   FfiConverterBytes,
 
@@ -162,6 +165,8 @@ const uniffiDefaultRustCallOptions = Object.freeze({
   rustCaller: uniffiRustCaller,
 });
 const uniffiRustCallOptionsByErrorConverter = new WeakMap();
+const uniffiOptionalConverterCache = new WeakMap();
+const uniffiArrayConverterCache = new WeakMap();
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   if (errorConverter == null) {
@@ -190,6 +195,24 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   });
   uniffiRustCallOptionsByErrorConverter.set(errorConverter, options);
   return options;
+}
+
+function uniffiOptionalConverter(innerConverter) {
+  let converter = uniffiOptionalConverterCache.get(innerConverter);
+  if (converter == null) {
+    converter = new FfiConverterOptional(innerConverter);
+    uniffiOptionalConverterCache.set(innerConverter, converter);
+  }
+  return converter;
+}
+
+function uniffiArrayConverter(innerConverter) {
+  let converter = uniffiArrayConverterCache.get(innerConverter);
+  if (converter == null) {
+    converter = new FfiConverterArray(innerConverter);
+    uniffiArrayConverterCache.set(innerConverter, converter);
+  }
+  return converter;
 }
 
 function uniffiCopyIntoRustBuffer(bytes) {
@@ -311,7 +334,7 @@ export class AsyncLogErrorRejected extends AsyncLogError {
 const FfiConverterLogRecord = new (class extends AbstractFfiConverterByteArray {
   allocationSize(value) {
     const recordValue = uniffiRequireRecordObject("LogRecord", value);
-    return FfiConverterLogLevel.allocationSize(recordValue["level"]) + FfiConverterString.allocationSize(recordValue["target"]) + FfiConverterString.allocationSize(recordValue["message"]) + new FfiConverterOptional(FfiConverterString).allocationSize(recordValue["module_path"]) + new FfiConverterOptional(FfiConverterString).allocationSize(recordValue["file"]) + new FfiConverterOptional(FfiConverterUInt32).allocationSize(recordValue["line"]);
+    return FfiConverterLogLevel.allocationSize(recordValue["level"]) + FfiConverterString.allocationSize(recordValue["target"]) + FfiConverterString.allocationSize(recordValue["message"]) + uniffiOptionalConverter(FfiConverterString).allocationSize(recordValue["module_path"]) + uniffiOptionalConverter(FfiConverterString).allocationSize(recordValue["file"]) + uniffiOptionalConverter(FfiConverterUInt32).allocationSize(recordValue["line"]);
   }
 
   write(value, writer) {
@@ -319,9 +342,9 @@ const FfiConverterLogRecord = new (class extends AbstractFfiConverterByteArray {
     FfiConverterLogLevel.write(recordValue["level"], writer);
     FfiConverterString.write(recordValue["target"], writer);
     FfiConverterString.write(recordValue["message"], writer);
-    new FfiConverterOptional(FfiConverterString).write(recordValue["module_path"], writer);
-    new FfiConverterOptional(FfiConverterString).write(recordValue["file"], writer);
-    new FfiConverterOptional(FfiConverterUInt32).write(recordValue["line"], writer);
+    uniffiOptionalConverter(FfiConverterString).write(recordValue["module_path"], writer);
+    uniffiOptionalConverter(FfiConverterString).write(recordValue["file"], writer);
+    uniffiOptionalConverter(FfiConverterUInt32).write(recordValue["line"], writer);
   }
 
   read(reader) {
@@ -329,9 +352,9 @@ const FfiConverterLogRecord = new (class extends AbstractFfiConverterByteArray {
       "level": FfiConverterLogLevel.read(reader),
       "target": FfiConverterString.read(reader),
       "message": FfiConverterString.read(reader),
-      "module_path": new FfiConverterOptional(FfiConverterString).read(reader),
-      "file": new FfiConverterOptional(FfiConverterString).read(reader),
-      "line": new FfiConverterOptional(FfiConverterUInt32).read(reader),
+      "module_path": uniffiOptionalConverter(FfiConverterString).read(reader),
+      "file": uniffiOptionalConverter(FfiConverterString).read(reader),
+      "line": uniffiOptionalConverter(FfiConverterUInt32).read(reader),
     };
   }
 })();
@@ -769,7 +792,7 @@ class UniffiLogSinkProxy extends UniffiObjectBase {
       (status) => ffiMethod(loweredSelf, status),
       uniffiRustCallOptions(),
     );
-    return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterString), uniffiResult);
+    return uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterString), uniffiResult);
   }
 }
 
@@ -854,7 +877,7 @@ function uniffiRegisterLogSinkVtable(bindings, registrations, vtableReferences) 
       if (uniffiStatus.code !== CALL_SUCCESS) {
         return;
       }
-      const loweredReturn = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterString), uniffiResult);
+      const loweredReturn = uniffiLowerIntoRustBuffer(uniffiOptionalConverter(FfiConverterString), uniffiResult);
       koffi.encode(uniffiOutReturn, bindings.ffiTypes.RustBuffer, loweredReturn);
     },
     koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceLogSinkMethod1),
@@ -993,7 +1016,7 @@ export async function flush_async(sink) {
 
 export function init_logging(level, collector) {
     const loweredLevel = uniffiLowerIntoRustBuffer(FfiConverterLogLevel, level);
-    const loweredCollector = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogCollector), collector);
+    const loweredCollector = uniffiLowerIntoRustBuffer(uniffiOptionalConverter(FfiConverterLogCollector), collector);
   uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_init_logging(loweredLevel, loweredCollector, status),
     uniffiRustCallOptions(),
@@ -1001,12 +1024,12 @@ export function init_logging(level, collector) {
 }
 
 export function last_message(sink) {
-    const loweredSink = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogSink), sink);
+    const loweredSink = uniffiLowerIntoRustBuffer(uniffiOptionalConverter(FfiConverterLogSink), sink);
   const uniffiResult = uniffiRustCaller.rustCall(
     (status) => ffiFunctions.uniffi_fixture_callbacks_fn_func_last_message(loweredSink, status),
     uniffiRustCallOptions(),
   );
-  return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterString), uniffiResult);
+  return uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterString), uniffiResult);
 }
 
 export class Settings extends UniffiObjectBase {

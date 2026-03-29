@@ -855,6 +855,11 @@ const when = new Date("2024-01-02T03:04:05.678Z");
 const echoedWhen = echo_timestamp(when);
 assert.ok(echoedWhen instanceof Date);
 assert.equal(echoedWhen.getTime(), when.getTime());
+assert.throws(() => echo_timestamp(new Date(Number.NaN)), (error) => {
+  assert.ok(error instanceof TypeError);
+  assert.equal(error.message, "timestamp values must be valid Date instances.");
+  return true;
+});
 
 const echoedDelayMs = echo_duration(1_500);
 assert.equal(typeof echoedDelayMs, "number");

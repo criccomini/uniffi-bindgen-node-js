@@ -1179,6 +1179,13 @@ function createBasicFixtureRuntime(libraryPath) {
       },
     ],
     [
+      "uniffi_fixture_basic_fn_func_echo_timestamp",
+      (whenBuffer, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(rustBufferToUint8Array(whenBuffer));
+      },
+    ],
+    [
       "uniffi_fixture_basic_fn_func_echo_byte_map",
       (valueBuffer, status) => {
         setCallSuccess(status);

@@ -595,6 +595,7 @@ import {{
   echo_byte_map,
   echo_bytes,
   echo_record,
+  echo_timestamp,
 }} from "./index.js";
 
 {}
@@ -680,6 +681,7 @@ import {{
   echo_byte_map,
   echo_bytes,
   echo_record,
+  echo_timestamp,
 }} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
@@ -739,6 +741,7 @@ import {{
   echo_byte_map,
   echo_bytes,
   echo_record,
+  echo_timestamp,
   load,
   unload,
 }} from "./index.js";
@@ -844,6 +847,11 @@ fn basic_fixture_api_smoke_body() -> &'static str {
 
 const echoedBytes = echo_bytes(new Uint8Array([7, 8, 9]));
 assert.deepStrictEqual(Array.from(echoedBytes), [7, 8, 9]);
+
+const when = new Date("2024-01-02T03:04:05.678Z");
+const echoedWhen = echo_timestamp(when);
+assert.ok(echoedWhen instanceof Date);
+assert.equal(echoedWhen.getTime(), when.getTime());
 
 const echoedRecord = echo_record(seed);
 assert.equal(echoedRecord.name, "seed");

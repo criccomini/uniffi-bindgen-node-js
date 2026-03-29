@@ -1,60 +1,156 @@
 # uniffi-bindgen-node-js
 
-`uniffi-bindgen-node-js` is a single Cargo package that exposes:
+`uniffi-bindgen-node-js` generates ESM Node packages for UniFFI `cdylib`s. Point it at a built Rust dynamic library and it writes a package with JavaScript, TypeScript declarations, a native loader, and the runtime helpers needed to call the library through `koffi`.
 
-- a reusable `uniffi_bindgen_node_js` Rust library
-- a `uniffi-bindgen-node-js` CLI for generating Node bindings from a built UniFFI `cdylib`
+Contributor setup, tests, and coverage live in [DEVELOPMENT.md](./DEVELOPMENT.md).
 
-The generator emits one npm package per invocation with a public API layer, a low-level FFI layer, and shared runtime helpers built around `koffi`.
+## What It Produces
 
-## Installation
+Each `generate` run writes one npm package containing:
 
-Build the CLI locally:
+- a public JavaScript API for your UniFFI namespace
+- matching `.d.ts` files
+- a low-level FFI module
+- runtime helpers used by the generated bindings
+- a `package.json` that declares `koffi` as the runtime dependency
 
-```sh
-cargo build
-```
+Generated packages are ESM-only and do not require a TypeScript build step.
 
-Install it into your Cargo bin directory:
+## Install
+
+Build and install the CLI from this repository:
 
 ```sh
 cargo install --path .
 ```
 
-Or run it from the repo without installing:
+Or run it without installing:
 
 ```sh
 cargo run -- --help
 ```
 
-## CLI usage
+## Quick Start
 
-Generate a package from a built UniFFI dynamic library:
+1. Build your UniFFI crate as a `cdylib`.
+
+```sh
+cargo build --release -p your-crate
+```
+
+2. Generate a Node package from the built library.
 
 ```sh
 uniffi-bindgen-node-js generate \
-  path/to/libyour_crate.dylib \
+  path/to/your/built/library \
   --crate-name your-crate \
-  --out-dir /tmp/your-package
+  --out-dir ./generated/your-package
 ```
 
-Available generator flags:
+Use the built library file for your platform:
 
-- `--crate-name <crate>`: Cargo package name or underscored library crate name for UniFFI library-mode generation.
-- `--out-dir <dir>`: output directory for the generated npm package.
-- `--package-name <name>`: generated npm package name.
-- `--cdylib-name <name>`: native library basename used for sibling-library lookup.
-- `--node-engine <range>`: value written to `package.json` `engines.node`.
-- `--lib-path-literal <path>`: emitted literal path for the native library.
-- `--bundled-prebuilds`: emit runtime resolution for packaged native libraries under `prebuilds/<target>/`.
-- `--manual-load`: disables eager library loading and exposes explicit load helpers.
-- `--config-override KEY=VALUE`: override supported `[bindings.node]` settings from the CLI.
+- macOS: `libyour_crate.dylib`
+- Linux: `libyour_crate.so`
+- Windows: `your_crate.dll`
 
-The CLI expects a built `cdylib` as `lib_source`. By default the generated package looks for a sibling native library next to the emitted JS files. With `--bundled-prebuilds`, the generated loader instead resolves `prebuilds/<target>/<default-library-filename>` inside the package, while still allowing `load(path)` to override the runtime path explicitly.
+3. Install the generated package dependencies.
 
-## UniFFI config
+```sh
+cd ./generated/your-package
+npm install
+```
 
-Generator settings can also come from `uniffi.toml`:
+You can then publish that directory as a package or install it into another app with `npm install ./generated/your-package`.
+
+4. Consume the generated package from Node.
+
+```js
+import { greet } from "./generated/your-package/index.js";
+
+console.log(greet("world"));
+```
+
+`--crate-name` accepts either the Cargo package name (`your-crate`) or the underscored library crate name (`your_crate`).
+
+## CLI Reference
+
+```sh
+uniffi-bindgen-node-js generate [OPTIONS] --crate-name <CRATE_NAME> --out-dir <OUT_DIR> <LIB_SOURCE>
+```
+
+Required inputs:
+
+- `LIB_SOURCE`: path to a built `.so`, `.dylib`, or `.dll`
+- `--crate-name`: Cargo package name or library crate name
+- `--out-dir`: directory where the npm package will be written
+
+Optional flags:
+
+- `--package-name <name>`: npm package name to write into `package.json`
+- `--cdylib-name <name>`: native library basename used by the generated loader
+- `--node-engine <range>`: value written to `package.json` `engines.node`
+- `--lib-path-literal <path>`: hard-coded default path for the native library
+- `--bundled-prebuilds`: resolve the default library from `prebuilds/<target>/...`
+- `--manual-load`: export explicit `load()` and `unload()` helpers instead of auto-loading on import
+- `--config-override KEY=VALUE`: override supported `[bindings.node]` settings from the CLI
+
+## Packaging Modes
+
+By default, the generated package expects a single native library for the current build and places it next to the generated JavaScript files:
+
+```text
+your-package/
+  index.js
+  your_namespace.js
+  your_namespace-ffi.js
+  libyour_crate.dylib
+```
+
+If you pass `--bundled-prebuilds`, the generated loader looks for platform-specific libraries under `prebuilds/<target>/`:
+
+```text
+your-package/
+  index.js
+  your_namespace.js
+  your_namespace-ffi.js
+  prebuilds/
+    darwin-arm64/libyour_crate.dylib
+    linux-x64-gnu/libyour_crate.so
+    win32-x64/your_crate.dll
+```
+
+This mode defines the lookup contract only. You still need to build and stage the per-target native libraries yourself.
+
+Linux bundled targets include a libc suffix:
+
+- `-gnu` when Node reports glibc at runtime
+- `-musl` otherwise
+
+## Manual Loading
+
+Without `--manual-load`, the generated package loads the native library during import.
+
+With `--manual-load`, the top-level package exports `load()` and `unload()` so you can choose the library path explicitly:
+
+```sh
+uniffi-bindgen-node-js generate \
+  path/to/your/built/library \
+  --crate-name your-crate \
+  --out-dir ./generated/your-package \
+  --manual-load
+```
+
+```js
+import { load, unload, greet } from "./generated/your-package/index.js";
+
+load("./path/to/your/native/library");
+console.log(greet("world"));
+unload();
+```
+
+## `uniffi.toml` Configuration
+
+You can store Node generator settings in `uniffi.toml`:
 
 ```toml
 [bindings.node]
@@ -74,63 +170,19 @@ Defaults:
 - `bundled_prebuilds`: `false`
 - `manual_load`: `false`
 
-CLI flags apply after config-file settings. `bundled_prebuilds = true` cannot be combined with `lib_path_literal`, because both would otherwise define the default auto-load path.
+CLI flags apply after config-file settings.
 
-## Generated package layout
-
-Each invocation writes a package directory containing:
-
-- `package.json`
-- `index.js`
-- `index.d.ts`
-- `<namespace>.js`
-- `<namespace>.d.ts`
-- `<namespace>-ffi.js`
-- `<namespace>-ffi.d.ts`
-- `runtime/errors.js`
-- `runtime/ffi-types.js`
-- `runtime/ffi-converters.js`
-- `runtime/rust-call.js`
-- `runtime/async-rust-call.js`
-- `runtime/handle-map.js`
-- `runtime/callbacks.js`
-- `runtime/objects.js`
-
-The generated `package.json` declares `koffi` as the runtime FFI dependency.
-
-Default native-library packaging modes:
-
-- sibling mode: copy the built library next to the generated JS files, for example `<package>/libyour_crate.dylib`
-- bundled-prebuild mode: stage one library per target under `prebuilds/<target>/<filename>`, for example `prebuilds/darwin-arm64/libyour_crate.dylib`, `prebuilds/linux-x64-gnu/libyour_crate.so`, or `prebuilds/win32-x64/your_crate.dll`
-
-Bundled target IDs use Node's `process.platform` and `process.arch`. Linux targets add a libc suffix: `-gnu` when `process.report?.getReport?.().header.glibcVersionRuntime` is present, otherwise `-musl`.
-
-## Output format
-
-v1 output is ESM-only. Generated packages set `"type": "module"` and export the generated entrypoints through `index.js`.
-
-The generator emits ready-to-consume JavaScript and declaration files directly:
-
-- `index.js` and `index.d.ts`
-- `<namespace>.js` and `<namespace>.d.ts`
-- `<namespace>-ffi.js` and `<namespace>-ffi.d.ts`
-
-Downstream consumers do not need a TypeScript build step to use the generated package.
+`bundled_prebuilds = true` cannot be combined with `lib_path_literal`.
 
 ## Compatibility
 
-The first-class target for this generator is UniFFI 0.29.
+- First-class target: UniFFI `0.29.5`
+- Generated output: ESM-only
+- Default Node engine range: `>=16`
 
-This repo currently pins:
+## Supported UniFFI Surface
 
-- `uniffi = 0.29.5`
-- `uniffi_bindgen = 0.29.5`
-
-Support for newer UniFFI releases is follow-up work.
-
-## Supported UniFFI surface
-
-The current generator is scoped to:
+The current generator supports:
 
 - top-level functions
 - objects, constructors, and synchronous methods
@@ -147,51 +199,22 @@ The current generator is scoped to:
 
 Public API conventions:
 
-- byte values use `Uint8Array`, and Node `Buffer` inputs work because `Buffer` is a `Uint8Array`
-- `Option<T>` maps to `T | undefined`
-- `Vec<T>` maps to `Array<T>`
-- `HashMap<K, V>` maps to `Map<K, V>`
-- 64-bit integers use bigint-aware converters
-- records are plain JavaScript objects with matching declaration interfaces
-- objects are JavaScript classes backed by UniFFI handles
+- `Option<T>` becomes `T | undefined`
+- `Vec<T>` becomes `Array<T>`
+- `HashMap<K, V>` becomes `Map<K, V>`
+- `bytes` becomes `Uint8Array`
+- Node `Buffer` inputs also work for `bytes`
+- 64-bit integers use `bigint`
+- records become plain JavaScript objects
+- objects become JavaScript classes backed by UniFFI handles
 
-## Current limitations
+## Current Limitations
 
-The generator rejects or does not yet support:
+The generator does not yet support:
 
 - UniFFI custom types
 - UniFFI external types
 - async callback-interface methods
 - timestamps in the public Node API
 - durations in the public Node API
-- automatic multi-target package assembly; bundled prebuilds only define the runtime lookup contract and still require the release pipeline to stage `prebuilds/<target>/...`
-
-## Development
-
-Local tests cover:
-
-- generator config parsing and output-path handling
-- snapshot/codegen output for fixture crates
-- generated package creation and dependency installation
-- plain JavaScript smoke tests
-- TypeScript declaration checks
-
-When running the real Koffi benchmark suites, use Node 22 or earlier for now. On Node versions newer than 22, the callback benchmarks can abort inside Koffi's synchronous callback path. Track that upstream in <https://github.com/Koromix/koffi/issues/261>.
-
-To measure Rust coverage for the test suite, install the LLVM coverage tooling once:
-
-```sh
-rustup component add llvm-tools-preview
-cargo install cargo-llvm-cov
-```
-
-Then run `cargo llvm-cov` directly:
-
-```sh
-cargo llvm-cov --html
-cargo llvm-cov report --lcov --output-path target/llvm-cov/lcov.info
-```
-
-The first command runs the test suite under coverage instrumentation and writes the HTML report to `target/llvm-cov/html/index.html`.
-
-The second command reuses the most recent coverage run and writes an LCOV artifact to `target/llvm-cov/lcov.info`.
+- automatic multi-target package assembly

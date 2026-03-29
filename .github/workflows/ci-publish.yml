@@ -116,7 +116,7 @@ jobs:
       - lint
       - test
       - generated-package-smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release): prepare v')
     concurrency:
       group: release-main
       cancel-in-progress: false
@@ -138,6 +138,22 @@ jobs:
           EVENT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+
+          bump_patch() {
+            local version="$1"
+            local major minor patch extra
+
+            IFS=. read -r major minor patch extra <<EOF
+$version
+EOF
+
+            if [ "${major:-}" != "0" ] || [ "${minor:-}" != "0" ] || [ -n "${extra:-}" ] || [ -z "${patch:-}" ]; then
+              echo "release automation only supports 0.0.X versions; found ${version}" >&2
+              return 1
+            fi
+
+            printf '0.0.%s\n' "$((patch + 1))"
+          }
 
           version_http_status() {
             local version="$1"
@@ -161,22 +177,6 @@ jobs:
             esac
           }
 
-          bump_patch() {
-            local version="$1"
-            local major minor patch extra
-
-            IFS=. read -r major minor patch extra <<EOF
-$version
-EOF
-
-            if [ -n "${extra:-}" ] || [ -z "${major:-}" ] || [ -z "${minor:-}" ] || [ -z "${patch:-}" ]; then
-              echo "version ${version} must use plain X.Y.Z semver for release automation" >&2
-              return 1
-            fi
-
-            printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))"
-          }
-
           git fetch origin refs/heads/main:refs/remotes/origin/main --tags
           tip_sha="$(git rev-parse origin/main)"
           if [ "$EVENT_SHA" != "$tip_sha" ]; then
@@ -190,33 +190,8 @@ EOF
           manifest_json="$(cargo read-manifest)"
           crate_name="$(printf '%s' "$manifest_json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["name"])')"
           current_version="$(printf '%s' "$manifest_json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')"
-          current_tag="v${current_version}"
-          release_subject="chore(release): ${current_tag}"
-          head_subject="$(git log -1 --pretty=%s)"
-          is_release_commit=false
 
-          if [ "$head_subject" = "$release_subject" ]; then
-            is_release_commit=true
-          fi
-
-          if [ "$is_release_commit" = false ] && version_is_published "$current_version"; then
-            next_version="$current_version"
-            while version_is_published "$next_version"; do
-              next_version="$(bump_patch "$next_version")"
-            done
-
-            cargo set-version "$next_version"
-            cargo metadata --format-version 1 --no-deps >/dev/null
-
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add Cargo.toml Cargo.lock
-            git commit -m "chore(release): v${next_version}"
-            git push origin HEAD:main
-
-            current_version="$next_version"
-            current_tag="v${current_version}"
-          fi
+          next_version="$(bump_patch "$current_version")"
 
           git fetch origin refs/heads/main:refs/remotes/origin/main --tags
           head_sha="$(git rev-parse HEAD)"
@@ -236,6 +211,7 @@ EOF
           echo "crate_name=$crate_name" >> "$GITHUB_OUTPUT"
           echo "version=$current_version" >> "$GITHUB_OUTPUT"
           echo "tag=v${current_version}" >> "$GITHUB_OUTPUT"
+          echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
           echo "published=$published" >> "$GITHUB_OUTPUT"
 
       - name: Create and push release tag
@@ -276,3 +252,19 @@ EOF
           else
             gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
           fi
+
+      - name: Bump Cargo.toml to next patch version
+        if: steps.prepare.outputs.release_ready == 'true'
+        env:
+          NEXT_VERSION: ${{ steps.prepare.outputs.next_version }}
+        run: |
+          set -euo pipefail
+
+          cargo set-version "$NEXT_VERSION"
+          cargo metadata --format-version 1 --no-deps >/dev/null
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore(release): prepare v${NEXT_VERSION}"
+          git push origin HEAD:main

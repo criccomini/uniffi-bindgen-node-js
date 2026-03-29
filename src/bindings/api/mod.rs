@@ -637,6 +637,18 @@ mod tests {
     use uniffi_bindgen::interface::ComponentInterface;
     use uniffi_bindgen::interface::Type;
 
+    fn assert_component_js_imports_include_converters(rendered_js: &str, expected: &[&str]) {
+        let imports = crate::bindings::ComponentJsImports::from_public_api(rendered_js);
+
+        for expected in expected {
+            assert!(
+                imports.ffi_converter_imports.contains(&expected.to_string()),
+                "missing {expected} in {:?}",
+                imports.ffi_converter_imports
+            );
+        }
+    }
+
     #[test]
     fn component_model_collects_objects_records_enums_errors_and_functions() {
         let ci = ComponentInterface::from_webidl(
@@ -1335,6 +1347,122 @@ mod tests {
             ),
             "unexpected JS output: {}",
             rendered.js
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_temporal_converters_for_functions() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                timestamp echo_timestamp(timestamp when);
+                duration echo_duration(duration delay_ms);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .dts
+                .contains("export declare function echo_timestamp(when: Date): Date;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .dts
+                .contains("export declare function echo_duration(delay_ms: number): number;"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const loweredWhen = uniffiLowerIntoRustBuffer(FfiConverterTimestamp, when);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("return uniffiLiftFromRustBuffer(FfiConverterTimestamp, uniffiResult);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const loweredDelayMs = uniffiLowerIntoRustBuffer(FfiConverterDuration, delay_ms);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("return uniffiLiftFromRustBuffer(FfiConverterDuration, uniffiResult);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+
+        assert_component_js_imports_include_converters(
+            &rendered.js,
+            &["FfiConverterTimestamp", "FfiConverterDuration"],
+        );
+    }
+
+    #[test]
+    fn render_public_api_emits_temporal_converters_for_callback_interfaces() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                void init_clock(Clock callback);
+            };
+
+            callback interface Clock {
+                duration record(timestamp when);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let rendered = ComponentModel::from_ci(&ci)
+            .expect("component model should build")
+            .render_public_api()
+            .expect("public API should render");
+
+        assert!(
+            rendered
+                .dts
+                .contains("export interface Clock {\n  record(when: Date): number;\n}"),
+            "unexpected DTS output: {}",
+            rendered.dts
+        );
+        assert!(
+            rendered.js.contains(
+                "args: [\n          uniffiLiftFromRustBuffer(FfiConverterTimestamp, when),\n        ],"
+            ),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("const loweredReturn = uniffiLowerIntoRustBuffer(FfiConverterDuration, uniffiResult);"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+
+        assert_component_js_imports_include_converters(
+            &rendered.js,
+            &["FfiConverterTimestamp", "FfiConverterDuration"],
         );
     }
 

@@ -57,8 +57,8 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Replace the timestamp rejection unit test with positive timestamp rendering assertions.
 - [x] Add unit tests for nested optional and sequence shapes containing timestamps.
 - [x] Add unit tests for nested map shapes containing durations.
-- [ ] Add a render_public_api() test that exercises timestamp converter imports.
-- [ ] Add a render_public_api() test that exercises duration converter imports.
+- [x] Add a render_public_api() test that exercises timestamp converter imports.
+- [x] Add a render_public_api() test that exercises duration converter imports.
 - [ ] Add timestamp echo APIs to the basic fixture Rust source.
 - [ ] Add duration echo APIs to the basic fixture Rust source.
 - [ ] Add temporal declarations to the basic fixture UDL.

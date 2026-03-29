@@ -205,6 +205,8 @@ Public API conventions:
 - `bytes` becomes `Uint8Array`
 - Node `Buffer` inputs also work for `bytes`
 - 64-bit integers use `bigint`
+- `timestamp` becomes `Date` with millisecond precision
+- `duration` becomes `number` as a non-negative integer millisecond count
 - records become plain JavaScript objects
 - objects become JavaScript classes backed by UniFFI handles
 

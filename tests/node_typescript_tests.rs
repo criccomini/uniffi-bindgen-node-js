@@ -25,7 +25,9 @@ import {
   echo_byte_map,
   echo_bytes,
   echo_record,
+  echo_timestamp,
   type BlobRecord,
+  type TemporalRecord,
 } from "./index.js";
 
 const seed: BlobRecord = {
@@ -37,6 +39,11 @@ const seed: BlobRecord = {
 
 const store = new Store(seed);
 const current: BlobRecord = store.current();
+const when = new Date("2024-01-02T03:04:05.678Z");
+const echoedWhen: Date = echo_timestamp(when);
+declare const temporalRecord: TemporalRecord;
+const optionalWhen: Date | undefined = temporalRecord.maybe_when;
+const reminders: Map<string, Date> = temporalRecord.reminders;
 const flavor: Flavor = store.flavor();
 const scanResult: ScanResult = store.inspect(true);
 const echoedMap: Map<string, Uint8Array> = echo_byte_map(
@@ -51,6 +58,9 @@ const readerBuilder = new ReaderBuilder(true);
 const asyncReader: Promise<Reader> = readerBuilder.build();
 
 void current;
+void echoedWhen;
+void optionalWhen;
+void reminders;
 void flavor;
 void scanResult;
 void echoedMap;

@@ -263,11 +263,13 @@ jobs:
       - name: Bump Cargo.toml to next patch version
         if: steps.prepare.outputs.release_ready == 'true'
         env:
+          CURRENT_VERSION: ${{ steps.prepare.outputs.version }}
           NEXT_VERSION: ${{ steps.prepare.outputs.next_version }}
         run: |
           set -euo pipefail
 
-          cargo set-version "$NEXT_VERSION"
+          perl -0pi -e 's/^version = "\Q$ENV{CURRENT_VERSION}\E"$/version = "$ENV{NEXT_VERSION}"/m' Cargo.toml
+          perl -0pi -e 's/name = "uniffi-bindgen-node-js"\nversion = "\Q$ENV{CURRENT_VERSION}\E"/name = "uniffi-bindgen-node-js"\nversion = "$ENV{NEXT_VERSION}"/' Cargo.lock
           cargo metadata --format-version 1 --no-deps >/dev/null
 
           git add Cargo.toml Cargo.lock

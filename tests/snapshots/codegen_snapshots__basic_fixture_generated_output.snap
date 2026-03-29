@@ -1,5 +1,6 @@
 ---
 source: tests/codegen_snapshots.rs
+assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -14,39 +15,77 @@ import {
   getFfiBindings,
   load as loadFfi,
 } from "./fixture-ffi.js";
+
 import {
+
   createForeignBytes,
-  EMPTY_RUST_BUFFER,
+
   RustBufferValue,
+
 } from "./runtime/ffi-types.js";
+
+
 import {
+
   AbstractFfiConverterByteArray,
+
   FfiConverterArray,
+
   FfiConverterBool,
+
   FfiConverterBytes,
+
   FfiConverterMap,
+
   FfiConverterOptional,
+
   FfiConverterString,
+
 } from "./runtime/ffi-converters.js";
+
+
 import {
+
   UnexpectedEnumCase,
+
 } from "./runtime/errors.js";
+
+
 import {
+
   rustCallAsync,
+
   rustFutureContinuationCallback,
+
 } from "./runtime/async-rust-call.js";
+
+
 import {
+
   clearPendingForeignFutures,
+
 } from "./runtime/callbacks.js";
+
+
 import {
+
   createObjectConverter,
+
   createObjectFactory,
+
   UniffiObjectBase,
+
 } from "./runtime/objects.js";
+
+
 import {
+
   UniffiRustCaller,
+
   createRustCallStatus,
+
 } from "./runtime/rust-call.js";
+
 
 export const componentMetadata = Object.freeze({
   namespace: "fixture",

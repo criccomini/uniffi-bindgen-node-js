@@ -301,11 +301,19 @@ export function viewPointerBytes(pointer, length, label = "pointer") {
     throw new UnexpectedNullPointer(`${label} is null.`);
   }
 
-  return new Uint8Array(koffi.view(pointer, byteLength));
+  const pointerBytes = koffi.view(pointer, byteLength);
+  return Uint8Array.from(
+    ArrayBuffer.isView(pointerBytes)
+      ? pointerBytes
+      : new Uint8Array(pointerBytes),
+  );
 }
 
 export function readPointerBytes(pointer, length, label = "pointer") {
-  return Uint8Array.from(viewPointerBytes(pointer, length, label));
+  const bytes = viewPointerBytes(pointer, length, label);
+  return isByteSource(pointer)
+    ? Uint8Array.from(bytes)
+    : bytes;
 }
 
 export function readForeignBytes(bytes, label = "ForeignBytes") {

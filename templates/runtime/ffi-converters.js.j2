@@ -288,7 +288,7 @@ export class ByteReader {
     const start = this._offset;
     const end = this._offset + byteLength;
     this._offset = end;
-    return this._bytes.slice(start, end);
+    return this._bytes.subarray(start, end);
   }
 
   readCount(label) {

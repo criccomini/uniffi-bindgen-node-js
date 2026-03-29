@@ -42,9 +42,13 @@ export const ffiIntegrity = Object.freeze({
 });
 
 let loadedBindings = null;
+let loadedFfiTypes = null;
+let loadedFfiFunctions = null;
 let runtimeHooks = Object.freeze({});
 const moduleFilename = fileURLToPath(import.meta.url);
 const moduleDirectory = dirname(moduleFilename);
+const libraryNotLoadedMessage =
+  "The native library is not loaded. Call load(libraryPath) first.";
 
 function defaultSiblingLibraryFilename() {
   const extensionByPlatform = {
@@ -222,6 +226,8 @@ export function load(libraryPath = undefined) {
   }
 
   loadedBindings = bindings;
+  loadedFfiTypes = bindings.ffiTypes;
+  loadedFfiFunctions = bindings.ffiFunctions;
   return loadedBindings;
 }
 
@@ -238,6 +244,8 @@ export function unload() {
   }
   loadedBindings.library.unload();
   loadedBindings = null;
+  loadedFfiTypes = null;
+  loadedFfiFunctions = null;
   if (hookError != null) {
     throw hookError;
   }
@@ -258,14 +266,32 @@ if (!ffiMetadata.manualLoad) {
 }
 {% endif %}
 
+function throwLibraryNotLoaded() {
+  throw new LibraryNotLoadedError(libraryNotLoadedMessage);
+}
+
 export function getFfiBindings() {
   if (loadedBindings === null) {
-    throw new LibraryNotLoadedError(
-      "The native library is not loaded. Call load(libraryPath) first.",
-    );
+    throwLibraryNotLoaded();
   }
 
   return loadedBindings;
+}
+
+export function getFfiTypes() {
+  if (loadedFfiTypes === null) {
+    throwLibraryNotLoaded();
+  }
+
+  return loadedFfiTypes;
+}
+
+function getLoadedFfiFunctions() {
+  if (loadedFfiFunctions === null) {
+    throwLibraryNotLoaded();
+  }
+
+  return loadedFfiFunctions;
 }
 
 export function getContractVersion(bindings = getFfiBindings()) {
@@ -306,7 +332,7 @@ export function validateChecksums(bindings = getFfiBindings()) {
 export const ffiFunctions = Object.freeze({
 {% for function in context.functions %}
   {{ function.identifier }}(...args) {
-    const result = getFfiBindings().ffiFunctions.{{ function.identifier }}(...args);
+    const result = getLoadedFfiFunctions().{{ function.identifier }}(...args);
 {% if let Some(return_normalizer) = function.return_normalizer %}
     return {{ return_normalizer }}(result);
 {% else %}
@@ -316,7 +342,7 @@ export const ffiFunctions = Object.freeze({
 {% if function.generic_identifier.is_some() %}
 
   {{ function.generic_identifier.as_ref().unwrap() }}(...args) {
-    const result = getFfiBindings().ffiFunctions.{{ function.generic_identifier.as_ref().unwrap() }}(...args);
+    const result = getLoadedFfiFunctions().{{ function.generic_identifier.as_ref().unwrap() }}(...args);
 {% if let Some(return_normalizer) = function.return_normalizer %}
     return {{ return_normalizer }}(result);
 {% else %}

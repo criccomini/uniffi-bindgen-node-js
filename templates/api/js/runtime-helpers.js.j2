@@ -8,18 +8,18 @@ function uniffiLiftString(bytes) {
 function uniffiDecodeRustCallStatus(status) {
   return status == null
     ? createRustCallStatus()
-    : koffi.decode(status, getFfiBindings().ffiTypes.RustCallStatus);
+    : koffi.decode(status, getFfiTypes().RustCallStatus);
 }
 
 function uniffiWriteRustCallStatus(status, value) {
   if (status != null) {
-    koffi.encode(status, getFfiBindings().ffiTypes.RustCallStatus, value);
+    koffi.encode(status, getFfiTypes().RustCallStatus, value);
   }
   return status;
 }
 
 const uniffiRustCaller = new UniffiRustCaller({
-  createStatus: () => koffi.alloc(getFfiBindings().ffiTypes.RustCallStatus, 1),
+  createStatus: () => koffi.alloc(getFfiTypes().RustCallStatus, 1),
   readStatus: uniffiDecodeRustCallStatus,
   writeStatus: uniffiWriteRustCallStatus,
   liftString: uniffiLiftString,

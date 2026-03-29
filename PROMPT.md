@@ -1,33 +1,24 @@
-# Prompt For Codex: Iterative Performance Work In This Repo
-
-## Summary
-
-Use the repo’s existing benchmark harness as the source of truth. Measure a baseline, make one performance change at a time, rerun the same benchmark suite, compare before/
-after on the same harness, then rerun the full perf suite and run cargo test last if code changed.
-
-## Prompt
-
-You are working in the `uniffi-bindgen-node-js` repo. Iteratively improve performance, and use the existing perf tests in this repo as the only scoring mechanism for whether a
+You are working in the `uniffi-bindgen-node-js` repo. Iteratively improve performance, and use the repo’s existing perf tests as the only scoring mechanism for whether a
 change helped.
 
-Benchmark source of truth:
-- Rust driver: `tests/node_benchmarks.rs`
-- JS benchmark suites:
-  - `tests/benchmarks/basic-hot-path.mjs`
-  - `tests/benchmarks/callback-hot-path.mjs`
-  - `tests/benchmarks/startup-lifecycle.mjs`
-- Benchmark helpers/options: `tests/benchmarks/common.mjs`
+Use these files as the source of truth:
+- `tests/node_benchmarks.rs`
+- `tests/benchmarks/basic-hot-path.mjs`
+- `tests/benchmarks/callback-hot-path.mjs`
+- `tests/benchmarks/startup-lifecycle.mjs`
+- `tests/benchmarks/common.mjs`
+- `tests/support/mod.rs`
 
-How the perf tests actually run:
-- Use the Rust test harness, not the `.mjs` files directly from the repo root.
-- The harness builds fixture `cdylib`s, generates temporary npm packages, stages the benchmark scripts into those generated packages, runs `npm install --no-package-lock`, and
-then executes Node with `--expose-gc`.
-- These benchmark tests are `#[ignore]` by default because they require npm registry access to install real `koffi` and `tinybench`.
+How perf tests actually run:
+- Use the Rust test harness for measurement, not ad hoc scripts from the repo root.
+- The harness builds fixture `cdylib`s, generates temporary npm packages, stages `tests/benchmarks` into those packages, runs `npm install --no-package-lock`, and executes
+Node with `--expose-gc`.
+- These perf tests are `#[ignore]` by default because they require npm registry access to install real `koffi` and `tinybench`.
 
-Commands:
+Perf commands:
 - List available perf tests:
   `cargo test --test node_benchmarks -- --ignored --list`
-- Run the full perf suite and print benchmark output:
+- Run the full perf suite:
   `cargo test --test node_benchmarks -- --ignored --nocapture`
 - Run individual suites:
   `cargo test --test node_benchmarks benchmarks_basic_generated_package_hot_paths -- --ignored --exact --nocapture`
@@ -39,58 +30,81 @@ What each suite measures:
 builders, and readers.
 - `benchmarks_callback_generated_package_hot_paths`: generated-package callback/runtime hot paths for sync sinks, async sinks, settings serialization, and write-batch
 operations.
-- `benchmarks_generated_package_startup_and_lifecycle`: cold-process startup/lifecycle for eager import, manual `load()`, and `load() + unload()` using fresh child processes.
+- `benchmarks_generated_package_startup_and_lifecycle`: cold-process startup/lifecycle for eager import, manual `load()`, and `load() + unload()`.
 
-Benchmark tuning knobs:
-- Hot-path suites read:
-  - `UNIFFI_BENCH_TIME_MS`
-  - `UNIFFI_BENCH_ITERATIONS`
-  - `UNIFFI_BENCH_WARMUP_TIME_MS`
-  - `UNIFFI_BENCH_WARMUP_ITERATIONS`
-- Startup suite reads:
-  - `UNIFFI_BENCH_STARTUP_TIME_MS`
-  - `UNIFFI_BENCH_STARTUP_ITERATIONS`
-- If you change any benchmark env vars, keep them identical between baseline and comparison runs and report the exact values used.
+Benchmark knobs:
+- Hot-path suites use:
+  `UNIFFI_BENCH_TIME_MS`
+  `UNIFFI_BENCH_ITERATIONS`
+  `UNIFFI_BENCH_WARMUP_TIME_MS`
+  `UNIFFI_BENCH_WARMUP_ITERATIONS`
+- Startup suite uses:
+  `UNIFFI_BENCH_STARTUP_TIME_MS`
+  `UNIFFI_BENCH_STARTUP_ITERATIONS`
+- Keep env vars identical between baseline and comparison runs, and report the exact values used.
 
 How to evaluate performance:
-- Establish a before-change baseline with the exact suite you want to improve.
+- Establish a baseline with the exact suite you are targeting.
 - After each code change, rerun the same suite with the same command and same env.
-- Use the `tinybench` table printed to stdout as the comparison source. Compare the same named benchmark rows before vs. after. Do not compare numbers across different suites.
-- Treat results as relative before/after measurements on the same machine and same harness. The current harness uses the repo’s existing dev/test flow, so use it for
-comparison, not as an absolute production benchmark.
-- Before finishing, rerun the full perf suite to check for regressions outside the targeted area.
-- If one benchmark improves and another regresses, report that tradeoff explicitly.
-- Do not change the benchmark harness, fixtures, or benchmark parameters just to improve reported numbers. If a harness change is truly required, separate it from performance
-claims and justify it.
+- Compare only the same named benchmark rows before vs. after from the printed `tinybench` table.
+- Treat results as relative before/after measurements on the same machine and same harness.
+- Rerun the full perf suite before stopping.
+- If one row improves and another regresses, report that tradeoff explicitly.
+- Do not change the benchmark harness, fixtures, or benchmark parameters just to improve reported numbers.
+
+Hotspot visibility is mandatory:
+- Do not rely only on benchmark deltas. For every targeted perf test, capture hotspot data before changing code and again after a material performance shift.
+- Save a raw `.cpuprofile` artifact and also provide a terminal summary of the hottest files, functions, and call stacks.
+- Use Node’s built-in CPU profiler with `--cpu-prof --cpu-prof-dir <dir> --cpu-prof-name <name>.cpuprofile`.
+
+How to profile without changing the measurement harness:
+- Use the Rust perf harness for scoring.
+- For profiling, reproduce the same generated-package setup in a retained temp directory by following `tests/support/mod.rs`: build the relevant fixture `cdylib`, generate the
+package, stage `tests/benchmarks` into it, run `npm install --no-package-lock`, and execute the benchmark logic from inside that generated package.
+- For hot-path suites, if you need per-benchmark visibility, create a temporary profiling driver that mirrors the exact setup and body of the specific `bench.add(...)` case
+you are investigating, then run that driver under `node --cpu-prof`. Do not treat that driver as the scoring harness; it is only for hotspot diagnosis.
+- For the startup suite, profile the child scripts directly rather than `benchmarks/startup-lifecycle.mjs`, because that benchmark measures fresh child processes:
+  `benchmarks/children/cold-import.mjs`
+  `benchmarks/children/cold-manual-load.mjs`
+  `benchmarks/children/load-unload.mjs`
+- Report the saved profile path for each targeted test and summarize the hottest stacks/files/functions from the profile output.
 
 Working loop:
 1. Run a baseline benchmark.
-2. Make one focused performance change.
-3. Rerun the relevant benchmark suite and compare against baseline.
-4. Repeat while the benchmark data shows real improvement.
-5. Rerun the full perf suite before stopping.
-6. If you made code changes, run `cargo test` as the last step.
+2. Capture hotspot visibility for the targeted test.
+3. Make one focused performance change.
+4. Rerun the same benchmark suite and compare against baseline.
+5. Refresh hotspot visibility if the bottleneck moved or the result materially changed.
+6. Repeat while measured results improve.
+7. Rerun the full perf suite before stopping.
+8. If you made code changes, run `cargo test` last.
 
 Reporting requirements:
 - Show the benchmark command(s) used.
-- Show before/after results for the benchmark rows that materially changed.
-- Call out regressions and inconclusive/noisy results.
+- Show the exact env var values used for benchmark timing.
+- Show before/after results for benchmark rows that materially changed.
+- Show the hotspot artifact path(s) and a concise hotspot summary for each targeted test.
+- Call out regressions, noisy results, and inconclusive runs explicitly.
 - State whether the full perf suite was rerun.
 - State whether `cargo test` was run last and whether it passed.
 - If benchmarks cannot run because npm registry access is unavailable, say so explicitly and do not claim unmeasured performance improvements.
 
-## Test Plan
+Constraints:
+- Use the current perf harness as-is.
+- Do not add new perf tests or redefine success criteria unless explicitly asked.
+- Do not claim a performance improvement without benchmark evidence from this repo’s existing perf suite.
 
-- Baseline with the targeted perf suite.
-- Re-measure the same suite after each iteration.
-- Rerun the full perf suite before stopping.
-- Run cargo test last if any code changed.
+## Scenarios
+
+- Basic hot-path suite
+- Callback hot-path suite
+- Startup/lifecycle suite, with direct child-process profiling for hotspot visibility
 
 ## Assumptions
 
-- Use the current perf harness as-is.
-- Do not redefine success criteria or add new perf tests unless explicitly asked.
-- The repo’s current perf coverage is runtime behavior of generated fixture packages, and performance claims should be scoped to that.
+- Node’s built-in CPU profiler is available via node --cpu-prof.
+- Raw .cpuprofile artifacts plus CLI hotspot summaries are required.
+- Perf claims stay scoped to this repo’s existing generated-package benchmark coverage.
 
 ## Instructions
 

@@ -72,4 +72,5 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a JS smoke assertion that negative duration inputs throw.
 - [x] Refresh the basic fixture snapshot to capture the new API surface.
 - [x] Update the README public API conventions to document timestamp and duration mappings.
-- [ ] Remove timestamp and duration entries from the README limitations list.
+- [x] Remove timestamp and duration entries from the README limitations list.
+✅

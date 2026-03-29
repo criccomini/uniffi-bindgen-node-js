@@ -216,6 +216,4 @@ The generator does not yet support:
 
 - UniFFI custom types
 - UniFFI external types
-- timestamps in the public Node API
-- durations in the public Node API
 - automatic multi-target package assembly

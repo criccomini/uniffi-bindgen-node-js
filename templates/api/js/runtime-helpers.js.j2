@@ -12,7 +12,15 @@ function uniffiDecodeRustCallStatus(status) {
 }
 
 function uniffiWriteRustCallStatus(status, value) {
-  if (status != null) {
+  if (
+    status != null
+    && (
+      value.code !== 0
+      || value.error_buf.data !== null
+      || value.error_buf.len !== 0n
+      || value.error_buf.capacity !== 0n
+    )
+  ) {
     koffi.encode(status, getFfiTypes().RustCallStatus, value);
   }
   return status;

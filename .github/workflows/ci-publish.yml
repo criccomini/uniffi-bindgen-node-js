@@ -116,7 +116,7 @@ jobs:
       - lint
       - test
       - generated-package-smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release): prepare v')
+    if: "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release): prepare v') }}"
     concurrency:
       group: release-main
       cancel-in-progress: false
@@ -143,9 +143,7 @@ jobs:
             local version="$1"
             local major minor patch extra
 
-            IFS=. read -r major minor patch extra <<EOF
-$version
-EOF
+            IFS=. read -r major minor patch extra <<< "$version"
 
             if [ "${major:-}" != "0" ] || [ "${minor:-}" != "0" ] || [ -n "${extra:-}" ] || [ -z "${patch:-}" ]; then
               echo "release automation only supports 0.0.X versions; found ${version}" >&2

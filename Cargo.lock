@@ -779,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen-node-js"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "askama 0.12.1",

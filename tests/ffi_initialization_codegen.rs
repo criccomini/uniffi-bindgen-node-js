@@ -117,9 +117,13 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     });
 
     let loadedBindings = null;
+    let loadedFfiTypes = null;
+    let loadedFfiFunctions = null;
     let runtimeHooks = Object.freeze({});
     const moduleFilename = fileURLToPath(import.meta.url);
     const moduleDirectory = dirname(moduleFilename);
+    const libraryNotLoadedMessage =
+      "The native library is not loaded. Call load(libraryPath) first.";
 
     function defaultSiblingLibraryFilename() {
       const extensionByPlatform = {
@@ -235,6 +239,8 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
       }
 
       loadedBindings = bindings;
+      loadedFfiTypes = bindings.ffiTypes;
+      loadedFfiFunctions = bindings.ffiFunctions;
       return loadedBindings;
     }
 
@@ -251,6 +257,8 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
       }
       loadedBindings.library.unload();
       loadedBindings = null;
+      loadedFfiTypes = null;
+      loadedFfiFunctions = null;
       if (hookError != null) {
         throw hookError;
       }
@@ -271,14 +279,32 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     }
 
 
+    function throwLibraryNotLoaded() {
+      throw new LibraryNotLoadedError(libraryNotLoadedMessage);
+    }
+
     export function getFfiBindings() {
       if (loadedBindings === null) {
-        throw new LibraryNotLoadedError(
-          "The native library is not loaded. Call load(libraryPath) first.",
-        );
+        throwLibraryNotLoaded();
       }
 
       return loadedBindings;
+    }
+
+    export function getFfiTypes() {
+      if (loadedFfiTypes === null) {
+        throwLibraryNotLoaded();
+      }
+
+      return loadedFfiTypes;
+    }
+
+    function getLoadedFfiFunctions() {
+      if (loadedFfiFunctions === null) {
+        throwLibraryNotLoaded();
+      }
+
+      return loadedFfiFunctions;
     }
 
     export function getContractVersion(bindings = getFfiBindings()) {
@@ -366,6 +392,7 @@ fn generated_ffi_dts_snapshots_initialization_contract() {
     export declare function unload(): boolean;
     export declare function isLoaded(): boolean;
     export declare function getFfiBindings(): Readonly<FfiBindings>;
+    export declare function getFfiTypes(): Readonly<Record<string, unknown>>;
     export declare function getContractVersion(bindings?: Readonly<FfiBindings>): number;
     export declare function validateContractVersion(bindings?: Readonly<FfiBindings>): number;
     export declare function getChecksums(

@@ -108,6 +108,8 @@ Constraints:
 
 ## Instructions
 
-- never ever change any PROMPT.md
 - commit after each change
 - use conventional commit syntax for commit messages
+
+Append a ✅ to the end of PROMPT.md when you have completed the instructions.
+✅

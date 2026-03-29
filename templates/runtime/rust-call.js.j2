@@ -45,6 +45,17 @@ function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
   };
 }
 
+function isEmptyRustBuffer(buffer) {
+  return (
+    buffer == null
+    || (
+      buffer.data == null
+      && buffer.len === 0n
+      && buffer.capacity === 0n
+    )
+  );
+}
+
 function consumeRustBuffer(buffer, freeRustBuffer) {
   const normalized = createMutableRustBuffer(buffer);
   if (normalized.len === 0n) {
@@ -82,6 +93,10 @@ function checkRustCallStatusImpl(
   liftString,
   errorHandlerOverride = undefined,
 ) {
+  if (status?.code === CALL_SUCCESS && isEmptyRustBuffer(status.error_buf)) {
+    return status;
+  }
+
   const normalized = normalizeRustCallStatus(status) ?? createRustCallStatus();
   const errorHandler = errorHandlerOverride ?? options?.errorHandler;
   const resolvedFreeRustBuffer = options?.freeRustBuffer ?? freeRustBuffer;

@@ -1516,7 +1516,7 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "const loweredCallback = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterLogCallback), callback);"
+                "const loweredCallback = uniffiLowerIntoRustBuffer(uniffiOptionalConverter(FfiConverterLogCallback), callback);"
             ),
             "unexpected component JS contents: {component_js}"
         );
@@ -1546,7 +1546,7 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "args: [\n          uniffiLiftFromRustBuffer(FfiConverterBytes, key),\n          uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterBytes), existing_value),\n          uniffiLiftFromRustBuffer(FfiConverterBytes, operand),\n        ],"
+                "args: [\n          uniffiLiftFromRustBuffer(FfiConverterBytes, key),\n          uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterBytes), existing_value),\n          uniffiLiftFromRustBuffer(FfiConverterBytes, operand),\n        ],"
             ),
             "unexpected component JS contents: {component_js}"
         );
@@ -1722,13 +1722,13 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterBytes), uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterBytes), uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterKeyValue), uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterKeyValue), uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
@@ -1758,7 +1758,7 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterWriteHandle), uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterWriteHandle), uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
@@ -1770,13 +1770,13 @@ mod tests {
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterRowEntry), uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterRowEntry), uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );
         assert!(
             component_js.contains(
-                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(new FfiConverterArray(FfiConverterWalFile), uniffiResult),"
+                "liftFunc: (uniffiResult) => uniffiLiftFromRustBuffer(uniffiArrayConverter(FfiConverterWalFile), uniffiResult),"
             ),
             "unexpected component JS contents: {component_js}"
         );

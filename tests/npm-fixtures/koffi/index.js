@@ -1172,6 +1172,13 @@ function createBasicFixtureRuntime(libraryPath) {
       },
     ],
     [
+      "uniffi_fixture_basic_fn_func_echo_duration",
+      (delayBuffer, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(rustBufferToUint8Array(delayBuffer));
+      },
+    ],
+    [
       "uniffi_fixture_basic_fn_func_echo_record",
       (recordBuffer, status) => {
         setCallSuccess(status);

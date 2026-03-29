@@ -594,6 +594,7 @@ import {{
   Store,
   echo_byte_map,
   echo_bytes,
+  echo_duration,
   echo_record,
   echo_timestamp,
 }} from "./index.js";
@@ -680,6 +681,7 @@ import {{
   Store,
   echo_byte_map,
   echo_bytes,
+  echo_duration,
   echo_record,
   echo_timestamp,
 }} from "./index.js";
@@ -740,6 +742,7 @@ import {{
   Store,
   echo_byte_map,
   echo_bytes,
+  echo_duration,
   echo_record,
   echo_timestamp,
   load,
@@ -852,6 +855,10 @@ const when = new Date("2024-01-02T03:04:05.678Z");
 const echoedWhen = echo_timestamp(when);
 assert.ok(echoedWhen instanceof Date);
 assert.equal(echoedWhen.getTime(), when.getTime());
+
+const echoedDelayMs = echo_duration(1_500);
+assert.equal(typeof echoedDelayMs, "number");
+assert.equal(echoedDelayMs, 1_500);
 
 const echoedRecord = echo_record(seed);
 assert.equal(echoedRecord.name, "seed");

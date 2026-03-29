@@ -67,7 +67,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Update the TypeScript smoke test to typecheck Date timestamp usage.
 - [x] Update the TypeScript smoke test to typecheck numeric duration usage.
 - [x] Add a JS smoke assertion that timestamp roundtrips return Date instances.
-- [ ] Add a JS smoke assertion that duration roundtrips return numeric values.
+- [x] Add a JS smoke assertion that duration roundtrips return numeric values.
 - [ ] Add a JS smoke assertion that invalid Date inputs throw.
 - [ ] Add a JS smoke assertion that negative duration inputs throw.
 - [ ] Refresh the basic fixture snapshot to capture the new API surface.

@@ -175,3 +175,23 @@ Local tests cover:
 - generated package creation and dependency installation
 - plain JavaScript smoke tests
 - TypeScript declaration checks
+
+When running the real Koffi benchmark suites, use Node 22 or earlier for now. On Node versions newer than 22, the callback benchmarks can abort inside Koffi's synchronous callback path. Track that upstream in <https://github.com/Koromix/koffi/issues/261>.
+
+To measure Rust coverage for the test suite, install the LLVM coverage tooling once:
+
+```sh
+rustup component add llvm-tools-preview
+cargo install cargo-llvm-cov
+```
+
+Then run `cargo llvm-cov` directly:
+
+```sh
+cargo llvm-cov --html
+cargo llvm-cov report --lcov --output-path target/llvm-cov/lcov.info
+```
+
+The first command runs the test suite under coverage instrumentation and writes the HTML report to `target/llvm-cov/html/index.html`.
+
+The second command reuses the most recent coverage run and writes an LCOV artifact to `target/llvm-cov/lcov.info`.

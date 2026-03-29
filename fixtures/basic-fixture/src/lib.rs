@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use thiserror::Error;
@@ -69,6 +69,11 @@ pub fn echo_bytes(value: Vec<u8>) -> Vec<u8> {
 #[uniffi::export]
 pub fn echo_timestamp(when: SystemTime) -> SystemTime {
     when
+}
+
+#[uniffi::export]
+pub fn echo_duration(delay_ms: Duration) -> Duration {
+    delay_ms
 }
 
 #[uniffi::export]

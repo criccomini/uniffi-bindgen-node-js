@@ -864,6 +864,14 @@ assert.throws(() => echo_timestamp(new Date(Number.NaN)), (error) => {
 const echoedDelayMs = echo_duration(1_500);
 assert.equal(typeof echoedDelayMs, "number");
 assert.equal(echoedDelayMs, 1_500);
+assert.throws(() => echo_duration(-1), (error) => {
+  assert.equal(error?.name, "ConverterRangeError");
+  assert.equal(
+    error?.message,
+    "duration values must be non-negative integer millisecond counts.",
+  );
+  return true;
+});
 
 const echoedRecord = echo_record(seed);
 assert.equal(echoedRecord.name, "seed");

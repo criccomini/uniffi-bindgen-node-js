@@ -69,7 +69,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a JS smoke assertion that timestamp roundtrips return Date instances.
 - [x] Add a JS smoke assertion that duration roundtrips return numeric values.
 - [x] Add a JS smoke assertion that invalid Date inputs throw.
-- [ ] Add a JS smoke assertion that negative duration inputs throw.
+- [x] Add a JS smoke assertion that negative duration inputs throw.
 - [ ] Refresh the basic fixture snapshot to capture the new API surface.
 - [ ] Update the README public API conventions to document timestamp and duration mappings.
 - [ ] Remove timestamp and duration entries from the README limitations list.

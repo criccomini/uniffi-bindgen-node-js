@@ -59,7 +59,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add unit tests for nested map shapes containing durations.
 - [x] Add a render_public_api() test that exercises timestamp converter imports.
 - [x] Add a render_public_api() test that exercises duration converter imports.
-- [ ] Add timestamp echo APIs to the basic fixture Rust source.
+- [x] Add timestamp echo APIs to the basic fixture Rust source.
 - [ ] Add duration echo APIs to the basic fixture Rust source.
 - [ ] Add temporal declarations to the basic fixture UDL.
 - [ ] Add a fixture record that includes timestamp and duration fields.

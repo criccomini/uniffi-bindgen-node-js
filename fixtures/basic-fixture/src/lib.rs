@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::SystemTime,
 };
 
 use thiserror::Error;
@@ -63,6 +64,11 @@ pub fn echo_record(record: BlobRecord) -> BlobRecord {
 #[uniffi::export]
 pub fn echo_bytes(value: Vec<u8>) -> Vec<u8> {
     value
+}
+
+#[uniffi::export]
+pub fn echo_timestamp(when: SystemTime) -> SystemTime {
+    when
 }
 
 #[uniffi::export]

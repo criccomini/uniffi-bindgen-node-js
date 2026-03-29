@@ -53,10 +53,10 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 ## TODO
 
 - [x] Change render_public_type to map Type::Timestamp to Date.
-- [ ] Change render_public_type to map Type::Duration to number.
+- [x] Change render_public_type to map Type::Duration to number.
 - [x] Replace the timestamp rejection unit test with positive timestamp rendering assertions.
 - [x] Add unit tests for nested optional and sequence shapes containing timestamps.
-- [ ] Add unit tests for nested map shapes containing durations.
+- [x] Add unit tests for nested map shapes containing durations.
 - [ ] Add a render_public_api() test that exercises timestamp converter imports.
 - [ ] Add a render_public_api() test that exercises duration converter imports.
 - [ ] Add timestamp echo APIs to the basic fixture Rust source.

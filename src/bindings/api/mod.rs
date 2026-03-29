@@ -1031,6 +1031,11 @@ mod tests {
     }
 
     #[test]
+    fn render_public_type_maps_duration_to_number() {
+        assert_eq!(render_public_type(&Type::Duration).unwrap(), "number");
+    }
+
+    #[test]
     fn render_public_type_maps_nested_timestamp_shapes() {
         assert_eq!(
             render_public_type(&Type::Optional {
@@ -1049,6 +1054,21 @@ mod tests {
             })
             .unwrap(),
             "Array<Date | undefined>"
+        );
+    }
+
+    #[test]
+    fn render_public_type_maps_nested_duration_map_shapes() {
+        assert_eq!(
+            render_public_type(&Type::Map {
+                key_type: Box::new(Type::String),
+                value_type: Box::new(Type::Map {
+                    key_type: Box::new(Type::String),
+                    value_type: Box::new(Type::Duration),
+                }),
+            })
+            .unwrap(),
+            "Map<string, Map<string, number>>"
         );
     }
 

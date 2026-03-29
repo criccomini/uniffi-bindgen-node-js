@@ -121,7 +121,7 @@ pub(crate) fn render_public_type(type_: &Type) -> Result<String> {
             render_public_type(value_type)?
         )),
         Type::Timestamp => Ok("Date".to_string()),
-        Type::Duration => bail!("durations are not supported in the public Node API yet"),
+        Type::Duration => Ok("number".to_string()),
         Type::Custom { name, .. } => {
             bail!("custom type '{name}' is not supported in the public Node API yet")
         }

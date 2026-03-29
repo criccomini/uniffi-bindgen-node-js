@@ -1,6 +1,7 @@
 namespace fixture {
     BlobRecord echo_record(BlobRecord record);
     bytes echo_bytes(bytes value);
+    record<string, bytes> echo_byte_map(record<string, bytes> value);
 };
 
 enum Flavor {

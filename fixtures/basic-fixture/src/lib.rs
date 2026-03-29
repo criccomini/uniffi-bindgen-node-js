@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use thiserror::Error;
 
@@ -59,6 +62,11 @@ pub fn echo_record(record: BlobRecord) -> BlobRecord {
 
 #[uniffi::export]
 pub fn echo_bytes(value: Vec<u8>) -> Vec<u8> {
+    value
+}
+
+#[uniffi::export]
+pub fn echo_byte_map(value: HashMap<String, Vec<u8>>) -> HashMap<String, Vec<u8>> {
     value
 }
 

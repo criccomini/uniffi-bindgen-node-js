@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 88
 expression: "snapshot_output_for_fixture(\"basic\")"
 ---
 === index.js ===
@@ -439,6 +438,15 @@ configureRuntimeHooks({
     uniffiUnregisterCallbackVtables();
   },
 });
+
+export function echo_byte_map(value) {
+    const loweredValue = uniffiLowerIntoRustBuffer(new FfiConverterMap(FfiConverterString, FfiConverterBytes), value);
+  const uniffiResult = uniffiRustCaller.rustCall(
+    (status) => ffiFunctions.uniffi_fixture_basic_fn_func_echo_byte_map(loweredValue, status),
+    uniffiRustCallOptions(),
+  );
+  return uniffiLiftFromRustBuffer(new FfiConverterMap(FfiConverterString, FfiConverterBytes), uniffiResult);
+}
 
 export function echo_bytes(value) {
     const loweredValue = uniffiLowerIntoRustBuffer(FfiConverterBytes, value);
@@ -957,6 +965,8 @@ export declare class FixtureErrorParse extends FixtureError {
   constructor(message: string);
 }
 
+export declare function echo_byte_map(value: Map<string, Uint8Array>): Map<string, Uint8Array>;
+
 export declare function echo_bytes(value: Uint8Array): Uint8Array;
 
 export declare function echo_record(record: BlobRecord): BlobRecord;
@@ -1024,6 +1034,8 @@ export const ffiIntegrity = Object.freeze({
   contractVersionFunction: "ffi_fixture_basic_uniffi_contract_version",
   expectedContractVersion: 29,
   checksums: Object.freeze({
+
+    "uniffi_fixture_basic_checksum_func_echo_byte_map": 1903,
 
     "uniffi_fixture_basic_checksum_func_echo_bytes": 49245,
 
@@ -1467,6 +1479,9 @@ function createBindings(libraryPath) {
     uniffi_fixture_basic_fn_method_store_require_value_generic_abi: library.func("uniffi_fixture_basic_fn_method_store_require_value", ffiTypes.RustBuffer, [ffiTypes.RustArcPtr, "int8_t", koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
+    uniffi_fixture_basic_fn_func_echo_byte_map: library.func("uniffi_fixture_basic_fn_func_echo_byte_map", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
+
+
     uniffi_fixture_basic_fn_func_echo_bytes: library.func("uniffi_fixture_basic_fn_func_echo_bytes", ffiTypes.RustBuffer, [ffiTypes.RustBuffer, koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
@@ -1641,6 +1656,9 @@ function createBindings(libraryPath) {
     ffi_fixture_basic_rust_future_complete_void: library.func("ffi_fixture_basic_rust_future_complete_void", "void", [ffiTypes.UniffiHandle, koffi.pointer(ffiTypes.RustCallStatus)]),
 
 
+    uniffi_fixture_basic_checksum_func_echo_byte_map: library.func("uniffi_fixture_basic_checksum_func_echo_byte_map", "uint16_t", []),
+
+
     uniffi_fixture_basic_checksum_func_echo_bytes: library.func("uniffi_fixture_basic_checksum_func_echo_bytes", "uint16_t", []),
 
 
@@ -1797,6 +1815,8 @@ export function validateContractVersion(bindings = getFfiBindings()) {
 export function getChecksums(bindings = getFfiBindings()) {
   return Object.freeze({
 
+    "uniffi_fixture_basic_checksum_func_echo_byte_map": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_byte_map(),
+
     "uniffi_fixture_basic_checksum_func_echo_bytes": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_bytes(),
 
     "uniffi_fixture_basic_checksum_func_echo_record": bindings.ffiFunctions.uniffi_fixture_basic_checksum_func_echo_record(),
@@ -1830,6 +1850,14 @@ export function getChecksums(bindings = getFfiBindings()) {
 
 export function validateChecksums(bindings = getFfiBindings()) {
   const actualChecksums = getChecksums(bindings);
+
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_func_echo_byte_map"];
+    const actual = actualChecksums["uniffi_fixture_basic_checksum_func_echo_byte_map"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_basic_checksum_func_echo_byte_map", expected, actual);
+    }
+  }
 
   {
     const expected = ffiIntegrity.checksums["uniffi_fixture_basic_checksum_func_echo_bytes"];
@@ -2238,6 +2266,14 @@ export const ffiFunctions = Object.freeze({
 
   uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args);
+
+    return normalizeRustBuffer(result);
+
+  },
+
+
+  uniffi_fixture_basic_fn_func_echo_byte_map(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_fn_func_echo_byte_map(...args);
 
     return normalizeRustBuffer(result);
 
@@ -2708,6 +2744,14 @@ export const ffiFunctions = Object.freeze({
   },
 
 
+  uniffi_fixture_basic_checksum_func_echo_byte_map(...args) {
+    const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_byte_map(...args);
+
+    return result;
+
+  },
+
+
   uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
     const result = getFfiBindings().ffiFunctions.uniffi_fixture_basic_checksum_func_echo_bytes(...args);
 
@@ -3032,6 +3076,12 @@ export function uniffi_fixture_basic_fn_method_store_require_value(...args) {
 
 export function uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args) {
   return ffiFunctions.uniffi_fixture_basic_fn_method_store_require_value_generic_abi(...args);
+}
+
+
+
+export function uniffi_fixture_basic_fn_func_echo_byte_map(...args) {
+  return ffiFunctions.uniffi_fixture_basic_fn_func_echo_byte_map(...args);
 }
 
 
@@ -3384,6 +3434,12 @@ export function ffi_fixture_basic_rust_future_complete_void(...args) {
 
 
 
+export function uniffi_fixture_basic_checksum_func_echo_byte_map(...args) {
+  return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_byte_map(...args);
+}
+
+
+
 export function uniffi_fixture_basic_checksum_func_echo_bytes(...args) {
   return ffiFunctions.uniffi_fixture_basic_checksum_func_echo_bytes(...args);
 }
@@ -3561,6 +3617,8 @@ export declare function uniffi_fixture_basic_fn_method_store_replace(...args: an
 
 export declare function uniffi_fixture_basic_fn_method_store_require_value(...args: any[]): any;
 
+export declare function uniffi_fixture_basic_fn_func_echo_byte_map(...args: any[]): any;
+
 export declare function uniffi_fixture_basic_fn_func_echo_bytes(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_fn_func_echo_record(...args: any[]): any;
@@ -3676,6 +3734,8 @@ export declare function ffi_fixture_basic_rust_future_cancel_void(...args: any[]
 export declare function ffi_fixture_basic_rust_future_free_void(...args: any[]): any;
 
 export declare function ffi_fixture_basic_rust_future_complete_void(...args: any[]): any;
+
+export declare function uniffi_fixture_basic_checksum_func_echo_byte_map(...args: any[]): any;
 
 export declare function uniffi_fixture_basic_checksum_func_echo_bytes(...args: any[]): any;
 

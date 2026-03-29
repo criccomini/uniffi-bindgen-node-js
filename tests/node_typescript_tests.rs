@@ -22,6 +22,7 @@ import {
   ReaderBuilder,
   ScanResult,
   Store,
+  echo_byte_map,
   echo_bytes,
   echo_record,
   type BlobRecord,
@@ -38,6 +39,9 @@ const store = new Store(seed);
 const current: BlobRecord = store.current();
 const flavor: Flavor = store.flavor();
 const scanResult: ScanResult = store.inspect(true);
+const echoedMap: Map<string, Uint8Array> = echo_byte_map(
+  new Map<string, Uint8Array>([["alpha", new Uint8Array([6, 7, 8])]]),
+);
 const echoedBytes: Uint8Array = echo_bytes(new Uint8Array([7, 8, 9]));
 const echoedRecord: BlobRecord = echo_record(seed);
 const asyncRecord: Promise<BlobRecord> = store.fetch_async(true);
@@ -49,6 +53,7 @@ const asyncReader: Promise<Reader> = readerBuilder.build();
 void current;
 void flavor;
 void scanResult;
+void echoedMap;
 void echoedBytes;
 void echoedRecord;
 void asyncRecord;

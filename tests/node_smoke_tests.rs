@@ -592,6 +592,7 @@ import {{
   ReaderBuilder,
   ScanResult,
   Store,
+  echo_byte_map,
   echo_bytes,
   echo_record,
 }} from "./index.js";
@@ -676,6 +677,7 @@ import {{
   ReaderBuilder,
   ScanResult,
   Store,
+  echo_byte_map,
   echo_bytes,
   echo_record,
 }} from "./index.js";
@@ -731,6 +733,7 @@ import {{
   ReaderBuilder,
   ScanResult,
   Store,
+  echo_byte_map,
   echo_bytes,
   echo_record,
   load,
@@ -842,6 +845,18 @@ assert.equal(echoedRecord.maybe_value, undefined);
 assert.deepStrictEqual(
   echoedRecord.chunks.map((chunk) => Array.from(chunk)),
   [[3], [4, 5]],
+);
+
+const echoedMap = echo_byte_map(
+  new Map([
+    ["alpha", new Uint8Array([6, 7, 8])],
+    ["beta", new Uint8Array([9])],
+  ]),
+);
+assert.ok(echoedMap instanceof Map);
+assert.deepStrictEqual(
+  Array.from(echoedMap.entries(), ([key, value]) => [key, Array.from(value)]),
+  [["alpha", [6, 7, 8]], ["beta", [9]]],
 );
 
 const store = new Store(seed);

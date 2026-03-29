@@ -227,12 +227,21 @@ pub fn install_generated_package_dependencies(package_dir: &Utf8PathBuf) {
     npm_install(package_dir);
 }
 
+pub fn install_generated_package_benchmark_dependencies(package_dir: &Utf8PathBuf) {
+    add_package_dependency(package_dir, "tinybench", "3.0.1");
+    npm_install(package_dir);
+}
+
 pub fn install_generated_package_dependencies_with_real_koffi(package_dir: &Utf8PathBuf) {
     npm_install(package_dir);
 }
 
 pub fn install_fixture_package_dependencies(package_dir: &Utf8PathBuf) {
     install_generated_package_dependencies(package_dir);
+}
+
+pub fn install_fixture_package_benchmark_dependencies(package_dir: &Utf8PathBuf) {
+    install_generated_package_benchmark_dependencies(package_dir);
 }
 
 pub fn install_fixture_package_dependencies_with_real_koffi(package_dir: &Utf8PathBuf) {
@@ -260,9 +269,21 @@ pub fn run_node_script(package_dir: &Utf8PathBuf, script_name: &str, source: &st
     fs::write(script_path.as_std_path(), source)
         .unwrap_or_else(|error| panic!("failed to write Node script {script_path}: {error}"));
 
+    run_node_program(package_dir, script_name, &[], &[]);
+}
+
+pub fn run_node_program(
+    package_dir: &Utf8PathBuf,
+    script_relative_path: &str,
+    node_args: &[&str],
+    envs: &[(&str, &str)],
+) -> String {
+    let script_path = package_dir.join(script_relative_path);
     let output = Command::new("node")
+        .args(node_args)
         .arg(script_path.as_str())
         .current_dir(package_dir.as_std_path())
+        .envs(envs.iter().copied())
         .output()
         .unwrap_or_else(|error| panic!("failed to run Node script {script_path}: {error}"));
 
@@ -273,6 +294,16 @@ pub fn run_node_script(package_dir: &Utf8PathBuf, script_name: &str, source: &st
             String::from_utf8_lossy(&output.stderr)
         );
     }
+
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+pub fn stage_package_benchmark_scripts(package_dir: &Utf8PathBuf) {
+    let source_dir = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("benchmarks");
+    let target_dir = package_dir.join("benchmarks");
+    copy_dir_all(&source_dir, &target_dir);
 }
 
 pub fn run_typescript_check(package_dir: &Utf8PathBuf, script_name: &str, source: &str) {
@@ -409,6 +440,18 @@ fn rewrite_package_dependency_to_local_fixture(
     dependency_name: &str,
     dependency_dir: &Utf8PathBuf,
 ) {
+    set_package_dependency(
+        package_dir,
+        dependency_name,
+        &format!("file:{}", dependency_dir),
+    );
+}
+
+fn add_package_dependency(package_dir: &Utf8PathBuf, dependency_name: &str, version_spec: &str) {
+    set_package_dependency(package_dir, dependency_name, version_spec);
+}
+
+fn set_package_dependency(package_dir: &Utf8PathBuf, dependency_name: &str, dependency_spec: &str) {
     let package_json_path = package_dir.join("package.json");
     let mut package_json: Value = serde_json::from_str(
         &fs::read_to_string(package_json_path.as_std_path()).unwrap_or_else(|error| {
@@ -419,13 +462,19 @@ fn rewrite_package_dependency_to_local_fixture(
         panic!("failed to parse generated package manifest {package_json_path}: {error}")
     });
 
-    let dependencies = package_json
-        .get_mut("dependencies")
-        .and_then(Value::as_object_mut)
-        .unwrap_or_else(|| panic!("generated package manifest is missing dependencies"));
+    let package_object = package_json
+        .as_object_mut()
+        .unwrap_or_else(|| panic!("generated package manifest is not a JSON object"));
+    let dependencies = package_object
+        .entry("dependencies".to_string())
+        .or_insert_with(|| Value::Object(serde_json::Map::new()))
+        .as_object_mut()
+        .unwrap_or_else(|| {
+            panic!("generated package manifest dependencies field is not an object")
+        });
     dependencies.insert(
         dependency_name.to_string(),
-        Value::String(format!("file:{}", dependency_dir)),
+        Value::String(dependency_spec.to_string()),
     );
 
     fs::write(

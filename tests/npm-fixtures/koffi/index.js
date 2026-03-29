@@ -495,6 +495,46 @@ function decodeBlobRecord(bytes) {
   };
 }
 
+function byteMapEntries(value) {
+  if (value instanceof Map) {
+    return Array.from(value.entries());
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return Array.from(value ?? []);
+}
+
+function byteMapAllocationSize(value) {
+  return byteMapEntries(value).reduce(
+    (total, [key, entryValue]) => {
+      return total + encodeString(key).byteLength + allocationSizeForBytes(entryValue);
+    },
+    4,
+  );
+}
+
+function encodeByteMap(value) {
+  const entries = byteMapEntries(value);
+  const writer = new ByteWriter(byteMapAllocationSize(entries));
+  writer.writeInt32(entries.length);
+  for (const [key, entryValue] of entries) {
+    writer.writeBytes(encodeString(key));
+    writeBytesValue(writer, entryValue);
+  }
+  return writer.finish();
+}
+
+function decodeByteMap(bytes) {
+  const reader = new ByteReader(bytes);
+  const entryCount = reader.readInt32();
+  const map = new Map();
+  for (let index = 0; index < entryCount; index += 1) {
+    map.set(decodeString(reader), readBytesValue(reader));
+  }
+  return map;
+}
+
 function encodeFlavor(value) {
   const writer = new ByteWriter(4);
   writer.writeInt32(value === "chocolate" ? 2 : 1);
@@ -1136,6 +1176,15 @@ function createBasicFixtureRuntime(libraryPath) {
       (recordBuffer, status) => {
         setCallSuccess(status);
         return rustBufferFromBytes(rustBufferToUint8Array(recordBuffer));
+      },
+    ],
+    [
+      "uniffi_fixture_basic_fn_func_echo_byte_map",
+      (valueBuffer, status) => {
+        setCallSuccess(status);
+        return rustBufferFromBytes(
+          encodeByteMap(decodeByteMap(rustBufferToUint8Array(valueBuffer))),
+        );
       },
     ],
   ]);

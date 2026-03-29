@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -50,10 +50,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # The callback benchmarks currently abort on Node >22 in koffi.
           node-version: 22
+          # Keep setup-node v5 from enabling package-manager cache implicitly.
+          package-manager-cache: false
 
       - name: Install TypeScript CLI
         run: npm install --global typescript@5
@@ -81,7 +83,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -90,10 +92,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # The callback benchmarks currently abort on Node >22 in koffi.
           node-version: 22
+          # Keep setup-node v5 from enabling package-manager cache implicitly.
+          package-manager-cache: false
 
       - name: Prefetch crate dependencies
         run: |
@@ -125,7 +129,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

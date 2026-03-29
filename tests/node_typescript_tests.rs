@@ -24,7 +24,9 @@ import {
   Store,
   echo_byte_map,
   echo_bytes,
+  echo_duration,
   echo_record,
+  echo_temporal_record,
   echo_timestamp,
   type BlobRecord,
   type TemporalRecord,
@@ -41,6 +43,17 @@ const store = new Store(seed);
 const current: BlobRecord = store.current();
 const when = new Date("2024-01-02T03:04:05.678Z");
 const echoedWhen: Date = echo_timestamp(when);
+const echoedDelayMs: number = echo_duration(1_500);
+const scheduled: TemporalRecord = store.schedule(when, echoedDelayMs);
+const scheduledDelayMs: number = scheduled.delay_ms;
+const scheduledDelays: Array<number> = scheduled.delays_ms;
+const echoedTemporalRecord: TemporalRecord = echo_temporal_record({
+  when,
+  delay_ms: echoedDelayMs,
+  maybe_when: when,
+  delays_ms: [echoedDelayMs],
+  reminders: new Map<string, Date>([["seed", when]]),
+});
 declare const temporalRecord: TemporalRecord;
 const optionalWhen: Date | undefined = temporalRecord.maybe_when;
 const reminders: Map<string, Date> = temporalRecord.reminders;
@@ -59,6 +72,10 @@ const asyncReader: Promise<Reader> = readerBuilder.build();
 
 void current;
 void echoedWhen;
+void echoedDelayMs;
+void scheduledDelayMs;
+void scheduledDelays;
+void echoedTemporalRecord;
 void optionalWhen;
 void reminders;
 void flavor;

@@ -65,7 +65,7 @@ You are in a Ralph Wiggum loop. Work through the first few TODOs in the `## TODO
 - [x] Add a fixture record that includes timestamp and duration fields.
 - [x] Add one object constructor or method in the fixture that accepts or returns temporal values.
 - [x] Update the TypeScript smoke test to typecheck Date timestamp usage.
-- [ ] Update the TypeScript smoke test to typecheck numeric duration usage.
+- [x] Update the TypeScript smoke test to typecheck numeric duration usage.
 - [ ] Add a JS smoke assertion that timestamp roundtrips return Date instances.
 - [ ] Add a JS smoke assertion that duration roundtrips return numeric values.
 - [ ] Add a JS smoke assertion that invalid Date inputs throw.

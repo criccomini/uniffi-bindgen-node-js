@@ -14,6 +14,15 @@ pub struct BlobRecord {
     pub chunks: Vec<Vec<u8>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct TemporalRecord {
+    pub when: SystemTime,
+    pub delay_ms: Duration,
+    pub maybe_when: Option<SystemTime>,
+    pub delays_ms: Vec<Duration>,
+    pub reminders: HashMap<String, SystemTime>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum Flavor {
     Vanilla,
@@ -58,6 +67,11 @@ pub struct ReaderBuilder {
 
 #[uniffi::export]
 pub fn echo_record(record: BlobRecord) -> BlobRecord {
+    record
+}
+
+#[uniffi::export]
+pub fn echo_temporal_record(record: TemporalRecord) -> TemporalRecord {
     record
 }
 

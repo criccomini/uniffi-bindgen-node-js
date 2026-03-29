@@ -20,6 +20,38 @@ import { blackBox, hotPathBenchOptions, printBenchResults } from "./common.mjs";
 const SMALL_BYTES = new Uint8Array([1, 2, 3, 4]);
 const LARGE_BYTES = Uint8Array.from({ length: 1024 }, (_, index) => index % 256);
 
+class SyncSink {
+  constructor() {
+    this.messages = [];
+  }
+
+  reset(messages = []) {
+    this.messages = [...messages];
+  }
+
+  write(message) {
+    this.messages.push(message);
+  }
+
+  latest() {
+    return this.messages.at(-1);
+  }
+}
+
+class LogCollector {
+  constructor() {
+    this.records = [];
+  }
+
+  reset() {
+    this.records = [];
+  }
+
+  log(record) {
+    this.records.push(record);
+  }
+}
+
 const bench = new Bench({
   ...hotPathBenchOptions("Generated Callback Package Hot Paths"),
   setup() {
@@ -30,31 +62,21 @@ const bench = new Bench({
   },
 });
 
-let syncMessages;
-let syncSink;
+const syncSink = new SyncSink();
 bench.add(
   "emit(sync sink)",
   () => {
     emit(syncSink, "message");
-    blackBox(syncMessages.length);
+    blackBox(syncSink.messages.length);
   },
   {
     beforeEach() {
-      syncMessages = [];
-      syncSink = {
-        write(message) {
-          syncMessages.push(message);
-        },
-        latest() {
-          return syncMessages.at(-1);
-        },
-      };
+      syncSink.reset();
     },
   },
 );
 
-let latestMessages;
-let latestSink;
+const latestSink = new SyncSink();
 bench.add(
   "last_message(sync sink)",
   () => {
@@ -62,35 +84,21 @@ bench.add(
   },
   {
     beforeEach() {
-      latestMessages = ["first", "second"];
-      latestSink = {
-        write(message) {
-          latestMessages.push(message);
-        },
-        latest() {
-          return latestMessages.at(-1);
-        },
-      };
+      latestSink.reset(["first", "second"]);
     },
   },
 );
 
-let records;
-let collector;
+const collector = new LogCollector();
 bench.add(
   "init_logging(collector)",
   () => {
     init_logging(LogLevel.Info, collector);
-    blackBox(records.length);
+    blackBox(collector.records.length);
   },
   {
     beforeEach() {
-      records = [];
-      collector = {
-        log(record) {
-          records.push(record);
-        },
-      };
+      collector.reset();
     },
   },
 );

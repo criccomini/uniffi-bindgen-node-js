@@ -1,100 +1,99 @@
-# Prompt: Improve Complexity in src
+# Prompt For Codex: Iterative Performance Work In This Repo
 
-You are working in the uniffi-bindgen-node-js Rust codebase. Improve overall code complexity across the src directory, using Lizard as a guide rather than treating current
-warnings as the only target.
+## Summary
 
-## Goal
+Use the repo’s existing benchmark harness as the source of truth. Measure a baseline, make one performance change at a time, rerun the same benchmark suite, compare before/
+after on the same harness, then rerun the full perf suite and run cargo test last if code changed.
 
-Improve the maintainability of the Rust code in src by reducing complexity in a way that makes the code easier to read, reason about, and extend.
+## Prompt
 
-This includes:
+You are working in the `uniffi-bindgen-node-js` repo. Iteratively improve performance, and use the existing perf tests in this repo as the only scoring mechanism for whether a
+change helped.
 
-- Reducing cyclomatic complexity where it is genuinely too high
-- Breaking up long, multi-purpose functions
-- Removing repeated branching and duplicated control flow
-- Extracting cohesive helper functions when that clarifies behavior
-- Simplifying orchestration code so top-level functions read more clearly
+Benchmark source of truth:
+- Rust driver: `tests/node_benchmarks.rs`
+- JS benchmark suites:
+  - `tests/benchmarks/basic-hot-path.mjs`
+  - `tests/benchmarks/callback-hot-path.mjs`
+  - `tests/benchmarks/startup-lifecycle.mjs`
+- Benchmark helpers/options: `tests/benchmarks/common.mjs`
 
-Do not optimize only for clearing Lizard warnings. Improve the broader complexity profile of the codebase.
+How the perf tests actually run:
+- Use the Rust test harness, not the `.mjs` files directly from the repo root.
+- The harness builds fixture `cdylib`s, generates temporary npm packages, stages the benchmark scripts into those generated packages, runs `npm install --no-package-lock`, and
+then executes Node with `--expose-gc`.
+- These benchmark tests are `#[ignore]` by default because they require npm registry access to install real `koffi` and `tinybench`.
 
-## Metrics And Tooling
+Commands:
+- List available perf tests:
+  `cargo test --test node_benchmarks -- --ignored --list`
+- Run the full perf suite and print benchmark output:
+  `cargo test --test node_benchmarks -- --ignored --nocapture`
+- Run individual suites:
+  `cargo test --test node_benchmarks benchmarks_basic_generated_package_hot_paths -- --ignored --exact --nocapture`
+  `cargo test --test node_benchmarks benchmarks_callback_generated_package_hot_paths -- --ignored --exact --nocapture`
+  `cargo test --test node_benchmarks benchmarks_generated_package_startup_and_lifecycle -- --ignored --exact --nocapture`
 
-Use Lizard to establish a baseline and measure improvement:
+What each suite measures:
+- `benchmarks_basic_generated_package_hot_paths`: generated-package runtime hot paths for bytes, records, maps, object construction/methods, async methods, typed-error paths,
+builders, and readers.
+- `benchmarks_callback_generated_package_hot_paths`: generated-package callback/runtime hot paths for sync sinks, async sinks, settings serialization, and write-batch
+operations.
+- `benchmarks_generated_package_startup_and_lifecycle`: cold-process startup/lifecycle for eager import, manual `load()`, and `load() + unload()` using fresh child processes.
 
-uvx --from 'lizard==1.21.2' lizard -l rust src
+Benchmark tuning knobs:
+- Hot-path suites read:
+  - `UNIFFI_BENCH_TIME_MS`
+  - `UNIFFI_BENCH_ITERATIONS`
+  - `UNIFFI_BENCH_WARMUP_TIME_MS`
+  - `UNIFFI_BENCH_WARMUP_ITERATIONS`
+- Startup suite reads:
+  - `UNIFFI_BENCH_STARTUP_TIME_MS`
+  - `UNIFFI_BENCH_STARTUP_ITERATIONS`
+- If you change any benchmark env vars, keep them identical between baseline and comparison runs and report the exact values used.
 
-Notes:
+How to evaluate performance:
+- Establish a before-change baseline with the exact suite you want to improve.
+- After each code change, rerun the same suite with the same command and same env.
+- Use the `tinybench` table printed to stdout as the comparison source. Compare the same named benchmark rows before vs. after. Do not compare numbers across different suites.
+- Treat results as relative before/after measurements on the same machine and same harness. The current harness uses the repo’s existing dev/test flow, so use it for
+comparison, not as an absolute production benchmark.
+- Before finishing, rerun the full perf suite to check for regressions outside the targeted area.
+- If one benchmark improves and another regresses, report that tradeoff explicitly.
+- Do not change the benchmark harness, fixtures, or benchmark parameters just to improve reported numbers. If a harness change is truly required, separate it from performance
+claims and justify it.
 
-- Lizard may exit with status 1 when warnings exist; treat the output as valid.
-- Use Lizard to identify high-impact functions, but also inspect nearby medium-complexity functions in touched areas.
-- Re-run Lizard after refactors and compare before/after results.
+Working loop:
+1. Run a baseline benchmark.
+2. Make one focused performance change.
+3. Rerun the relevant benchmark suite and compare against baseline.
+4. Repeat while the benchmark data shows real improvement.
+5. Rerun the full perf suite before stopping.
+6. If you made code changes, run `cargo test` as the last step.
 
-## Current High-Complexity Areas To Inspect First
+Reporting requirements:
+- Show the benchmark command(s) used.
+- Show before/after results for the benchmark rows that materially changed.
+- Call out regressions and inconclusive/noisy results.
+- State whether the full perf suite was rerun.
+- State whether `cargo test` was run last and whether it passed.
+- If benchmarks cannot run because npm registry access is unavailable, say so explicitly and do not claim unmeasured performance improvements.
 
-Start with these files and functions, but do not limit the work to them:
+## Test Plan
 
-- src/bindings/api/mod.rs
-    - render_public_api
-    - validate_renderable_types
-- src/bindings/api/render.rs
-    - AsyncCallbackVtableRegistrationJsView::from_method
-- src/bindings/mod.rs
-    - write_runtime_files
-- Also inspect:
-    - src/bindings/api/support.rs
-    - surrounding helpers in touched modules that still have avoidable complexity
+- Baseline with the targeted perf suite.
+- Re-measure the same suite after each iteration.
+- Rerun the full perf suite before stopping.
+- Run cargo test last if any code changed.
 
-## Refactoring Principles
+## Assumptions
 
-Prefer refactors that actually improve the code, not metric gaming.
+- Use the current perf harness as-is.
+- Do not redefine success criteria or add new perf tests unless explicitly asked.
+- The repo’s current perf coverage is runtime behavior of generated fixture packages, and performance claims should be scoped to that.
 
-Good changes:
+## Instructions
 
-- Split orchestration from detail-heavy logic
-- Extract repeated validation/rendering/conversion patterns into focused helpers
-- Replace repeated imperative sequences with small data-driven loops when clearer
-- Use early returns or helper boundaries to flatten branching
-- Keep related logic together and preserve local readability
-
-Avoid:
-
-- Moving complexity into shallow wrappers
-- Introducing abstractions that make control flow harder to follow
-- Changing behavior, generated output, or public interfaces
-- Refactoring unrelated areas without a clear complexity payoff
-
-## Working Style
-
-Approach the work incrementally:
-
-1. Run the baseline Lizard scan on src.
-2. Rank the biggest complexity offenders.
-3. Inspect the worst functions and nearby code in the same modules.
-4. Refactor only where the result is clearly simpler.
-5. Re-run Lizard and compare before/after metrics.
-6. Run tests last.
-
-If you make code changes, run tests as the final step:
-
-cargo test
-
-## Expected Output
-
-At the end, report:
-
-- Which files and functions were simplified
-- Before/after Lizard results
-- Which complexity reductions were most meaningful
-- Any remaining hotspots worth a future pass
-- Confirmation that tests were run last and whether they passed
-
-## Acceptance Criteria
-
-The work is successful if:
-
-- The src directory has a meaningfully better complexity profile
-- Current hotspots are reduced where it makes sense
-- Some medium-complexity code in touched areas is also improved
-- Readability improves rather than degrades
-- Behavior and outputs remain unchanged
-- cargo test passes
+- never ever change any PROMPT.md
+- commit after each change
+- use conventional commit syntax for commit messages

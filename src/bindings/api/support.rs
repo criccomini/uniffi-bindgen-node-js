@@ -436,11 +436,11 @@ pub(crate) fn render_js_type_converter_expression(type_: &Type) -> Result<String
 
     match type_ {
         Type::Optional { inner_type } => Ok(format!(
-            "new FfiConverterOptional({})",
+            "uniffiOptionalConverter({})",
             render_js_type_converter_expression(inner_type)?
         )),
         Type::Sequence { inner_type } => Ok(format!(
-            "new FfiConverterArray({})",
+            "uniffiArrayConverter({})",
             render_js_type_converter_expression(inner_type)?
         )),
         Type::Map {

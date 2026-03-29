@@ -46,6 +46,8 @@ const uniffiDefaultRustCallOptions = Object.freeze({
   rustCaller: uniffiRustCaller,
 });
 const uniffiRustCallOptionsByErrorConverter = new WeakMap();
+const uniffiOptionalConverterCache = new WeakMap();
+const uniffiArrayConverterCache = new WeakMap();
 
 function uniffiRustCallOptions(errorConverter = undefined) {
   if (errorConverter == null) {
@@ -74,6 +76,24 @@ function uniffiRustCallOptions(errorConverter = undefined) {
   });
   uniffiRustCallOptionsByErrorConverter.set(errorConverter, options);
   return options;
+}
+
+function uniffiOptionalConverter(innerConverter) {
+  let converter = uniffiOptionalConverterCache.get(innerConverter);
+  if (converter == null) {
+    converter = new FfiConverterOptional(innerConverter);
+    uniffiOptionalConverterCache.set(innerConverter, converter);
+  }
+  return converter;
+}
+
+function uniffiArrayConverter(innerConverter) {
+  let converter = uniffiArrayConverterCache.get(innerConverter);
+  if (converter == null) {
+    converter = new FfiConverterArray(innerConverter);
+    uniffiArrayConverterCache.set(innerConverter, converter);
+  }
+  return converter;
 }
 
 function uniffiCopyIntoRustBuffer(bytes) {

@@ -1856,14 +1856,14 @@ mod tests {
 
         assert!(
             rendered.js.contains(
-                "const loweredChunks = uniffiLowerIntoRustBuffer(new FfiConverterArray(FfiConverterBytes), chunks);"
+                "const loweredChunks = uniffiLowerIntoRustBuffer(uniffiArrayConverter(FfiConverterBytes), chunks);"
             ),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
             rendered.js.contains(
-                "return uniffiLiftFromRustBuffer(new FfiConverterArray(FfiConverterBytes), uniffiResult);"
+                "return uniffiLiftFromRustBuffer(uniffiArrayConverter(FfiConverterBytes), uniffiResult);"
             ),
             "unexpected JS output: {}",
             rendered.js
@@ -1896,14 +1896,14 @@ mod tests {
 
         assert!(
             rendered.js.contains(
-                "const loweredValue = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterBytes), value);"
+                "const loweredValue = uniffiLowerIntoRustBuffer(uniffiOptionalConverter(FfiConverterBytes), value);"
             ),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
             rendered.js.contains(
-                "return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterBytes), uniffiResult);"
+                "return uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterBytes), uniffiResult);"
             ),
             "unexpected JS output: {}",
             rendered.js
@@ -1939,14 +1939,14 @@ mod tests {
 
         assert!(
             rendered.js.contains(
-                "const loweredValue = uniffiLowerIntoRustBuffer(new FfiConverterOptional(FfiConverterStore), value);"
+                "const loweredValue = uniffiLowerIntoRustBuffer(uniffiOptionalConverter(FfiConverterStore), value);"
             ),
             "unexpected JS output: {}",
             rendered.js
         );
         assert!(
             rendered.js.contains(
-                "return uniffiLiftFromRustBuffer(new FfiConverterOptional(FfiConverterStore), uniffiResult);"
+                "return uniffiLiftFromRustBuffer(uniffiOptionalConverter(FfiConverterStore), uniffiResult);"
             ),
             "unexpected JS output: {}",
             rendered.js

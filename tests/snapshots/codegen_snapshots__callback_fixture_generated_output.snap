@@ -119,6 +119,7 @@ function uniffiNotImplemented(member) {
 
 const uniffiTextEncoder = new TextEncoder();
 const uniffiTextDecoder = new TextDecoder();
+const uniffiSuccessRustCallStatus = createRustCallStatus();
 
 function uniffiLiftString(bytes) {
   return uniffiTextDecoder.decode(bytes);
@@ -126,8 +127,10 @@ function uniffiLiftString(bytes) {
 
 function uniffiDecodeRustCallStatus(status) {
   return status == null
-    ? createRustCallStatus()
-    : koffi.decode(status, getFfiTypes().RustCallStatus);
+    ? uniffiSuccessRustCallStatus
+    : koffi.decode(status, 0, "int8_t") === 0
+      ? uniffiSuccessRustCallStatus
+      : koffi.decode(status, getFfiTypes().RustCallStatus);
 }
 
 function uniffiWriteRustCallStatus(status, value) {
@@ -4830,11 +4833,19 @@ export function viewPointerBytes(pointer, length, label = "pointer") {
     throw new UnexpectedNullPointer(`${label} is null.`);
   }
 
-  return new Uint8Array(koffi.view(pointer, byteLength));
+  const pointerBytes = koffi.view(pointer, byteLength);
+  return Uint8Array.from(
+    ArrayBuffer.isView(pointerBytes)
+      ? pointerBytes
+      : new Uint8Array(pointerBytes),
+  );
 }
 
 export function readPointerBytes(pointer, length, label = "pointer") {
-  return Uint8Array.from(viewPointerBytes(pointer, length, label));
+  const bytes = viewPointerBytes(pointer, length, label);
+  return isByteSource(pointer)
+    ? Uint8Array.from(bytes)
+    : bytes;
 }
 
 export function readForeignBytes(bytes, label = "ForeignBytes") {
@@ -5346,7 +5357,7 @@ export class ByteReader {
     const start = this._offset;
     const end = this._offset + byteLength;
     this._offset = end;
-    return this._bytes.slice(start, end);
+    return this._bytes.subarray(start, end);
   }
 
   readCount(label) {
@@ -5963,6 +5974,17 @@ function createMutableRustBuffer(buffer = EMPTY_RUST_BUFFER) {
   };
 }
 
+function isEmptyRustBuffer(buffer) {
+  return (
+    buffer == null
+    || (
+      buffer.data == null
+      && buffer.len === 0n
+      && buffer.capacity === 0n
+    )
+  );
+}
+
 function consumeRustBuffer(buffer, freeRustBuffer) {
   const normalized = createMutableRustBuffer(buffer);
   if (normalized.len === 0n) {
@@ -6000,6 +6022,10 @@ function checkRustCallStatusImpl(
   liftString,
   errorHandlerOverride = undefined,
 ) {
+  if (status?.code === CALL_SUCCESS && isEmptyRustBuffer(status.error_buf)) {
+    return status;
+  }
+
   const normalized = normalizeRustCallStatus(status) ?? createRustCallStatus();
   const errorHandler = errorHandlerOverride ?? options?.errorHandler;
   const resolvedFreeRustBuffer = options?.freeRustBuffer ?? freeRustBuffer;

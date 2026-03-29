@@ -195,7 +195,7 @@ The current generator supports:
 - `Vec<T>`
 - `HashMap<K, V>`
 - `bytes` as `Uint8Array`
-- synchronous callback interfaces
+- callback interfaces, including async methods
 
 Public API conventions:
 
@@ -214,7 +214,6 @@ The generator does not yet support:
 
 - UniFFI custom types
 - UniFFI external types
-- async callback-interface methods
 - timestamps in the public Node API
 - durations in the public Node API
 - automatic multi-target package assembly

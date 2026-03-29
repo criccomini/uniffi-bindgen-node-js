@@ -248,7 +248,7 @@ pub fn install_fixture_package_dependencies_with_real_koffi(package_dir: &Utf8Pa
 }
 
 fn npm_install(package_dir: &Utf8PathBuf) {
-    let output = Command::new("npm")
+    let output = Command::new(npm_command())
         .args(["install", "--no-package-lock"])
         .current_dir(package_dir.as_std_path())
         .output()
@@ -413,25 +413,82 @@ fn local_koffi_fixture_dir() -> Utf8PathBuf {
         .join("koffi")
 }
 
+fn npm_command() -> &'static str {
+    if cfg!(windows) { "npm.cmd" } else { "npm" }
+}
+
 fn find_typescript_cli() -> Option<Utf8PathBuf> {
-    let output = Command::new("zsh")
-        .args([
-            "-lc",
-            "command -v tsc || ls -1d /opt/homebrew/Cellar/heroku/*/libexec/node_modules/typescript/bin/tsc 2>/dev/null | head -n 1 || ls -1d /opt/homebrew/Cellar/heroku/*/lib/client/*/node_modules/typescript/bin/tsc 2>/dev/null | head -n 1",
-        ])
-        .output()
-        .unwrap_or_else(|error| panic!("failed to search for a local TypeScript compiler: {error}"));
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let candidate = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if candidate.is_empty() {
-        None
+    find_command_in_path(if cfg!(windows) {
+        &["tsc.cmd", "tsc"]
     } else {
-        Some(Utf8PathBuf::from(candidate))
+        &["tsc"]
+    })
+    .or_else(find_homebrew_heroku_typescript_cli)
+}
+
+fn find_command_in_path(candidates: &[&str]) -> Option<Utf8PathBuf> {
+    let path = env::var_os("PATH")?;
+
+    for directory in env::split_paths(&path) {
+        for candidate in candidates {
+            let candidate_path = directory.join(candidate);
+            if candidate_path.is_file()
+                && let Ok(candidate_path) = Utf8PathBuf::from_path_buf(candidate_path)
+            {
+                return Some(candidate_path);
+            }
+        }
     }
+
+    None
+}
+
+fn find_homebrew_heroku_typescript_cli() -> Option<Utf8PathBuf> {
+    let heroku_root = Utf8PathBuf::from("/opt/homebrew/Cellar/heroku");
+    let Ok(entries) = fs::read_dir(heroku_root.as_std_path()) else {
+        return None;
+    };
+
+    let mut version_dirs = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| Utf8PathBuf::from_path_buf(entry.path()).ok())
+        .collect::<Vec<_>>();
+    version_dirs.sort_unstable_by(|left, right| right.cmp(left));
+
+    for version_dir in version_dirs {
+        let libexec_tsc = version_dir
+            .join("libexec")
+            .join("node_modules")
+            .join("typescript")
+            .join("bin")
+            .join("tsc");
+        if libexec_tsc.is_file() {
+            return Some(libexec_tsc);
+        }
+
+        let client_root = version_dir.join("lib").join("client");
+        let Ok(client_entries) = fs::read_dir(client_root.as_std_path()) else {
+            continue;
+        };
+        let mut client_dirs = client_entries
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| Utf8PathBuf::from_path_buf(entry.path()).ok())
+            .collect::<Vec<_>>();
+        client_dirs.sort_unstable_by(|left, right| right.cmp(left));
+
+        for client_dir in client_dirs {
+            let client_tsc = client_dir
+                .join("node_modules")
+                .join("typescript")
+                .join("bin")
+                .join("tsc");
+            if client_tsc.is_file() {
+                return Some(client_tsc);
+            }
+        }
+    }
+
+    None
 }
 
 fn rewrite_package_dependency_to_local_fixture(

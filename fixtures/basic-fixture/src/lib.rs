@@ -143,6 +143,19 @@ impl Store {
         }
     }
 
+    pub fn schedule(&self, when: SystemTime, delay_ms: Duration) -> TemporalRecord {
+        let mut reminders = HashMap::new();
+        reminders.insert(self.state.lock().unwrap().name.clone(), when.clone());
+
+        TemporalRecord {
+            when: when.clone(),
+            delay_ms,
+            maybe_when: Some(when),
+            delays_ms: vec![delay_ms],
+            reminders,
+        }
+    }
+
     pub async fn fetch_async(&self, succeed: bool) -> Result<BlobRecord, FixtureError> {
         if succeed {
             Ok(self.current())

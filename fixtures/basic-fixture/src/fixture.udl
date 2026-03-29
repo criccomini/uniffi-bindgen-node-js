@@ -32,6 +32,7 @@ interface Store {
     Flavor flavor();
     ScanResult inspect(boolean include_payload);
     [Throws=FixtureError] bytes require_value(boolean present);
+    TemporalRecord schedule(timestamp when, duration delay_ms);
     [Async, Throws=FixtureError] BlobRecord fetch_async(boolean succeed);
 };
 

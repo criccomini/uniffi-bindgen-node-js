@@ -18,7 +18,13 @@ Generated packages are ESM-only and do not require a TypeScript build step.
 
 ## Install
 
-Build and install the CLI from this repository:
+Install the CLI from crates.io:
+
+```sh
+cargo install uniffi-bindgen-node-js
+```
+
+If you want the current repository checkout instead:
 
 ```sh
 cargo install --path .

@@ -1,12 +1,8 @@
 mod support;
 
-#[path = "support/fixtures.rs"]
-mod fixtures;
-
-use self::fixtures::fixture_spec;
 use self::support::{
-    FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
-    install_fixture_package_dependencies, remove_dir_all,
+    FixturePackageOptions, fixtures::fixture_spec, generate_fixture_package,
+    generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
 };
 
 #[test]

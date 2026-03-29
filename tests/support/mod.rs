@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod fixtures;
+pub mod fixtures;
 
 use std::{
     env, fs, process,
@@ -137,14 +137,13 @@ pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {
         );
     }
 
-    let library_path =
-        find_cdylib_artifact(&output.stdout, &spec.crate_name).unwrap_or_else(|| {
-            panic!(
-                "failed to locate cdylib artifact for fixture {name}\nstdout:\n{}\nstderr:\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            )
-        });
+    let library_path = find_cdylib_artifact(&output.stdout, spec.crate_name).unwrap_or_else(|| {
+        panic!(
+            "failed to locate cdylib artifact for fixture {name}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
 
     BuiltFixtureCdylib {
         workspace_dir,

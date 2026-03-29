@@ -36,18 +36,33 @@ Run a single test target while iterating:
 cargo test --test node_package_generation
 ```
 
+Run the ignored real-Koffi callback smoke test locally with Node 22 active and npm registry access available:
+
+```sh
+cargo test --locked --test node_real_koffi_tests -- --ignored
+```
+
 ## CI And Publishing
 
 GitHub Actions runs the full suite on pull requests, pushes to `main`, and version tags matching `v*`.
 
-The workflow uses Node 22 because the callback benchmarks currently abort on newer Node releases, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
+The Linux workflow uses Node 22 because the callback benchmarks currently abort on newer Node releases, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
 
 ```sh
 cargo test --locked
 cargo test --locked -- --ignored
 ```
 
-Publishing only runs on `v*` tag pushes after the test job passes. Set the repository secret `CARGO_REGISTRY_TOKEN` to a crates.io API token before using the publish path.
+A separate lint job also enforces:
+
+```sh
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+```
+
+Separate macOS and Windows jobs run generated-package smoke coverage from `tests/node_smoke_tests.rs` for the basic, callback, bundled-prebuild, manual-load, and missing-prebuild cases.
+
+Publishing only runs on `v*` tag pushes after the CI jobs pass. Set the repository secret `CARGO_REGISTRY_TOKEN` to a crates.io API token before using the publish path.
 
 ## What The Tests Cover
 

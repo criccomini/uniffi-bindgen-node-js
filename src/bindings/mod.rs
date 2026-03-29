@@ -166,7 +166,7 @@ fn normalize_required_value(flag: &str, value: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
-fn parse_override_parts<'a>(raw: &'a str) -> Result<(&'a str, String)> {
+fn parse_override_parts(raw: &str) -> Result<(&str, String)> {
     let (raw_key, raw_value) = raw
         .split_once('=')
         .ok_or_else(|| anyhow!("invalid --config-override '{raw}': expected KEY=VALUE"))?;

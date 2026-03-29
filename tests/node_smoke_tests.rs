@@ -715,6 +715,9 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
         .sibling_library_path
         .as_ref()
         .expect("manual-load regression fixture should stage a sibling library");
+    let expected_library_filename = expected_library_path
+        .file_name()
+        .expect("manual-load regression fixture library should have a filename");
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -745,11 +748,11 @@ assert.equal(ffiMetadata.bundledPrebuilds, true);
 assert.equal(ffiMetadata.manualLoad, true);
 assert.equal(isLoaded(), false);
 
-const firstBindings = load("./libfixture_basic.dylib");
+const firstBindings = load({});
 assert.equal(isLoaded(), true);
 assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
 
-const secondBindings = load("libfixture_basic.dylib");
+const secondBindings = load({});
 assert.strictEqual(secondBindings, firstBindings);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
@@ -760,8 +763,12 @@ assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
 assert.equal(koffi.registeredCallbackCount(), 0);
 "#,
+            serde_json::to_string(&format!("./{expected_library_filename}"))
+                .expect("relative library path should serialize"),
             serde_json::to_string(expected_library_path.as_str())
                 .expect("sibling library path should serialize"),
+            serde_json::to_string(expected_library_filename)
+                .expect("library filename should serialize"),
             basic_fixture_api_smoke_body()
         ),
     );

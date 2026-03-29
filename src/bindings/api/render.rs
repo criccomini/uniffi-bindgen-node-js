@@ -1674,7 +1674,7 @@ impl ObjectDtsView {
             constructors: object
                 .constructors
                 .iter()
-                .filter(|constructor| !(constructor.is_primary && !constructor.is_async))
+                .filter(|constructor| !constructor.is_primary || constructor.is_async)
                 .map(|constructor| ConstructorDtsView::from_constructor(&object.name, constructor))
                 .collect::<Result<_>>()?,
             methods: object

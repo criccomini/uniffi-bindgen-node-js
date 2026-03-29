@@ -3,8 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[path = "support/fixtures.rs"]
-mod fixtures;
+mod support;
 
 use camino::Utf8PathBuf;
 use uniffi_bindgen::{
@@ -14,7 +13,7 @@ use uniffi_bindgen_node_js::bindings::{
     NodeBindingCliOverrides, NodeBindingGenerator, NodeBindingGeneratorConfig,
 };
 
-use self::fixtures::{FixtureSpec, fixture_spec};
+use self::support::fixtures::{FixtureSpec, fixture_spec};
 
 fn fixture_component(spec: &FixtureSpec) -> Component<NodeBindingGeneratorConfig> {
     let udl_path = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))

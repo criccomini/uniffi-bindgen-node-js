@@ -120,7 +120,7 @@ function checkRustCallStatusImpl(
         errorBytes.byteLength === 0
           ? "Rust panic"
           : resolvedLiftString(errorBytes);
-      throw new RustPanic(message);
+      throw new RustPanic(message, { captureStack: false });
     }
 
     case CALL_CANCELLED:

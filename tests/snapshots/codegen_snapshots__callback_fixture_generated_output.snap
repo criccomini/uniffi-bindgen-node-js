@@ -4254,7 +4254,18 @@ function assignErrorMetadata(error, options = {}) {
 
 export class UniffiError extends Error {
   constructor(message = "UniFFI error", options = {}) {
-    super(message);
+    const captureStack = options.captureStack !== false;
+    if (!captureStack && typeof Error.stackTraceLimit === "number") {
+      const previousStackTraceLimit = Error.stackTraceLimit;
+      Error.stackTraceLimit = 0;
+      try {
+        super(message);
+      } finally {
+        Error.stackTraceLimit = previousStackTraceLimit;
+      }
+    } else {
+      super(message);
+    }
     this.name = new.target.name;
     assignErrorMetadata(this, options);
   }
@@ -6144,7 +6155,7 @@ function checkRustCallStatusImpl(
         errorBytes.byteLength === 0
           ? "Rust panic"
           : resolvedLiftString(errorBytes);
-      throw new RustPanic(message);
+      throw new RustPanic(message, { captureStack: false });
     }
 
     case CALL_CANCELLED:
@@ -6789,7 +6800,7 @@ export declare function createHandleMap<T>(
   options?: HandleMapOptions,
 ): UniffiHandleMap<T>;
 === runtime/callbacks.js ===
-import { ensureError, getErrorMessage } from "./errors.js";
+import { getErrorMessage } from "./errors.js";
 import { UniffiHandleMap } from "./handle-map.js";
 import { EMPTY_RUST_BUFFER } from "./ffi-types.js";
 import {
@@ -6824,30 +6835,33 @@ function lowerCallbackFailure(error, options = {}) {
     lowerString,
     defaultMessage = "Callback invocation failed.",
   } = options;
-  const normalizedError = ensureError(error, defaultMessage);
 
   if (typeof lowerError === "function") {
-    const loweredError = lowerError(normalizedError);
+    const loweredError = lowerError(error);
     if (loweredError != null) {
       return {
         code: CALL_ERROR,
-        error: normalizedError,
+        error,
         error_buf: loweredError,
       };
     }
   }
 
+  // Avoid creating stack-bearing Error objects when UniFFI only needs the
+  // surfaced message for an unexpected callback failure.
+  const message = getErrorMessage(error, defaultMessage);
+
   if (typeof lowerString === "function") {
     return {
       code: CALL_UNEXPECTED_ERROR,
-      error: normalizedError,
-      error_buf: lowerString(getErrorMessage(normalizedError, defaultMessage)),
+      error,
+      error_buf: lowerString(message),
     };
   }
 
   return {
     code: CALL_UNEXPECTED_ERROR,
-    error: normalizedError,
+    error,
     error_buf: EMPTY_RUST_BUFFER,
   };
 }

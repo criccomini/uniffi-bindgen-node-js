@@ -1338,7 +1338,7 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_ffi_js.contains("koffi.proto(\"CallbackInterfaceLogCallbackMethod0\""),
+            component_ffi_js.contains("defineCallbackPrototype(\"CallbackInterfaceLogCallbackMethod0\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1350,7 +1350,7 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("koffi.proto(\"RustFutureContinuationCallback\""),
+            component_ffi_js.contains("defineCallbackPrototype(\"RustFutureContinuationCallback\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1363,7 +1363,7 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("koffi.proto(\"ForeignFutureCompleteVoid\""),
+            component_ffi_js.contains("defineCallbackPrototype(\"ForeignFutureCompleteVoid\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

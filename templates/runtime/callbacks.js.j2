@@ -1,4 +1,4 @@
-import { ensureError, getErrorMessage } from "./errors.js";
+import { getErrorMessage } from "./errors.js";
 import { UniffiHandleMap } from "./handle-map.js";
 import { EMPTY_RUST_BUFFER } from "./ffi-types.js";
 import {
@@ -33,30 +33,33 @@ function lowerCallbackFailure(error, options = {}) {
     lowerString,
     defaultMessage = "Callback invocation failed.",
   } = options;
-  const normalizedError = ensureError(error, defaultMessage);
 
   if (typeof lowerError === "function") {
-    const loweredError = lowerError(normalizedError);
+    const loweredError = lowerError(error);
     if (loweredError != null) {
       return {
         code: CALL_ERROR,
-        error: normalizedError,
+        error,
         error_buf: loweredError,
       };
     }
   }
 
+  // Avoid creating stack-bearing Error objects when UniFFI only needs the
+  // surfaced message for an unexpected callback failure.
+  const message = getErrorMessage(error, defaultMessage);
+
   if (typeof lowerString === "function") {
     return {
       code: CALL_UNEXPECTED_ERROR,
-      error: normalizedError,
-      error_buf: lowerString(getErrorMessage(normalizedError, defaultMessage)),
+      error,
+      error_buf: lowerString(message),
     };
   }
 
   return {
     code: CALL_UNEXPECTED_ERROR,
-    error: normalizedError,
+    error,
     error_buf: EMPTY_RUST_BUFFER,
   };
 }

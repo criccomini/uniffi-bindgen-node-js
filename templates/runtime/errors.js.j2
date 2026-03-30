@@ -13,7 +13,18 @@ function assignErrorMetadata(error, options = {}) {
 
 export class UniffiError extends Error {
   constructor(message = "UniFFI error", options = {}) {
-    super(message);
+    const captureStack = options.captureStack !== false;
+    if (!captureStack && typeof Error.stackTraceLimit === "number") {
+      const previousStackTraceLimit = Error.stackTraceLimit;
+      Error.stackTraceLimit = 0;
+      try {
+        super(message);
+      } finally {
+        Error.stackTraceLimit = previousStackTraceLimit;
+      }
+    } else {
+      super(message);
+    }
     this.name = new.target.name;
     assignErrorMetadata(this, options);
   }

@@ -1,6 +1,8 @@
 const uniffiTextEncoder = new TextEncoder();
 const uniffiTextDecoder = new TextDecoder();
 const uniffiSuccessRustCallStatus = createRustCallStatus();
+const UNIFFI_MAX_CACHED_RUST_CALL_STATUSES = 32;
+const uniffiRustCallStatusPool = [];
 
 function uniffiLiftString(bytes) {
   return uniffiTextDecoder.decode(bytes);
@@ -29,8 +31,31 @@ function uniffiWriteRustCallStatus(status, value) {
   return status;
 }
 
+function uniffiAcquireRustCallStatus() {
+  const status = uniffiRustCallStatusPool.pop();
+  if (status != null) {
+    return status;
+  }
+  return koffi.alloc(getFfiTypes().RustCallStatus, 1);
+}
+
+function uniffiReleaseRustCallStatus(status) {
+  if (status == null) {
+    return;
+  }
+
+  koffi.encode(status, getFfiTypes().RustCallStatus, uniffiSuccessRustCallStatus);
+  if (uniffiRustCallStatusPool.length < UNIFFI_MAX_CACHED_RUST_CALL_STATUSES) {
+    uniffiRustCallStatusPool.push(status);
+    return;
+  }
+
+  koffi.free(status);
+}
+
 const uniffiRustCaller = new UniffiRustCaller({
-  createStatus: () => koffi.alloc(getFfiTypes().RustCallStatus, 1),
+  createStatus: uniffiAcquireRustCallStatus,
+  disposeStatus: uniffiReleaseRustCallStatus,
   readStatus: uniffiDecodeRustCallStatus,
   writeStatus: uniffiWriteRustCallStatus,
   liftString: uniffiLiftString,

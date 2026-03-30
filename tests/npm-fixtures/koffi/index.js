@@ -1945,6 +1945,11 @@ const koffi = {
       __koffiValue: null,
     };
   },
+  free(value) {
+    if (isAllocatedValue(value)) {
+      value.__koffiValue = null;
+    }
+  },
   as(value, type) {
     if (isOpaquePointerType(type)) {
       if (typeof value === "object" && value != null && value.__koffiPointerCast === true) {

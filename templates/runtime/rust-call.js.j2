@@ -163,12 +163,14 @@ export function rustCallWithError(errorHandler, caller, options = undefined) {
 export class UniffiRustCaller {
   constructor({
     createStatus = () => createRustCallStatus(),
+    disposeStatus = undefined,
     freeRustBuffer = undefined,
     liftString = defaultLiftString,
     readStatus = defaultReadStatus,
     writeStatus = defaultWriteStatus,
   } = {}) {
     this._createStatus = createStatus;
+    this._disposeStatus = disposeStatus;
     this._freeRustBuffer = freeRustBuffer;
     this._liftString = liftString;
     this._readStatus = readStatus;
@@ -188,14 +190,20 @@ export class UniffiRustCaller {
 
   makeRustCall(caller, options = undefined) {
     const status = this.createCallStatus();
-    const result = caller(status);
-    checkRustCallStatusImpl(
-      this._readStatus(status),
-      options,
-      this._freeRustBuffer,
-      this._liftString,
-    );
-    return result;
+    try {
+      const result = caller(status);
+      checkRustCallStatusImpl(
+        this._readStatus(status),
+        options,
+        this._freeRustBuffer,
+        this._liftString,
+      );
+      return result;
+    } finally {
+      if (typeof this._disposeStatus === "function") {
+        this._disposeStatus(status);
+      }
+    }
   }
 
   rustCall(caller, options = undefined) {
@@ -204,15 +212,21 @@ export class UniffiRustCaller {
 
   rustCallWithError(errorHandler, caller, options = undefined) {
     const status = this.createCallStatus();
-    const result = caller(status);
-    checkRustCallStatusImpl(
-      this._readStatus(status),
-      options,
-      this._freeRustBuffer,
-      this._liftString,
-      errorHandler,
-    );
-    return result;
+    try {
+      const result = caller(status);
+      checkRustCallStatusImpl(
+        this._readStatus(status),
+        options,
+        this._freeRustBuffer,
+        this._liftString,
+        errorHandler,
+      );
+      return result;
+    } finally {
+      if (typeof this._disposeStatus === "function") {
+        this._disposeStatus(status);
+      }
+    }
   }
 }
 

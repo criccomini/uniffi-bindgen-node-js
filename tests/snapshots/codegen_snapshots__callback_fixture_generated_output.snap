@@ -119,6 +119,8 @@ function uniffiNotImplemented(member) {
 const uniffiTextEncoder = new TextEncoder();
 const uniffiTextDecoder = new TextDecoder();
 const uniffiSuccessRustCallStatus = createRustCallStatus();
+const UNIFFI_MAX_CACHED_RUST_CALL_STATUSES = 32;
+const uniffiRustCallStatusPool = [];
 
 function uniffiLiftString(bytes) {
   return uniffiTextDecoder.decode(bytes);
@@ -147,8 +149,31 @@ function uniffiWriteRustCallStatus(status, value) {
   return status;
 }
 
+function uniffiAcquireRustCallStatus() {
+  const status = uniffiRustCallStatusPool.pop();
+  if (status != null) {
+    return status;
+  }
+  return koffi.alloc(getFfiTypes().RustCallStatus, 1);
+}
+
+function uniffiReleaseRustCallStatus(status) {
+  if (status == null) {
+    return;
+  }
+
+  koffi.encode(status, getFfiTypes().RustCallStatus, uniffiSuccessRustCallStatus);
+  if (uniffiRustCallStatusPool.length < UNIFFI_MAX_CACHED_RUST_CALL_STATUSES) {
+    uniffiRustCallStatusPool.push(status);
+    return;
+  }
+
+  koffi.free(status);
+}
+
 const uniffiRustCaller = new UniffiRustCaller({
-  createStatus: () => koffi.alloc(getFfiTypes().RustCallStatus, 1),
+  createStatus: uniffiAcquireRustCallStatus,
+  disposeStatus: uniffiReleaseRustCallStatus,
   readStatus: uniffiDecodeRustCallStatus,
   writeStatus: uniffiWriteRustCallStatus,
   liftString: uniffiLiftString,
@@ -6120,12 +6145,14 @@ export function rustCallWithError(errorHandler, caller, options = undefined) {
 export class UniffiRustCaller {
   constructor({
     createStatus = () => createRustCallStatus(),
+    disposeStatus = undefined,
     freeRustBuffer = undefined,
     liftString = defaultLiftString,
     readStatus = defaultReadStatus,
     writeStatus = defaultWriteStatus,
   } = {}) {
     this._createStatus = createStatus;
+    this._disposeStatus = disposeStatus;
     this._freeRustBuffer = freeRustBuffer;
     this._liftString = liftString;
     this._readStatus = readStatus;
@@ -6145,14 +6172,20 @@ export class UniffiRustCaller {
 
   makeRustCall(caller, options = undefined) {
     const status = this.createCallStatus();
-    const result = caller(status);
-    checkRustCallStatusImpl(
-      this._readStatus(status),
-      options,
-      this._freeRustBuffer,
-      this._liftString,
-    );
-    return result;
+    try {
+      const result = caller(status);
+      checkRustCallStatusImpl(
+        this._readStatus(status),
+        options,
+        this._freeRustBuffer,
+        this._liftString,
+      );
+      return result;
+    } finally {
+      if (typeof this._disposeStatus === "function") {
+        this._disposeStatus(status);
+      }
+    }
   }
 
   rustCall(caller, options = undefined) {
@@ -6161,15 +6194,21 @@ export class UniffiRustCaller {
 
   rustCallWithError(errorHandler, caller, options = undefined) {
     const status = this.createCallStatus();
-    const result = caller(status);
-    checkRustCallStatusImpl(
-      this._readStatus(status),
-      options,
-      this._freeRustBuffer,
-      this._liftString,
-      errorHandler,
-    );
-    return result;
+    try {
+      const result = caller(status);
+      checkRustCallStatusImpl(
+        this._readStatus(status),
+        options,
+        this._freeRustBuffer,
+        this._liftString,
+        errorHandler,
+      );
+      return result;
+    } finally {
+      if (typeof this._disposeStatus === "function") {
+        this._disposeStatus(status);
+      }
+    }
   }
 }
 
@@ -6228,6 +6267,7 @@ export declare class UniffiRustCaller<
 > {
   constructor(options?: {
     createStatus?: () => Status;
+    disposeStatus?: ((status: Status) => void) | null;
     freeRustBuffer?: ((buffer: RustBufferStruct) => void) | null;
     liftString?: RustStringLifter;
     readStatus?: RustCallStatusReader<Status>;

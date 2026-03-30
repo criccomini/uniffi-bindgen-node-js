@@ -82,11 +82,17 @@ UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-callback-leaks \
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-manual-leaks \
   /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
   scripts/leaks/runtime-load-unload-soak.mjs
+
+UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-manual-leaks \
+  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  scripts/leaks/runtime-load-unload-soak.mjs --case reader-build
 ```
 
 Use `--baseline-only` to capture an idle baseline and `--pause` to stop the process for live `leaks <pid>` inspection before exit.
 
 `runtime-basic-soak.mjs` defaults to `--scenario full`. Use `--scenario bytes`, `--scenario objects`, or `--scenario async` to isolate the major operation families inside the basic fixture workload.
+
+`runtime-load-unload-soak.mjs` defaults to `--case store-fetch`. Use `--case reader-build` to focus on manual-load cycles that build and destroy raw-external object handles across repeated `load()` / `unload()` boundaries.
 
 For a smaller second-level bisect inside the basic probe:
 

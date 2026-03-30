@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [, , packageDirArg, iterationsArg = "1", mode = "workload"] = process.argv;
+const [, , packageDirArg, iterationsArg = "1", mode = "workload", selectedCase = "store-fetch"] =
+  process.argv;
 
 if (packageDirArg == null) {
   throw new Error("package directory argument is required");
@@ -22,15 +23,32 @@ for (let index = 0; index < iterations; index += 1) {
   assert.equal(ffi.isLoaded(), true);
 
   if (mode === "workload") {
-    const store = new api.Store({
-      name: `child-${index}`,
-      value: new Uint8Array([1, index % 256]),
-      maybe_value: undefined,
-      chunks: [new Uint8Array([2, 3])],
-    });
-    await store.fetch_async(true);
-    store.dispose();
-    api.echo_bytes(new Uint8Array([4, 5, index % 256]));
+    switch (selectedCase) {
+      case "store-fetch": {
+        const store = new api.Store({
+          name: `child-${index}`,
+          value: new Uint8Array([1, index % 256]),
+          maybe_value: undefined,
+          chunks: [new Uint8Array([2, 3])],
+        });
+        await store.fetch_async(true);
+        store.dispose();
+        api.echo_bytes(new Uint8Array([4, 5, index % 256]));
+        break;
+      }
+
+      case "reader-build": {
+        const builder = new api.ReaderBuilder(true);
+        const reader = await builder.build();
+        assert.equal(reader.label(), "ready");
+        reader.dispose();
+        builder.dispose();
+        break;
+      }
+
+      default:
+        throw new Error(`Unknown workload case ${JSON.stringify(selectedCase)}.`);
+    }
   }
 
   assert.equal(api.unload(), true);

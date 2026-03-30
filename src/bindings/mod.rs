@@ -1800,6 +1800,18 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
+            component_js.contains("const library = bindings.library;"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("let libraryCache = uniffiLibraryFunctionCache.get(library);"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("uniffiLibraryFunctionCache.set(library, libraryCache);"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
             component_js.contains("function uniffiGetRustFutureContinuationPointer() {"),
             "unexpected component JS contents: {component_js}"
         );

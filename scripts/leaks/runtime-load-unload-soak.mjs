@@ -9,6 +9,7 @@ import {
   importPackageModule,
   maybePauseForInspection,
   parseProbeArgs,
+  readRequiredString,
   printMemorySnapshot,
   printMemorySummary,
   requirePackageDir,
@@ -17,10 +18,23 @@ import {
 } from "./common.mjs";
 
 const execFileAsync = promisify(execFile);
-const options = parseProbeArgs();
+const LOAD_UNLOAD_CASES = new Set(["store-fetch", "reader-build"]);
+const options = parseProbeArgs(process.argv.slice(2), {
+  "--case": (parsedOptions, argv, index) => {
+    const selectedCase = readRequiredString("--case", argv, index + 1);
+    if (!LOAD_UNLOAD_CASES.has(selectedCase)) {
+      throw new Error(
+        `--case must be one of ${Array.from(LOAD_UNLOAD_CASES).join(", ")}, got ${JSON.stringify(selectedCase)}.`,
+      );
+    }
+    parsedOptions.case = selectedCase;
+    return index + 1;
+  },
+});
+const selectedCase = options.case ?? "store-fetch";
 
 if (options.help) {
-  console.log(`Usage: node --expose-gc scripts/leaks/runtime-load-unload-soak.mjs [--baseline-only] [--pause] [--batches N] [--ops-per-batch N] [--child-iterations N]
+  console.log(`Usage: node --expose-gc scripts/leaks/runtime-load-unload-soak.mjs [--case store-fetch|reader-build] [--baseline-only] [--pause] [--batches N] [--ops-per-batch N] [--child-iterations N]
 
 Environment:
   UNIFFI_LEAK_PACKAGE_DIR   Path to a generated basic fixture package produced with --manual-load.
@@ -57,10 +71,7 @@ for (let batch = 1; batch <= options.batches; batch += 1) {
     assert.equal(ffi.isLoaded(), true);
 
     if (!options.baselineOnly) {
-      const store = new api.Store(createSeed(sampleIndex));
-      await store.fetch_async(true);
-      store.dispose();
-      api.echo_bytes(new Uint8Array([1, sampleIndex % 256, 9]));
+      await runWorkloadCase(sampleIndex);
     }
 
     assert.equal(api.unload(), true);
@@ -109,12 +120,37 @@ async function runChildCycles(childIterations) {
       packageDir,
       String(childIterations),
       options.baselineOnly ? "baseline" : "workload",
+      selectedCase,
     ],
     {
       cwd: packageDir,
       env: process.env,
     },
   );
+}
+
+async function runWorkloadCase(sampleIndex) {
+  switch (selectedCase) {
+    case "store-fetch": {
+      const store = new api.Store(createSeed(sampleIndex));
+      await store.fetch_async(true);
+      store.dispose();
+      api.echo_bytes(new Uint8Array([1, sampleIndex % 256, 9]));
+      return;
+    }
+
+    case "reader-build": {
+      const builder = new api.ReaderBuilder(true);
+      const reader = await builder.build();
+      assert.equal(reader.label(), "ready");
+      reader.dispose();
+      builder.dispose();
+      return;
+    }
+
+    default:
+      throw new Error(`Unhandled load/unload case ${JSON.stringify(selectedCase)}.`);
+  }
 }
 
 function createSeed(index) {

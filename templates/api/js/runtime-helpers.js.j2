@@ -127,16 +127,17 @@ function uniffiArrayConverter(innerConverter) {
 
 function uniffiGetCachedLibraryFunction(cacheKey, create) {
   const bindings = getFfiBindings();
-  let bindingCache = uniffiLibraryFunctionCache.get(bindings);
-  if (bindingCache == null) {
-    bindingCache = new Map();
-    uniffiLibraryFunctionCache.set(bindings, bindingCache);
+  const library = bindings.library;
+  let libraryCache = uniffiLibraryFunctionCache.get(library);
+  if (libraryCache == null) {
+    libraryCache = new Map();
+    uniffiLibraryFunctionCache.set(library, libraryCache);
   }
 
-  let cachedFunction = bindingCache.get(cacheKey);
+  let cachedFunction = libraryCache.get(cacheKey);
   if (cachedFunction == null) {
     cachedFunction = create(bindings);
-    bindingCache.set(cacheKey, cachedFunction);
+    libraryCache.set(cacheKey, cachedFunction);
   }
   return cachedFunction;
 }

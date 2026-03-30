@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import koffi from "koffi";
@@ -127,6 +127,16 @@ function resolveLibraryPath(libraryPath = undefined) {
   });
 }
 
+function canonicalizeExistingLibraryPath(libraryPath) {
+  if (!existsSync(libraryPath)) {
+    return libraryPath;
+  }
+
+  return typeof realpathSync.native === "function"
+    ? realpathSync.native(libraryPath)
+    : realpathSync(libraryPath);
+}
+
 function createBindingCore(libraryPath) {
   const library = koffi.load(libraryPath);
 {% for opaque_type in context.opaque_types %}
@@ -205,9 +215,10 @@ export function load(libraryPath = undefined) {
   const resolution = resolveLibraryPath(libraryPath);
   const resolvedLibraryPath = resolution.libraryPath;
   const bundledPrebuild = resolution.bundledPrebuild;
+  const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
 
   if (loadedBindings !== null) {
-    if (loadedBindings.libraryPath === resolvedLibraryPath) {
+    if (loadedBindings.libraryPath === canonicalLibraryPath) {
       return loadedBindings;
     }
 
@@ -222,14 +233,14 @@ export function load(libraryPath = undefined) {
     );
   }
 
-  const bindingCore = bindingCache.get(resolvedLibraryPath);
-  const bindings = createBindings(resolvedLibraryPath, bindingCore);
+  const bindingCore = bindingCache.get(canonicalLibraryPath);
+  const bindings = createBindings(canonicalLibraryPath, bindingCore);
   try {
     runtimeHooks.onLoad?.(bindings);
     if (bindingCore == null) {
       validateContractVersion(bindings);
       validateChecksums(bindings);
-      bindingCache.set(resolvedLibraryPath, Object.freeze({
+      bindingCache.set(canonicalLibraryPath, Object.freeze({
         library: bindings.library,
         ffiTypes: bindings.ffiTypes,
         ffiCallbacks: bindings.ffiCallbacks,

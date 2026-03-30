@@ -201,14 +201,25 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
       });
     }
 
+    function canonicalizeExistingLibraryPath(libraryPath) {
+      if (!existsSync(libraryPath)) {
+        return libraryPath;
+      }
+
+      return typeof realpathSync.native === "function"
+        ? realpathSync.native(libraryPath)
+        : realpathSync(libraryPath);
+    }
+
     === lifecycle ===
     export function load(libraryPath = undefined) {
       const resolution = resolveLibraryPath(libraryPath);
       const resolvedLibraryPath = resolution.libraryPath;
       const bundledPrebuild = resolution.bundledPrebuild;
+      const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
 
       if (loadedBindings !== null) {
-        if (loadedBindings.libraryPath === resolvedLibraryPath) {
+        if (loadedBindings.libraryPath === canonicalLibraryPath) {
           return loadedBindings;
         }
 
@@ -223,14 +234,14 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
         );
       }
 
-      const bindingCore = bindingCache.get(resolvedLibraryPath);
-      const bindings = createBindings(resolvedLibraryPath, bindingCore);
+      const bindingCore = bindingCache.get(canonicalLibraryPath);
+      const bindings = createBindings(canonicalLibraryPath, bindingCore);
       try {
         runtimeHooks.onLoad?.(bindings);
         if (bindingCore == null) {
           validateContractVersion(bindings);
           validateChecksums(bindings);
-          bindingCache.set(resolvedLibraryPath, Object.freeze({
+          bindingCache.set(canonicalLibraryPath, Object.freeze({
             library: bindings.library,
             ffiTypes: bindings.ffiTypes,
             ffiCallbacks: bindings.ffiCallbacks,
@@ -483,8 +494,8 @@ fn generated_bundled_ffi_js_emits_bundled_resolution_contract() {
             "if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {",
             "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
             "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.",
-            "const bindingCore = bindingCache.get(resolvedLibraryPath);",
-            "const bindings = createBindings(resolvedLibraryPath, bindingCore);",
+            "const bindingCore = bindingCache.get(canonicalLibraryPath);",
+            "const bindings = createBindings(canonicalLibraryPath, bindingCore);",
         ],
     );
 }

@@ -1338,7 +1338,8 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_ffi_js.contains("defineCallbackPrototype(\"CallbackInterfaceLogCallbackMethod0\""),
+            component_ffi_js
+                .contains("defineCallbackPrototype(\"CallbackInterfaceLogCallbackMethod0\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1862,7 +1863,7 @@ mod tests {
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
         assert!(
-            component_ffi_js.contains("loadedBindings.libraryPath === resolvedLibraryPath"),
+            component_ffi_js.contains("loadedBindings.libraryPath === canonicalLibraryPath"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1991,7 +1992,7 @@ mod tests {
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
         assert!(
-            component_ffi_js.contains("import { existsSync } from \"node:fs\""),
+            component_ffi_js.contains("import { existsSync, realpathSync } from \"node:fs\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -2009,6 +2010,10 @@ mod tests {
         assert!(
             component_ffi_js
                 .contains("const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("function canonicalizeExistingLibraryPath(libraryPath)"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

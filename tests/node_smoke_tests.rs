@@ -741,7 +741,9 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
         &format!(
             r#"
 import assert from "node:assert/strict";
-import {{ realpathSync }} from "node:fs";
+import {{ mkdtempSync, realpathSync, rmSync, symlinkSync }} from "node:fs";
+import {{ tmpdir }} from "node:os";
+import {{ join }} from "node:path";
 import koffi from "koffi";
 import {{
   Config,
@@ -773,7 +775,7 @@ const secondBindings = load({0});
 assert.strictEqual(secondBindings, firstBindings);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
-{2}
+{3}
 
 assert.equal(koffi.registeredCallbackCount(), 1);
 assert.equal(unload(), true);
@@ -794,11 +796,38 @@ assert.equal(koffi.registeredCallbackCount(), 1);
 assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
 assert.equal(koffi.registeredCallbackCount(), 0);
+
+const aliasDir = mkdtempSync(join(tmpdir(), "uniffi-manual-load-alias-"));
+try {{
+  const aliasPath = join(aliasDir, {2});
+  symlinkSync({1}, aliasPath);
+
+  const aliasBindings = load(aliasPath);
+  assert.equal(isLoaded(), true);
+  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
+  assert.notStrictEqual(aliasBindings, reloadedBindings);
+  assert.strictEqual(aliasBindings.library, firstBindings.library);
+  assert.strictEqual(aliasBindings.ffiFunctions, firstBindings.ffiFunctions);
+
+  const canonicalBindings = load({1});
+  assert.strictEqual(canonicalBindings, aliasBindings);
+  const aliasStore = new Store(seed);
+  await aliasStore.fetch_async(true);
+  aliasStore.dispose();
+  assert.equal(koffi.registeredCallbackCount(), 1);
+  assert.equal(unload(), true);
+  assert.equal(isLoaded(), false);
+  assert.equal(koffi.registeredCallbackCount(), 0);
+}} finally {{
+  rmSync(aliasDir, {{ recursive: true, force: true }});
+}}
 "#,
             serde_json::to_string(&format!("./{expected_library_filename}"))
                 .expect("relative library path should serialize"),
             serde_json::to_string(expected_library_path.as_str())
                 .expect("sibling library path should serialize"),
+            serde_json::to_string(expected_library_filename)
+                .expect("sibling library filename should serialize"),
             basic_fixture_api_smoke_body()
         ),
     );

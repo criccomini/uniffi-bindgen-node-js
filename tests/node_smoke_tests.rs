@@ -741,7 +741,7 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
         &format!(
             r#"
 import assert from "node:assert/strict";
-import {{ mkdtempSync, realpathSync, rmSync, symlinkSync }} from "node:fs";
+import {{ copyFileSync, mkdtempSync, realpathSync, rmSync, symlinkSync }} from "node:fs";
 import {{ tmpdir }} from "node:os";
 import {{ join }} from "node:path";
 import koffi from "koffi";
@@ -797,8 +797,26 @@ assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
+const copiedDir = mkdtempSync(join(process.cwd(), "copied-library-"));
 const aliasDir = mkdtempSync(join(tmpdir(), "uniffi-manual-load-alias-"));
 try {{
+  const copiedPath = join(copiedDir, {2});
+  copyFileSync({1}, copiedPath);
+
+  const copiedBindings = load(copiedPath);
+  assert.equal(isLoaded(), true);
+  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(copiedPath));
+  assert.notStrictEqual(copiedBindings, reloadedBindings);
+  assert.notStrictEqual(copiedBindings.library, firstBindings.library);
+  assert.notStrictEqual(copiedBindings.ffiFunctions, firstBindings.ffiFunctions);
+  const copiedStore = new Store(seed);
+  await copiedStore.fetch_async(true);
+  copiedStore.dispose();
+  assert.equal(koffi.registeredCallbackCount(), 1);
+  assert.equal(unload(), true);
+  assert.equal(isLoaded(), false);
+  assert.equal(koffi.registeredCallbackCount(), 0);
+
   const aliasPath = join(aliasDir, {2});
   symlinkSync({1}, aliasPath);
 
@@ -806,8 +824,8 @@ try {{
   assert.equal(isLoaded(), true);
   assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
   assert.notStrictEqual(aliasBindings, reloadedBindings);
-  assert.strictEqual(aliasBindings.library, firstBindings.library);
-  assert.strictEqual(aliasBindings.ffiFunctions, firstBindings.ffiFunctions);
+  assert.notStrictEqual(aliasBindings.library, copiedBindings.library);
+  assert.notStrictEqual(aliasBindings.ffiFunctions, copiedBindings.ffiFunctions);
 
   const canonicalBindings = load({1});
   assert.strictEqual(canonicalBindings, aliasBindings);
@@ -819,6 +837,7 @@ try {{
   assert.equal(isLoaded(), false);
   assert.equal(koffi.registeredCallbackCount(), 0);
 }} finally {{
+  rmSync(copiedDir, {{ recursive: true, force: true }});
   rmSync(aliasDir, {{ recursive: true, force: true }});
 }}
 "#,

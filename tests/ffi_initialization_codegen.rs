@@ -120,9 +120,10 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     let loadedFfiTypes = null;
     let loadedFfiFunctions = null;
     // Koffi retains native state for repeated lib.func() declarations, so keep a
-    // per-library binding core alive across unload/load cycles and only clear the
-    // generated package's active view of it.
-    const bindingCache = new Map();
+    // single binding core alive across unload/load cycles and evict stale cores
+    // when switching to a different canonical library path.
+    let cachedBindingCore = null;
+    let cachedLibraryPath = null;
     let runtimeHooks = Object.freeze({});
     const moduleFilename = fileURLToPath(import.meta.url);
     const moduleDirectory = dirname(moduleFilename);
@@ -234,20 +235,22 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
         );
       }
 
-      const bindingCore = bindingCache.get(canonicalLibraryPath);
+      let bindingCore =
+        cachedLibraryPath === canonicalLibraryPath
+          ? cachedBindingCore
+          : null;
+      if (bindingCore == null && cachedBindingCore != null) {
+        cachedBindingCore.library.unload();
+        clearBindingCoreCache();
+      }
+
       const bindings = createBindings(canonicalLibraryPath, bindingCore);
       try {
         runtimeHooks.onLoad?.(bindings);
         if (bindingCore == null) {
           validateContractVersion(bindings);
           validateChecksums(bindings);
-          bindingCache.set(canonicalLibraryPath, Object.freeze({
-            library: bindings.library,
-            ffiTypes: bindings.ffiTypes,
-            ffiCallbacks: bindings.ffiCallbacks,
-            ffiStructs: bindings.ffiStructs,
-            ffiFunctions: bindings.ffiFunctions,
-          }));
+          bindingCore = cacheBindingCore(canonicalLibraryPath, bindings);
         }
       } catch (error) {
         try {
@@ -494,7 +497,7 @@ fn generated_bundled_ffi_js_emits_bundled_resolution_contract() {
             "if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {",
             "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
             "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.",
-            "const bindingCore = bindingCache.get(canonicalLibraryPath);",
+            "let bindingCore =",
             "const bindings = createBindings(canonicalLibraryPath, bindingCore);",
         ],
     );

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -21,7 +21,12 @@ import {
 } from "./common.mjs";
 
 const execFileAsync = promisify(execFile);
-const LOAD_UNLOAD_CASES = new Set(["store-fetch", "reader-build", "alias-reload"]);
+const LOAD_UNLOAD_CASES = new Set([
+  "store-fetch",
+  "reader-build",
+  "alias-reload",
+  "copy-reload",
+]);
 const options = parseProbeArgs(process.argv.slice(2), {
   "--case": (parsedOptions, argv, index) => {
     const selectedCase = readRequiredString("--case", argv, index + 1);
@@ -37,7 +42,7 @@ const options = parseProbeArgs(process.argv.slice(2), {
 const selectedCase = options.case ?? "store-fetch";
 
 if (options.help) {
-  console.log(`Usage: node --expose-gc scripts/leaks/runtime-load-unload-soak.mjs [--case store-fetch|reader-build|alias-reload] [--baseline-only] [--pause] [--batches N] [--ops-per-batch N] [--child-iterations N]
+  console.log(`Usage: node --expose-gc scripts/leaks/runtime-load-unload-soak.mjs [--case store-fetch|reader-build|alias-reload|copy-reload] [--baseline-only] [--pause] [--batches N] [--ops-per-batch N] [--child-iterations N]
 
 Environment:
   UNIFFI_LEAK_PACKAGE_DIR   Path to a generated basic fixture package produced with --manual-load.
@@ -52,9 +57,9 @@ const api = await importPackageModule(packageDir, "index.js");
 const ffi = await importPackageModule(packageDir, "fixture-ffi.js");
 const callbackRuntime = await importPackageModule(packageDir, "runtime/callbacks.js");
 const asyncRuntime = await importPackageModule(packageDir, "runtime/async-rust-call.js");
-const aliasSourceLibraryPath = resolve(packageDir, "libfixture_basic.dylib");
-const aliasDirectory =
-  selectedCase === "alias-reload"
+const sourceLibraryPath = resolve(packageDir, "libfixture_basic.dylib");
+const dynamicLibraryDirectory =
+  selectedCase === "alias-reload" || selectedCase === "copy-reload"
     ? mkdtempSync(join(tmpdir(), "uniffi-load-alias-"))
     : null;
 
@@ -118,8 +123,8 @@ try {
   printMemorySummary("load/unload", samples);
   assertNoLeakCandidates("load/unload", samples);
 } finally {
-  if (aliasDirectory != null) {
-    rmSync(aliasDirectory, { recursive: true, force: true });
+  if (dynamicLibraryDirectory != null) {
+    rmSync(dynamicLibraryDirectory, { recursive: true, force: true });
   }
 }
 
@@ -138,7 +143,7 @@ async function runWarmup() {
 }
 
 async function runChildCycles(childIterations) {
-  if (selectedCase === "alias-reload") {
+  if (selectedCase === "alias-reload" || selectedCase === "copy-reload") {
     return;
   }
 
@@ -179,6 +184,7 @@ async function runWorkloadCase(sampleIndex) {
     }
 
     case "alias-reload":
+    case "copy-reload":
       api.echo_bytes(new Uint8Array([1, sampleIndex % 256, 9]));
       return;
 
@@ -188,17 +194,27 @@ async function runWorkloadCase(sampleIndex) {
 }
 
 function createLoadPath(sampleIndex) {
-  if (selectedCase !== "alias-reload") {
+  if (selectedCase !== "alias-reload" && selectedCase !== "copy-reload") {
     return undefined;
   }
 
-  const aliasPath = join(aliasDirectory, `alias-${String(sampleIndex)}.dylib`);
-  symlinkSync(aliasSourceLibraryPath, aliasPath);
-  return aliasPath;
+  const libraryPath = join(
+    dynamicLibraryDirectory,
+    `${selectedCase}-${String(sampleIndex)}.dylib`,
+  );
+  if (selectedCase === "alias-reload") {
+    symlinkSync(sourceLibraryPath, libraryPath);
+  } else {
+    copyFileSync(sourceLibraryPath, libraryPath);
+  }
+  return libraryPath;
 }
 
 function cleanupLoadPath(loadPath) {
-  if (selectedCase !== "alias-reload" || loadPath == null) {
+  if (
+    (selectedCase !== "alias-reload" && selectedCase !== "copy-reload")
+    || loadPath == null
+  ) {
     return;
   }
 

@@ -1,6 +1,5 @@
 ---
 source: tests/codegen_snapshots.rs
-assertion_line: 95
 expression: "snapshot_output_for_fixture(\"callbacks\")"
 ---
 === index.js ===
@@ -1485,9 +1484,10 @@ let loadedBindings = null;
 let loadedFfiTypes = null;
 let loadedFfiFunctions = null;
 // Koffi retains native state for repeated lib.func() declarations, so keep a
-// per-library binding core alive across unload/load cycles and only clear the
-// generated package's active view of it.
-const bindingCache = new Map();
+// single binding core alive across unload/load cycles and evict stale cores
+// when switching to a different canonical library path.
+let cachedBindingCore = null;
+let cachedLibraryPath = null;
 let runtimeHooks = Object.freeze({});
 const moduleFilename = fileURLToPath(import.meta.url);
 const moduleDirectory = dirname(moduleFilename);
@@ -2197,6 +2197,23 @@ function createBindings(libraryPath, bindingCore = undefined) {
   });
 }
 
+function cacheBindingCore(libraryPath, bindings) {
+  cachedLibraryPath = libraryPath;
+  cachedBindingCore = Object.freeze({
+    library: bindings.library,
+    ffiTypes: bindings.ffiTypes,
+    ffiCallbacks: bindings.ffiCallbacks,
+    ffiStructs: bindings.ffiStructs,
+    ffiFunctions: bindings.ffiFunctions,
+  });
+  return cachedBindingCore;
+}
+
+function clearBindingCoreCache() {
+  cachedBindingCore = null;
+  cachedLibraryPath = null;
+}
+
 export function load(libraryPath = undefined) {
   const resolution = resolveLibraryPath(libraryPath);
   const resolvedLibraryPath = resolution.libraryPath;
@@ -2219,20 +2236,22 @@ export function load(libraryPath = undefined) {
     );
   }
 
-  const bindingCore = bindingCache.get(canonicalLibraryPath);
+  let bindingCore =
+    cachedLibraryPath === canonicalLibraryPath
+      ? cachedBindingCore
+      : null;
+  if (bindingCore == null && cachedBindingCore != null) {
+    cachedBindingCore.library.unload();
+    clearBindingCoreCache();
+  }
+
   const bindings = createBindings(canonicalLibraryPath, bindingCore);
   try {
     runtimeHooks.onLoad?.(bindings);
     if (bindingCore == null) {
       validateContractVersion(bindings);
       validateChecksums(bindings);
-      bindingCache.set(canonicalLibraryPath, Object.freeze({
-        library: bindings.library,
-        ffiTypes: bindings.ffiTypes,
-        ffiCallbacks: bindings.ffiCallbacks,
-        ffiStructs: bindings.ffiStructs,
-        ffiFunctions: bindings.ffiFunctions,
-      }));
+      bindingCore = cacheBindingCore(canonicalLibraryPath, bindings);
     }
   } catch (error) {
     try {

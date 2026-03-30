@@ -206,6 +206,12 @@ When running the real Koffi benchmark suites, use Node 22 or earlier for now. On
 
 Upstream issue: <https://github.com/Koromix/koffi/issues/261>
 
+Run locally with:
+
+```sh
+PATH=/opt/homebrew/opt/node@22/bin:$PATH cargo test --test node_benchmarks -- --ignored --nocapture
+```
+
 ## Coverage
 
 Install the LLVM coverage tooling once:

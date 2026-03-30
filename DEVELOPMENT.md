@@ -59,12 +59,12 @@ The repository includes manual leak probes for the generated Node runtime and th
 Runtime prep:
 
 ```sh
-cargo run --example runtime_leak_prep -- basic --out-dir /tmp/uniffi-basic-leaks
-cargo run --example runtime_leak_prep -- callbacks --out-dir /tmp/uniffi-callback-leaks
-cargo run --example runtime_leak_prep -- basic --manual-load --out-dir /tmp/uniffi-basic-manual-leaks
+cargo run --bin runtime_leak_prep -- basic --out-dir /tmp/uniffi-basic-leaks
+cargo run --bin runtime_leak_prep -- callbacks --out-dir /tmp/uniffi-callback-leaks
+cargo run --bin runtime_leak_prep -- basic --manual-load --out-dir /tmp/uniffi-basic-manual-leaks
 ```
 
-Those commands build the fixture cdylib in a temporary workspace, generate a package into `--out-dir`, stage the native library next to the generated JavaScript files, and run `npm install --no-package-lock` unless you pass `--skip-npm-install`.
+That helper binary builds the fixture cdylib in a temporary workspace, generates a package into `--out-dir`, stages the native library next to the generated JavaScript files, and runs `npm install --no-package-lock` unless you pass `--skip-npm-install`.
 
 Run the runtime probes with Node 22 and `--expose-gc`:
 
@@ -148,10 +148,10 @@ UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
 Generator leak probe:
 
 ```sh
-cargo run --example generator_leak_probe -- both --pause-after-warmup --pause-at-end
+cargo run --bin generator_leak_probe -- both --pause-after-warmup --pause-at-end
 ```
 
-That example builds the fixture cdylibs once, loops generation inside one long-lived Rust process, prints the process ID for `leaks <pid>`, and removes the per-iteration output directories after each cycle.
+That helper binary builds the fixture cdylibs once, loops generation inside one long-lived Rust process, prints the process ID for `leaks <pid>`, and removes the per-iteration output directories after each cycle.
 
 To inspect the normal CLI path at exit:
 
@@ -213,6 +213,8 @@ Some real-runtime Node tests are intentionally ignored because they require regi
 - `src/bindings/mod.rs`: generation orchestration and package writing
 - `src/bindings/api/`: high-level JavaScript and declaration emission
 - `src/bindings/ffi.rs`: low-level FFI module generation
+- `src/bin/`: contributor-facing helper binaries, including leak tooling
+- `scripts/leaks/`: manual Node soak probes used during leak investigations
 - `tests/`: snapshot, smoke, packaging, and regression tests
 - `fixtures/`: UniFFI fixture crates used by tests
 

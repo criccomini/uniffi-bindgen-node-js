@@ -634,7 +634,18 @@ import {{
   init_logging,
   last_message,
 }} from "./index.js";
-import {{ foreignFutureHandleCount }} from "./runtime/callbacks.js";
+import {{
+  UniffiCallbackRegistry,
+  foreignFutureHandleCount,
+  invokeAsyncCallbackMethod,
+  writeCallbackError,
+}} from "./runtime/callbacks.js";
+import {{ EMPTY_RUST_BUFFER }} from "./runtime/ffi-types.js";
+import {{
+  CALL_ERROR,
+  CALL_UNEXPECTED_ERROR,
+  createRustCallStatus,
+}} from "./runtime/rust-call.js";
 
 {}
 "#,
@@ -1014,7 +1025,110 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+async function withTimeout(promise, message) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), 1_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 assert.equal(foreignFutureHandleCount(), 0);
+
+const callbackLowererErrors = [];
+const callbackStatus = createRustCallStatus();
+const normalizedCallbackError = writeCallbackError(callbackStatus, "sync string failure", {
+  lowerError(error) {
+    callbackLowererErrors.push(error);
+    assert.ok(error instanceof Error);
+    assert.equal(error.message, "sync string failure");
+    return EMPTY_RUST_BUFFER;
+  },
+  lowerString(message) {
+    assert.fail(`unexpected lowerString call for lowered sync error: ${message}`);
+  },
+});
+assert.equal(callbackStatus.code, CALL_ERROR);
+assert.ok(normalizedCallbackError instanceof Error);
+assert.equal(normalizedCallbackError.message, "sync string failure");
+assert.deepStrictEqual(
+  callbackLowererErrors.map((error) => error.message),
+  ["sync string failure"],
+);
+
+const unexpectedCallbackMessages = [];
+const unexpectedCallbackStatus = createRustCallStatus();
+const unexpectedCallbackError = writeCallbackError(
+  unexpectedCallbackStatus,
+  "sync unexpected failure",
+  {
+    lowerError(error) {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "sync unexpected failure");
+      return null;
+    },
+    lowerString(message) {
+      unexpectedCallbackMessages.push(message);
+      return EMPTY_RUST_BUFFER;
+    },
+  },
+);
+assert.equal(unexpectedCallbackStatus.code, CALL_UNEXPECTED_ERROR);
+assert.ok(unexpectedCallbackError instanceof Error);
+assert.equal(unexpectedCallbackError.message, "sync unexpected failure");
+assert.deepStrictEqual(unexpectedCallbackMessages, ["sync unexpected failure"]);
+
+const runtimeLowererErrors = [];
+const runtimeCompletion = deferred();
+const runtimeRegistry = new UniffiCallbackRegistry({
+  interfaceName: "RuntimeAsyncSink",
+});
+const runtimeHandle = runtimeRegistry.register({
+  write(message) {
+    assert.equal(message, "runtime-string-failure");
+    return Promise.reject("runtime string failure");
+  },
+});
+
+const runtimeFutureHandle = invokeAsyncCallbackMethod({
+  registry: runtimeRegistry,
+  handle: runtimeHandle,
+  methodName: "write",
+  args: ["runtime-string-failure"],
+  callbackData: 99n,
+  complete(callbackData, result) {
+    runtimeCompletion.resolve({ callbackData, result });
+  },
+  lowerError(error) {
+    runtimeLowererErrors.push(error);
+    assert.ok(error instanceof Error);
+    assert.equal(error.message, "runtime string failure");
+    return EMPTY_RUST_BUFFER;
+  },
+  lowerString(message) {
+    assert.fail(`unexpected lowerString call for lowered async error: ${message}`);
+  },
+});
+assert.equal(typeof runtimeFutureHandle, "bigint");
+assert.equal(foreignFutureHandleCount(), 1);
+const completedRuntimeFailure = await withTimeout(
+  runtimeCompletion.promise,
+  "timed out waiting for async callback failure completion",
+);
+assert.equal(completedRuntimeFailure.callbackData, 99n);
+assert.equal(completedRuntimeFailure.result.call_status.code, CALL_ERROR);
+assert.equal(foreignFutureHandleCount(), 0);
+assert.deepStrictEqual(
+  runtimeLowererErrors.map((error) => error.message),
+  ["runtime string failure"],
+);
+runtimeRegistry.remove(runtimeHandle);
 
 const successWrite = deferred();
 const successSink = {

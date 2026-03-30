@@ -42,6 +42,16 @@ Run the ignored real-Koffi callback smoke test locally with Node 22 active and n
 cargo test --locked --test node_real_koffi_tests -- --ignored
 ```
 
+## Complexity
+
+Measure Rust cyclomatic complexity with `lizard` and review the `CCN` column in the output:
+
+```sh
+uvx --from 'lizard==1.21.2' lizard -l rust src
+```
+
+This runs a pinned `lizard` version through `uvx`, limits parsing to Rust files with `-l rust`, and scans the repository's `src` tree.
+
 ## Leak Investigation
 
 The repository includes manual leak probes for the generated Node runtime and the Rust generator process.

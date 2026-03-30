@@ -1310,6 +1310,10 @@ export const ffiIntegrity = Object.freeze({
 let loadedBindings = null;
 let loadedFfiTypes = null;
 let loadedFfiFunctions = null;
+// Koffi retains native state for repeated lib.func() declarations, so keep a
+// per-library binding core alive across unload/load cycles and only clear the
+// generated package's active view of it.
+const bindingCache = new Map();
 let runtimeHooks = Object.freeze({});
 const moduleFilename = fileURLToPath(import.meta.url);
 const moduleDirectory = dirname(moduleFilename);
@@ -1388,7 +1392,7 @@ function resolveLibraryPath(libraryPath = undefined) {
   });
 }
 
-function createBindings(libraryPath) {
+function createBindingCore(libraryPath) {
   const library = koffi.load(libraryPath);
 
   const RustArcPtr = defineOpaquePointer("RustArcPtr");
@@ -1976,12 +1980,23 @@ function createBindings(libraryPath) {
   });
 
   return Object.freeze({
-    libraryPath,
     library,
     ffiTypes,
     ffiCallbacks,
     ffiStructs,
     ffiFunctions,
+  });
+}
+
+function createBindings(libraryPath, bindingCore = undefined) {
+  const core = bindingCore ?? createBindingCore(libraryPath);
+  return Object.freeze({
+    libraryPath,
+    library: core.library,
+    ffiTypes: core.ffiTypes,
+    ffiCallbacks: core.ffiCallbacks,
+    ffiStructs: core.ffiStructs,
+    ffiFunctions: core.ffiFunctions,
   });
 }
 
@@ -2006,21 +2021,33 @@ export function load(libraryPath = undefined) {
     );
   }
 
-  const bindings = createBindings(resolvedLibraryPath);
+  const bindingCore = bindingCache.get(resolvedLibraryPath);
+  const bindings = createBindings(resolvedLibraryPath, bindingCore);
   try {
     runtimeHooks.onLoad?.(bindings);
-    validateContractVersion(bindings);
-    validateChecksums(bindings);
+    if (bindingCore == null) {
+      validateContractVersion(bindings);
+      validateChecksums(bindings);
+      bindingCache.set(resolvedLibraryPath, Object.freeze({
+        library: bindings.library,
+        ffiTypes: bindings.ffiTypes,
+        ffiCallbacks: bindings.ffiCallbacks,
+        ffiStructs: bindings.ffiStructs,
+        ffiFunctions: bindings.ffiFunctions,
+      }));
+    }
   } catch (error) {
     try {
       runtimeHooks.onUnload?.(bindings);
     } catch {
       // Preserve the original initialization failure.
     }
-    try {
-      bindings.library.unload();
-    } catch {
-      // Preserve the original initialization failure.
+    if (bindingCore == null) {
+      try {
+        bindings.library.unload();
+      } catch {
+        // Preserve the original initialization failure.
+      }
     }
     throw error;
   }
@@ -2042,7 +2069,6 @@ export function unload() {
   } catch (error) {
     hookError = error;
   }
-  loadedBindings.library.unload();
   loadedBindings = null;
   loadedFfiTypes = null;
   loadedFfiFunctions = null;

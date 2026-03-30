@@ -86,7 +86,7 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     let metadata_section = normalize_checksum_value(&extract_section(
         &ffi_js,
         "export const ffiMetadata = Object.freeze({",
-        "function createBindings(",
+        "function createBindingCore(",
     ));
     let lifecycle_section = extract_section(
         &ffi_js,
@@ -119,6 +119,10 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
     let loadedBindings = null;
     let loadedFfiTypes = null;
     let loadedFfiFunctions = null;
+    // Koffi retains native state for repeated lib.func() declarations, so keep a
+    // per-library binding core alive across unload/load cycles and only clear the
+    // generated package's active view of it.
+    const bindingCache = new Map();
     let runtimeHooks = Object.freeze({});
     const moduleFilename = fileURLToPath(import.meta.url);
     const moduleDirectory = dirname(moduleFilename);
@@ -219,21 +223,33 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
         );
       }
 
-      const bindings = createBindings(resolvedLibraryPath);
+      const bindingCore = bindingCache.get(resolvedLibraryPath);
+      const bindings = createBindings(resolvedLibraryPath, bindingCore);
       try {
         runtimeHooks.onLoad?.(bindings);
-        validateContractVersion(bindings);
-        validateChecksums(bindings);
+        if (bindingCore == null) {
+          validateContractVersion(bindings);
+          validateChecksums(bindings);
+          bindingCache.set(resolvedLibraryPath, Object.freeze({
+            library: bindings.library,
+            ffiTypes: bindings.ffiTypes,
+            ffiCallbacks: bindings.ffiCallbacks,
+            ffiStructs: bindings.ffiStructs,
+            ffiFunctions: bindings.ffiFunctions,
+          }));
+        }
       } catch (error) {
         try {
           runtimeHooks.onUnload?.(bindings);
         } catch {
           // Preserve the original initialization failure.
         }
-        try {
-          bindings.library.unload();
-        } catch {
-          // Preserve the original initialization failure.
+        if (bindingCore == null) {
+          try {
+            bindings.library.unload();
+          } catch {
+            // Preserve the original initialization failure.
+          }
         }
         throw error;
       }
@@ -255,7 +271,6 @@ fn generated_ffi_js_snapshots_contract_and_checksum_initialization() {
       } catch (error) {
         hookError = error;
       }
-      loadedBindings.library.unload();
       loadedBindings = null;
       loadedFfiTypes = null;
       loadedFfiFunctions = null;
@@ -418,7 +433,7 @@ fn generated_bundled_ffi_js_emits_bundled_resolution_contract() {
     let metadata_and_resolution = extract_section(
         &ffi_js,
         "export const ffiMetadata = Object.freeze({",
-        "function createBindings(",
+        "function createBindingCore(",
     );
     let lifecycle_section = extract_section(
         &ffi_js,
@@ -468,7 +483,8 @@ fn generated_bundled_ffi_js_emits_bundled_resolution_contract() {
             "if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {",
             "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
             "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.",
-            "const bindings = createBindings(resolvedLibraryPath);",
+            "const bindingCore = bindingCache.get(resolvedLibraryPath);",
+            "const bindings = createBindings(resolvedLibraryPath, bindingCore);",
         ],
     );
 }

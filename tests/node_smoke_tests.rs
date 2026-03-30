@@ -773,6 +773,8 @@ const reloadedBindings = load({0});
 assert.equal(isLoaded(), true);
 assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
 assert.notStrictEqual(reloadedBindings, firstBindings);
+assert.strictEqual(reloadedBindings.library, firstBindings.library);
+assert.strictEqual(reloadedBindings.ffiFunctions, firstBindings.ffiFunctions);
 assert.deepStrictEqual(Array.from(echo_bytes(new Uint8Array([4, 5, 6]))), [4, 5, 6]);
 const reloadedStore = new Store(seed);
 await reloadedStore.fetch_async(true);

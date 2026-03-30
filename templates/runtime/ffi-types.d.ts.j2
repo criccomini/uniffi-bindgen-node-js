@@ -93,6 +93,11 @@ export declare function defineCallbackVtable(
   name: string,
   fields: Readonly<Record<string, unknown>>,
 ): unknown;
+export declare function defineCallbackPrototype(
+  name: string,
+  returnType: unknown,
+  argumentTypes: ReadonlyArray<unknown>,
+): unknown;
 
 export declare class RustBufferValue {
   constructor(buffer?: RustBufferStruct | null);

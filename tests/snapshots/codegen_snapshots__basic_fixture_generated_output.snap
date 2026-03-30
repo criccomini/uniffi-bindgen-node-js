@@ -1235,6 +1235,7 @@ import {
   ForeignBytes,
   RustBuffer,
   RustCallStatus,
+  defineCallbackPrototype,
   UniffiHandle,
   VoidPointer,
   defineCallbackVtable,
@@ -1421,11 +1422,11 @@ function createBindings(libraryPath) {
   });
   const ffiCallbacks = {};
 
-  ffiCallbacks.RustFutureContinuationCallback = koffi.proto("RustFutureContinuationCallback", "void", ["uint64_t", "int8_t"]);
+  ffiCallbacks.RustFutureContinuationCallback = defineCallbackPrototype("RustFutureContinuationCallback", "void", ["uint64_t", "int8_t"]);
 
-  ffiCallbacks.ForeignFutureFree = koffi.proto("ForeignFutureFree", "void", ["uint64_t"]);
+  ffiCallbacks.ForeignFutureFree = defineCallbackPrototype("ForeignFutureFree", "void", ["uint64_t"]);
 
-  ffiCallbacks.CallbackInterfaceFree = koffi.proto("CallbackInterfaceFree", "void", ["uint64_t"]);
+  ffiCallbacks.CallbackInterfaceFree = defineCallbackPrototype("CallbackInterfaceFree", "void", ["uint64_t"]);
 
   const ffiStructs = {};
 
@@ -1568,31 +1569,31 @@ function createBindings(libraryPath) {
 
 
 
-  ffiCallbacks.ForeignFutureCompleteU8 = koffi.proto("ForeignFutureCompleteU8", "void", ["uint64_t", ffiStructs.ForeignFutureStructU8]);
+  ffiCallbacks.ForeignFutureCompleteU8 = defineCallbackPrototype("ForeignFutureCompleteU8", "void", ["uint64_t", ffiStructs.ForeignFutureStructU8]);
 
-  ffiCallbacks.ForeignFutureCompleteI8 = koffi.proto("ForeignFutureCompleteI8", "void", ["uint64_t", ffiStructs.ForeignFutureStructI8]);
+  ffiCallbacks.ForeignFutureCompleteI8 = defineCallbackPrototype("ForeignFutureCompleteI8", "void", ["uint64_t", ffiStructs.ForeignFutureStructI8]);
 
-  ffiCallbacks.ForeignFutureCompleteU16 = koffi.proto("ForeignFutureCompleteU16", "void", ["uint64_t", ffiStructs.ForeignFutureStructU16]);
+  ffiCallbacks.ForeignFutureCompleteU16 = defineCallbackPrototype("ForeignFutureCompleteU16", "void", ["uint64_t", ffiStructs.ForeignFutureStructU16]);
 
-  ffiCallbacks.ForeignFutureCompleteI16 = koffi.proto("ForeignFutureCompleteI16", "void", ["uint64_t", ffiStructs.ForeignFutureStructI16]);
+  ffiCallbacks.ForeignFutureCompleteI16 = defineCallbackPrototype("ForeignFutureCompleteI16", "void", ["uint64_t", ffiStructs.ForeignFutureStructI16]);
 
-  ffiCallbacks.ForeignFutureCompleteU32 = koffi.proto("ForeignFutureCompleteU32", "void", ["uint64_t", ffiStructs.ForeignFutureStructU32]);
+  ffiCallbacks.ForeignFutureCompleteU32 = defineCallbackPrototype("ForeignFutureCompleteU32", "void", ["uint64_t", ffiStructs.ForeignFutureStructU32]);
 
-  ffiCallbacks.ForeignFutureCompleteI32 = koffi.proto("ForeignFutureCompleteI32", "void", ["uint64_t", ffiStructs.ForeignFutureStructI32]);
+  ffiCallbacks.ForeignFutureCompleteI32 = defineCallbackPrototype("ForeignFutureCompleteI32", "void", ["uint64_t", ffiStructs.ForeignFutureStructI32]);
 
-  ffiCallbacks.ForeignFutureCompleteU64 = koffi.proto("ForeignFutureCompleteU64", "void", ["uint64_t", ffiStructs.ForeignFutureStructU64]);
+  ffiCallbacks.ForeignFutureCompleteU64 = defineCallbackPrototype("ForeignFutureCompleteU64", "void", ["uint64_t", ffiStructs.ForeignFutureStructU64]);
 
-  ffiCallbacks.ForeignFutureCompleteI64 = koffi.proto("ForeignFutureCompleteI64", "void", ["uint64_t", ffiStructs.ForeignFutureStructI64]);
+  ffiCallbacks.ForeignFutureCompleteI64 = defineCallbackPrototype("ForeignFutureCompleteI64", "void", ["uint64_t", ffiStructs.ForeignFutureStructI64]);
 
-  ffiCallbacks.ForeignFutureCompleteF32 = koffi.proto("ForeignFutureCompleteF32", "void", ["uint64_t", ffiStructs.ForeignFutureStructF32]);
+  ffiCallbacks.ForeignFutureCompleteF32 = defineCallbackPrototype("ForeignFutureCompleteF32", "void", ["uint64_t", ffiStructs.ForeignFutureStructF32]);
 
-  ffiCallbacks.ForeignFutureCompleteF64 = koffi.proto("ForeignFutureCompleteF64", "void", ["uint64_t", ffiStructs.ForeignFutureStructF64]);
+  ffiCallbacks.ForeignFutureCompleteF64 = defineCallbackPrototype("ForeignFutureCompleteF64", "void", ["uint64_t", ffiStructs.ForeignFutureStructF64]);
 
-  ffiCallbacks.ForeignFutureCompletePointer = koffi.proto("ForeignFutureCompletePointer", "void", ["uint64_t", ffiStructs.ForeignFutureStructPointer]);
+  ffiCallbacks.ForeignFutureCompletePointer = defineCallbackPrototype("ForeignFutureCompletePointer", "void", ["uint64_t", ffiStructs.ForeignFutureStructPointer]);
 
-  ffiCallbacks.ForeignFutureCompleteRustBuffer = koffi.proto("ForeignFutureCompleteRustBuffer", "void", ["uint64_t", ffiStructs.ForeignFutureStructRustBuffer]);
+  ffiCallbacks.ForeignFutureCompleteRustBuffer = defineCallbackPrototype("ForeignFutureCompleteRustBuffer", "void", ["uint64_t", ffiStructs.ForeignFutureStructRustBuffer]);
 
-  ffiCallbacks.ForeignFutureCompleteVoid = koffi.proto("ForeignFutureCompleteVoid", "void", ["uint64_t", ffiStructs.ForeignFutureStructVoid]);
+  ffiCallbacks.ForeignFutureCompleteVoid = defineCallbackPrototype("ForeignFutureCompleteVoid", "void", ["uint64_t", ffiStructs.ForeignFutureStructVoid]);
 
 
 
@@ -4611,6 +4612,13 @@ export const RustCallStatus = koffi.struct("RustCallStatus", {
   error_buf: RustBuffer,
 });
 
+// Koffi keeps named type and prototype definitions process-wide. Reuse them
+// across load/unload cycles so manual-load packages do not accumulate duplicates.
+const NAMED_POINTER_TYPES = new Map();
+const NAMED_STRUCT_TYPES = new Map();
+const NAMED_CALLBACK_VTABLE_TYPES = new Map();
+const NAMED_CALLBACK_PROTOTYPES = new Map();
+
 const MAX_SAFE_LENGTH = BigInt(Number.MAX_SAFE_INTEGER);
 const MAX_UINT64 = (1n << 64n) - 1n;
 const MAX_INT64 = (1n << 63n) - 1n;
@@ -4914,15 +4922,35 @@ export function readRustBufferBytes(buffer, label = "RustBuffer") {
 }
 
 export function defineOpaquePointer(name) {
-  return koffi.pointer(name, koffi.opaque());
+  return getOrCreateNamedType(
+    NAMED_POINTER_TYPES,
+    name,
+    () => koffi.pointer(name, koffi.opaque()),
+  );
 }
 
 export function defineStructType(name, fields) {
-  return koffi.struct(name, fields);
+  return getOrCreateNamedType(
+    NAMED_STRUCT_TYPES,
+    name,
+    () => koffi.struct(name, fields),
+  );
 }
 
 export function defineCallbackVtable(name, fields) {
-  return koffi.struct(name, fields);
+  return getOrCreateNamedType(
+    NAMED_CALLBACK_VTABLE_TYPES,
+    name,
+    () => koffi.struct(name, fields),
+  );
+}
+
+export function defineCallbackPrototype(name, returnType, argumentTypes) {
+  return getOrCreateNamedType(
+    NAMED_CALLBACK_PROTOTYPES,
+    name,
+    () => koffi.proto(name, returnType, argumentTypes),
+  );
 }
 
 export class RustBufferValue {
@@ -5004,6 +5032,15 @@ export class ForeignBytesValue {
   toUint8Array() {
     return readForeignBytes(this._bytes);
   }
+}
+
+function getOrCreateNamedType(cache, name, create) {
+  let type = cache.get(name);
+  if (type == null) {
+    type = create();
+    cache.set(name, type);
+  }
+  return type;
 }
 === runtime/ffi-types.d.ts ===
 export declare const UniffiHandle: "uint64_t";
@@ -5100,6 +5137,11 @@ export declare function defineStructType(
 export declare function defineCallbackVtable(
   name: string,
   fields: Readonly<Record<string, unknown>>,
+): unknown;
+export declare function defineCallbackPrototype(
+  name: string,
+  returnType: unknown,
+  argumentTypes: ReadonlyArray<unknown>,
 ): unknown;
 
 export declare class RustBufferValue {

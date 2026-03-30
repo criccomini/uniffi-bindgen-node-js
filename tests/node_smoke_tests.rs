@@ -754,16 +754,29 @@ assert.equal(ffiMetadata.bundledPrebuilds, true);
 assert.equal(ffiMetadata.manualLoad, true);
 assert.equal(isLoaded(), false);
 
-const firstBindings = load({});
+const firstBindings = load({0});
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
 
-const secondBindings = load({});
+const secondBindings = load({0});
 assert.strictEqual(secondBindings, firstBindings);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
-{}
+{2}
 
+assert.equal(koffi.registeredCallbackCount(), 1);
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+assert.equal(koffi.registeredCallbackCount(), 0);
+
+const reloadedBindings = load({0});
+assert.equal(isLoaded(), true);
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
+assert.notStrictEqual(reloadedBindings, firstBindings);
+assert.deepStrictEqual(Array.from(echo_bytes(new Uint8Array([4, 5, 6]))), [4, 5, 6]);
+const reloadedStore = new Store(seed);
+await reloadedStore.fetch_async(true);
+reloadedStore.dispose();
 assert.equal(koffi.registeredCallbackCount(), 1);
 assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
@@ -773,8 +786,6 @@ assert.equal(koffi.registeredCallbackCount(), 0);
                 .expect("relative library path should serialize"),
             serde_json::to_string(expected_library_path.as_str())
                 .expect("sibling library path should serialize"),
-            serde_json::to_string(expected_library_filename)
-                .expect("library filename should serialize"),
             basic_fixture_api_smoke_body()
         ),
     );

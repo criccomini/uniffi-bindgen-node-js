@@ -6,6 +6,7 @@ import {
   ForeignBytes,
   RustBuffer,
   RustCallStatus,
+  defineCallbackPrototype,
   UniffiHandle,
   VoidPointer,
   defineCallbackVtable,
@@ -140,7 +141,7 @@ function createBindings(libraryPath) {
   });
   const ffiCallbacks = {};
 {% for callback in context.pre_struct_callbacks %}
-  ffiCallbacks.{{ callback.identifier }} = koffi.proto({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
+  ffiCallbacks.{{ callback.identifier }} = defineCallbackPrototype({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
 {% endfor %}
   const ffiStructs = {};
 {% for struct_ in context.structs %}
@@ -153,7 +154,7 @@ function createBindings(libraryPath) {
 {% endif %}
 {% endfor %}
 {% for callback in context.post_struct_callbacks %}
-  ffiCallbacks.{{ callback.identifier }} = koffi.proto({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
+  ffiCallbacks.{{ callback.identifier }} = defineCallbackPrototype({{ callback.name_json }}, {{ callback.return_type_expr }}, [{% for argument_type_expr in callback.argument_type_exprs %}{{ argument_type_expr }}{% if !loop.last %}, {% endif %}{% endfor %}]);
 {% endfor %}
 {% for struct_ in context.structs %}
 {% if struct_.is_callback_vtable %}

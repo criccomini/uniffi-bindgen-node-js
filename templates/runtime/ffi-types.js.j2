@@ -24,6 +24,13 @@ export const RustCallStatus = koffi.struct("RustCallStatus", {
   error_buf: RustBuffer,
 });
 
+// Koffi keeps named type and prototype definitions process-wide. Reuse them
+// across load/unload cycles so manual-load packages do not accumulate duplicates.
+const NAMED_POINTER_TYPES = new Map();
+const NAMED_STRUCT_TYPES = new Map();
+const NAMED_CALLBACK_VTABLE_TYPES = new Map();
+const NAMED_CALLBACK_PROTOTYPES = new Map();
+
 const MAX_SAFE_LENGTH = BigInt(Number.MAX_SAFE_INTEGER);
 const MAX_UINT64 = (1n << 64n) - 1n;
 const MAX_INT64 = (1n << 63n) - 1n;
@@ -327,15 +334,35 @@ export function readRustBufferBytes(buffer, label = "RustBuffer") {
 }
 
 export function defineOpaquePointer(name) {
-  return koffi.pointer(name, koffi.opaque());
+  return getOrCreateNamedType(
+    NAMED_POINTER_TYPES,
+    name,
+    () => koffi.pointer(name, koffi.opaque()),
+  );
 }
 
 export function defineStructType(name, fields) {
-  return koffi.struct(name, fields);
+  return getOrCreateNamedType(
+    NAMED_STRUCT_TYPES,
+    name,
+    () => koffi.struct(name, fields),
+  );
 }
 
 export function defineCallbackVtable(name, fields) {
-  return koffi.struct(name, fields);
+  return getOrCreateNamedType(
+    NAMED_CALLBACK_VTABLE_TYPES,
+    name,
+    () => koffi.struct(name, fields),
+  );
+}
+
+export function defineCallbackPrototype(name, returnType, argumentTypes) {
+  return getOrCreateNamedType(
+    NAMED_CALLBACK_PROTOTYPES,
+    name,
+    () => koffi.proto(name, returnType, argumentTypes),
+  );
 }
 
 export class RustBufferValue {
@@ -417,4 +444,13 @@ export class ForeignBytesValue {
   toUint8Array() {
     return readForeignBytes(this._bytes);
   }
+}
+
+function getOrCreateNamedType(cache, name, create) {
+  let type = cache.get(name);
+  if (type == null) {
+    type = create();
+    cache.set(name, type);
+  }
+  return type;
 }

@@ -11,6 +11,9 @@ const CALL_CANCELLED = 3;
 const RUST_FUTURE_POLL_READY = 0;
 const RUST_FUTURE_POLL_WAKE = 1;
 const REGISTERED_CALLBACKS = new Set();
+const NAMED_POINTER_TYPES = new Set();
+const NAMED_STRUCT_TYPES = new Set();
+const NAMED_PROTOTYPES = new Set();
 let nextAnonymousPointerId = 1;
 
 function requireRegisteredCallback(callback, context) {
@@ -18,6 +21,13 @@ function requireRegisteredCallback(callback, context) {
     throw new Error(`${context} requires a registered callback pointer`);
   }
   return callback;
+}
+
+function registerNamedType(registry, name) {
+  if (registry.has(name)) {
+    throw new Error(`Duplicate type name '${name}'`);
+  }
+  registry.add(name);
 }
 
 function normalizeBigInt(value) {
@@ -1890,6 +1900,9 @@ const koffi = {
     return { kind: "opaque" };
   },
   pointer(typeOrName, maybeType) {
+    if (maybeType != null && typeof typeOrName === "string") {
+      registerNamedType(NAMED_POINTER_TYPES, typeOrName);
+    }
     return {
       kind: "pointer",
       name: maybeType == null ? null : typeOrName,
@@ -1897,6 +1910,7 @@ const koffi = {
     };
   },
   struct(name, fields) {
+    registerNamedType(NAMED_STRUCT_TYPES, name);
     return {
       kind: "struct",
       name,
@@ -1904,6 +1918,7 @@ const koffi = {
     };
   },
   proto(name, returnType, argumentTypes) {
+    registerNamedType(NAMED_PROTOTYPES, name);
     return {
       kind: "proto",
       name,

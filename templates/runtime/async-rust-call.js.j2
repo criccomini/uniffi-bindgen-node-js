@@ -10,6 +10,7 @@ const MIN_I8 = -0x80;
 const MAX_I8 = 0x7f;
 const MAX_U8 = 0xff;
 const RUST_FUTURE_RESOLVER_MAP = new UniffiHandleMap();
+const RUST_FUTURE_KEEPALIVE_MAP = new Map();
 
 function identity(value) {
   return value;
@@ -36,16 +37,28 @@ export function createAsyncCallState() {
   };
 }
 
+function clearRustFutureKeepAlive(handle) {
+  const keepAlive = RUST_FUTURE_KEEPALIVE_MAP.get(handle);
+  if (keepAlive === undefined) {
+    return;
+  }
+
+  RUST_FUTURE_KEEPALIVE_MAP.delete(handle);
+  clearTimeout(keepAlive);
+}
+
 export function cleanupAsyncCallState(state) {
   if (!state || state.resolverHandle == null) {
     return;
   }
 
+  clearRustFutureKeepAlive(state.resolverHandle);
   RUST_FUTURE_RESOLVER_MAP.remove(state.resolverHandle);
   state.resolverHandle = null;
 }
 
 export const rustFutureContinuationCallback = (handle, pollResult) => {
+  clearRustFutureKeepAlive(handle);
   const resolve = RUST_FUTURE_RESOLVER_MAP.remove(handle);
   if (resolve === undefined) {
     return false;
@@ -72,14 +85,16 @@ export function pollRustFuture(
     // on a native callback. Keep a ref'ed timer alive until the callback
     // settles so Rust future completions arrive before environment cleanup.
     const keepAlive = setTimeout(() => {}, RUST_FUTURE_KEEPALIVE_DELAY_MS);
+    let resolverHandle = null;
     const settle = (callback, value) => {
-      clearTimeout(keepAlive);
+      clearRustFutureKeepAlive(resolverHandle);
       callback(value);
     };
-    const resolverHandle = RUST_FUTURE_RESOLVER_MAP.insert((pollCode) => {
+    resolverHandle = RUST_FUTURE_RESOLVER_MAP.insert((pollCode) => {
       state.resolverHandle = null;
       settle(resolve, pollCode);
     });
+    RUST_FUTURE_KEEPALIVE_MAP.set(resolverHandle, keepAlive);
     state.resolverHandle = resolverHandle;
 
     try {

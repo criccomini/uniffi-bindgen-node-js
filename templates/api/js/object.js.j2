@@ -1,5 +1,5 @@
-export class {{ object.name }} extends UniffiObjectBase {
-{% if object.has_primary_constructor %}  constructor({{ object.primary_constructor_params }}) {
+{{ object.doc_comment }}export class {{ object.name }} extends UniffiObjectBase {
+{% if object.has_primary_constructor %}{{ object.primary_constructor_doc_comment }}  constructor({{ object.primary_constructor_params }}) {
     super();
 {% for line in object.primary_constructor_body_lines %}{{ line }}
 {% endfor %}  }
@@ -8,11 +8,11 @@ export class {{ object.name }} extends UniffiObjectBase {
     return uniffiNotImplemented({{ object.unimplemented_constructor_member }});
   }
 {% endif -%}{% for constructor in object.constructors %}
-  static {% if constructor.is_async %}async {% endif %}{{ constructor.name }}({{ constructor.params }}) {
+{{ constructor.doc_comment }}  static {% if constructor.is_async %}async {% endif %}{{ constructor.name }}({{ constructor.params }}) {
 {% for line in constructor.body_lines %}{{ line }}
 {% endfor %}  }
 {% endfor %}{% for method in object.methods %}
-  {% if method.is_async %}async {% endif %}{{ method.name }}({{ method.params }}) {
+{{ method.doc_comment }}  {% if method.is_async %}async {% endif %}{{ method.name }}({{ method.params }}) {
 {% for line in method.body_lines %}{{ line }}
 {% endfor %}  }
 {% endfor -%}

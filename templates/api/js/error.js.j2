@@ -1,4 +1,4 @@
-export class {{ error.name }} extends globalThis.Error {
+{{ error.doc_comment }}export class {{ error.name }} extends globalThis.Error {
   constructor(tag, message = tag) {
     super(message);
     this.name = {{ error.name_literal }};
@@ -7,7 +7,7 @@ export class {{ error.name }} extends globalThis.Error {
 }
 {%- for variant in error.variants %}
 
-export class {{ variant.class_name }} extends {{ error.name }} {
+{{ variant.doc_comment }}export class {{ variant.class_name }} extends {{ error.name }} {
   constructor({{ variant.constructor_params }}) {
 {% if error.is_flat %}    super({{ variant.tag_literal }}, message ?? {{ variant.tag_literal }});
 {% else %}    super({{ variant.tag_literal }});

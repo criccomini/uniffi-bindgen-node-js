@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
+use textwrap::dedent;
 use uniffi_bindgen::interface::{ComponentInterface, Type, ffi::FfiType};
 
 use super::{ArgumentModel, FieldModel, RecordModel};
@@ -126,6 +127,41 @@ pub(crate) fn render_public_type(type_: &Type) -> Result<String> {
             bail!("custom type '{name}' is not supported in the public Node API yet")
         }
     }
+}
+
+pub(crate) fn render_doc_comment(docstring: Option<&str>, indent: &str) -> String {
+    let Some(docstring) = docstring else {
+        return String::new();
+    };
+
+    let docstring = dedent(docstring);
+    let lines = docstring.lines().map(str::trim_end).collect::<Vec<_>>();
+    let Some(start) = lines.iter().position(|line| !line.trim().is_empty()) else {
+        return String::new();
+    };
+    let end = lines
+        .iter()
+        .rposition(|line| !line.trim().is_empty())
+        .expect("start guarantees at least one non-empty line")
+        + 1;
+
+    let mut rendered = String::new();
+    rendered.push_str(indent);
+    rendered.push_str("/**\n");
+    for line in &lines[start..end] {
+        rendered.push_str(indent);
+        if line.trim().is_empty() {
+            rendered.push_str(" *\n");
+            continue;
+        }
+
+        rendered.push_str(" * ");
+        rendered.push_str(&line.replace("*/", "*\\/"));
+        rendered.push('\n');
+    }
+    rendered.push_str(indent);
+    rendered.push_str(" */\n");
+    rendered
 }
 
 pub(crate) fn render_js_params(arguments: &[ArgumentModel]) -> String {
@@ -819,4 +855,40 @@ pub(crate) fn validate_type_renderable(type_: &Type, context: &str) -> Result<()
     render_public_type(type_)
         .with_context(|| format!("unsupported public Node API type for {context}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_doc_comment;
+
+    #[test]
+    fn render_doc_comment_returns_empty_for_missing_or_blank_docs() {
+        assert_eq!(render_doc_comment(None, ""), "");
+        assert_eq!(render_doc_comment(Some(" \n\n"), ""), "");
+    }
+
+    #[test]
+    fn render_doc_comment_dedents_and_preserves_blank_lines() {
+        assert_eq!(
+            render_doc_comment(
+                Some(
+                    "
+                        Summary line.
+
+                          Indented detail.
+                    "
+                ),
+                ""
+            ),
+            "/**\n * Summary line.\n *\n *   Indented detail.\n */\n"
+        );
+    }
+
+    #[test]
+    fn render_doc_comment_escapes_terminators_and_indents_output() {
+        assert_eq!(
+            render_doc_comment(Some("Ends with */ here."), "  "),
+            "  /**\n   * Ends with *\\/ here.\n   */\n"
+        );
+    }
 }

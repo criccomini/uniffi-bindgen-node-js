@@ -1,6 +1,6 @@
-export declare class {{ object.name }} extends UniffiObjectBase {
-{% if object.has_primary_constructor %}  constructor({{ object.primary_constructor_params }});
+{{ object.doc_comment }}export declare class {{ object.name }} extends UniffiObjectBase {
+{% if object.has_primary_constructor %}{{ object.primary_constructor_doc_comment }}  constructor({{ object.primary_constructor_params }});
 {% else %}  protected constructor();
-{% endif %}{% for constructor in object.constructors %}  static {{ constructor.name }}({{ constructor.params }}): {{ constructor.return_type }};
-{% endfor %}{% for method in object.methods %}  {{ method.name }}({{ method.params }}): {{ method.return_type }};
+{% endif %}{% for constructor in object.constructors %}{{ constructor.doc_comment }}  static {{ constructor.name }}({{ constructor.params }}): {{ constructor.return_type }};
+{% endfor %}{% for method in object.methods %}{{ method.doc_comment }}  {{ method.name }}({{ method.params }}): {{ method.return_type }};
 {% endfor %}}

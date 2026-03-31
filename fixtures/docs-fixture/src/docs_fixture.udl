@@ -1,0 +1,56 @@
+/// Docs fixture namespace.
+/// Includes multiline comments for generated JSDoc output.
+namespace docs_fixture {
+    /// Echoes a value.
+    [Throws=DocsError]
+    string echo(string value);
+};
+
+/// Flat enum docs.
+enum Mode {
+    /// Fast mode docs.
+    "fast",
+    /// Slow mode docs.
+    "slow"
+};
+
+/// Tagged enum docs.
+[Enum]
+interface Outcome {
+    /// Success variant docs.
+    Ok(string value);
+    /// Failure variant docs.
+    Err();
+};
+
+/// Error docs.
+[Error]
+interface DocsError {
+    /// Invalid input docs.
+    Invalid(string message);
+};
+
+/// Record docs.
+dictionary Payload {
+    /// Label field docs.
+    string label;
+};
+
+/// Callback interface docs.
+callback interface Reporter {
+    /// Report method docs.
+    void report(string message);
+};
+
+/// Object docs.
+interface Greeter {
+    /// Primary constructor docs.
+    constructor(Payload payload);
+
+    /// Named constructor docs.
+    [Name=from_label]
+    constructor(string label);
+
+    /// Greet method docs.
+    string greet();
+};

@@ -97,3 +97,11 @@ fn snapshots_callback_fixture_generated_output() {
         snapshot_output_for_fixture("callbacks")
     );
 }
+
+#[test]
+fn snapshots_docs_fixture_generated_output() {
+    insta::assert_snapshot!(
+        "docs_fixture_generated_output",
+        snapshot_output_for_fixture("docs")
+    );
+}

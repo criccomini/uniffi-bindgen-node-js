@@ -1,4 +1,4 @@
-export declare const {{ enum_def.name }}: Readonly<{
-{% for variant in enum_def.variants %}  {{ variant.property_name }}: {{ variant.value_literal }};
+{{ enum_def.doc_comment }}export declare const {{ enum_def.name }}: Readonly<{
+{% for variant in enum_def.variants %}{{ variant.doc_comment }}  {{ variant.property_name }}: {{ variant.value_literal }};
 {% endfor %}}>;
-export type {{ enum_def.name }} = (typeof {{ enum_def.name }})[keyof typeof {{ enum_def.name }}];
+{{ enum_def.doc_comment }}export type {{ enum_def.name }} = (typeof {{ enum_def.name }})[keyof typeof {{ enum_def.name }}];

@@ -9,7 +9,7 @@ use super::{
     callback_interface_registry_name, callback_interface_validator_name,
     callback_interface_vtable_struct_name, ffi_opaque_identifier, js_identifier,
     js_member_identifier, json_string_literal, object_converter_name, object_factory_name,
-    quoted_property_name, render_dts_fields_as_params, render_dts_params,
+    quoted_property_name, render_doc_comment, render_dts_fields_as_params, render_dts_params,
     render_js_fields_as_params, render_js_function_body_lines, render_js_koffi_type_expression,
     render_js_lift_expression, render_js_lower_expression, render_js_object_constructor_body_lines,
     render_js_object_method_body_lines, render_js_params, render_js_primary_constructor_body_lines,
@@ -131,7 +131,6 @@ impl<'a> PublicApiRenderer<'a> {
     }
 
     pub(crate) fn render_js(&self, sections: JsRenderSections) -> Result<String> {
-        let _ = self.model;
         Ok(PublicApiJsTemplate { renderer: sections }.render()?)
     }
 
@@ -207,6 +206,7 @@ impl DtsRenderer {
 }
 
 struct FunctionJsView {
+    doc_comment: String,
     name: String,
     is_async: bool,
     params: String,
@@ -216,6 +216,7 @@ struct FunctionJsView {
 impl FunctionJsView {
     fn from_function(function: &FunctionModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(function.docstring.as_deref(), ""),
             name: js_identifier(&function.name),
             is_async: function.is_async,
             params: render_js_params(&function.arguments),
@@ -231,6 +232,7 @@ pub(crate) fn render_js_function_fragment(function: &FunctionModel) -> Result<St
 }
 
 struct ObjectJsView {
+    doc_comment: String,
     name: String,
     factory_name: String,
     converter_name: String,
@@ -244,6 +246,7 @@ struct ObjectJsView {
     ffi_object_free_identifier: String,
     ffi_object_free_raw_external_cache_key: String,
     has_primary_constructor: bool,
+    primary_constructor_doc_comment: String,
     primary_constructor_params: String,
     primary_constructor_body_lines: Vec<String>,
     unimplemented_constructor_member: String,
@@ -254,6 +257,7 @@ struct ObjectJsView {
 #[derive(Default)]
 struct PrimaryConstructorJsView {
     has_primary_constructor: bool,
+    doc_comment: String,
     params: String,
     body_lines: Vec<String>,
 }
@@ -266,6 +270,7 @@ impl PrimaryConstructorJsView {
 
         Ok(Self {
             has_primary_constructor: true,
+            doc_comment: render_doc_comment(constructor.docstring.as_deref(), "  "),
             params: render_js_params(&constructor.arguments),
             body_lines: render_js_primary_constructor_body_lines(constructor, factory_name)?,
         })
@@ -306,6 +311,7 @@ impl ObjectJsView {
         let primary_constructor = PrimaryConstructorJsView::from_object(object, &factory_name)?;
 
         Ok(Self {
+            doc_comment: render_doc_comment(object.docstring.as_deref(), ""),
             name: object.name.clone(),
             factory_name: factory_name.clone(),
             converter_name: object_converter_name(&object.name),
@@ -328,6 +334,7 @@ impl ObjectJsView {
                 object.ffi_object_free_identifier
             ))?,
             has_primary_constructor: primary_constructor.has_primary_constructor,
+            primary_constructor_doc_comment: primary_constructor.doc_comment,
             primary_constructor_params: primary_constructor.params,
             primary_constructor_body_lines: primary_constructor.body_lines,
             unimplemented_constructor_member: json_string_literal(&format!(
@@ -341,6 +348,7 @@ impl ObjectJsView {
 }
 
 struct ConstructorJsView {
+    doc_comment: String,
     name: String,
     is_async: bool,
     params: String,
@@ -352,6 +360,7 @@ impl ConstructorJsView {
         let factory_name = object_factory_name(&object.name);
 
         Ok(Self {
+            doc_comment: render_doc_comment(constructor.docstring.as_deref(), "  "),
             name: js_member_identifier(&constructor.name),
             is_async: constructor.is_async,
             params: render_js_params(&constructor.arguments),
@@ -365,6 +374,7 @@ impl ConstructorJsView {
 }
 
 struct ObjectMethodJsView {
+    doc_comment: String,
     name: String,
     is_async: bool,
     params: String,
@@ -376,6 +386,7 @@ impl ObjectMethodJsView {
         let factory_name = object_factory_name(&object.name);
 
         Ok(Self {
+            doc_comment: render_doc_comment(method.docstring.as_deref(), "  "),
             name: js_member_identifier(&method.name),
             is_async: method.is_async,
             params: render_js_params(&method.arguments),
@@ -391,6 +402,7 @@ pub(crate) fn render_js_object_fragment(object: &ObjectModel) -> Result<String> 
 }
 
 struct FlatEnumJsView {
+    doc_comment: String,
     name: String,
     variants: Vec<FlatEnumVariantJsView>,
 }
@@ -398,6 +410,7 @@ struct FlatEnumJsView {
 impl FlatEnumJsView {
     fn from_enum(enum_def: &EnumModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(enum_def.docstring.as_deref(), ""),
             name: enum_def.name.clone(),
             variants: enum_def
                 .variants
@@ -409,6 +422,7 @@ impl FlatEnumJsView {
 }
 
 struct FlatEnumVariantJsView {
+    doc_comment: String,
     property_name: String,
     value_literal: String,
 }
@@ -416,6 +430,7 @@ struct FlatEnumVariantJsView {
 impl FlatEnumVariantJsView {
     fn from_variant(variant: &VariantModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(variant.docstring.as_deref(), "  "),
             property_name: quoted_property_name(&variant.name)?,
             value_literal: json_string_literal(&variant.name)?,
         })
@@ -429,6 +444,7 @@ pub(crate) fn render_js_flat_enum_fragment(enum_def: &EnumModel) -> Result<Strin
 }
 
 struct TaggedEnumJsView {
+    doc_comment: String,
     name: String,
     variants: Vec<TaggedEnumVariantJsView>,
 }
@@ -436,6 +452,7 @@ struct TaggedEnumJsView {
 impl TaggedEnumJsView {
     fn from_enum(enum_def: &EnumModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(enum_def.docstring.as_deref(), ""),
             name: enum_def.name.clone(),
             variants: enum_def
                 .variants
@@ -447,6 +464,7 @@ impl TaggedEnumJsView {
 }
 
 struct TaggedEnumVariantJsView {
+    doc_comment: String,
     constructor_name: String,
     params: String,
     tag_literal: String,
@@ -456,6 +474,7 @@ struct TaggedEnumVariantJsView {
 impl TaggedEnumVariantJsView {
     fn from_variant(variant: &VariantModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(variant.docstring.as_deref(), "  "),
             constructor_name: js_member_identifier(&variant.name),
             params: render_js_fields_as_params(&variant.fields),
             tag_literal: json_string_literal(&variant.name)?,
@@ -489,6 +508,7 @@ pub(crate) fn render_js_tagged_enum_fragment(enum_def: &EnumModel) -> Result<Str
 }
 
 struct ErrorJsView {
+    doc_comment: String,
     name: String,
     name_literal: String,
     is_flat: bool,
@@ -498,6 +518,7 @@ struct ErrorJsView {
 impl ErrorJsView {
     fn from_error(error: &ErrorModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(error.docstring.as_deref(), ""),
             name: error.name.clone(),
             name_literal: json_string_literal(&error.name)?,
             is_flat: error.is_flat,
@@ -511,6 +532,7 @@ impl ErrorJsView {
 }
 
 struct ErrorVariantJsView {
+    doc_comment: String,
     class_name: String,
     class_name_literal: String,
     tag_literal: String,
@@ -523,6 +545,7 @@ impl ErrorVariantJsView {
         let class_name = variant_type_name(&error.name, &variant.name);
 
         Ok(Self {
+            doc_comment: render_doc_comment(variant.docstring.as_deref(), ""),
             class_name_literal: json_string_literal(&class_name)?,
             class_name,
             tag_literal: json_string_literal(&variant.name)?,
@@ -1418,6 +1441,7 @@ fn render_js_async_callback_vtable_registration_fragment(
 }
 
 struct RecordDtsView {
+    doc_comment: String,
     name: String,
     fields: Vec<FieldDtsView>,
 }
@@ -1425,6 +1449,7 @@ struct RecordDtsView {
 impl RecordDtsView {
     fn from_record(record: &RecordModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(record.docstring.as_deref(), ""),
             name: record.name.clone(),
             fields: record
                 .fields
@@ -1436,6 +1461,7 @@ impl RecordDtsView {
 }
 
 struct FieldDtsView {
+    doc_comment: String,
     property_name: String,
     type_name: String,
 }
@@ -1443,6 +1469,7 @@ struct FieldDtsView {
 impl FieldDtsView {
     fn from_field(field: &FieldModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(field.docstring.as_deref(), "  "),
             property_name: quoted_property_name(&field.name)?,
             type_name: render_public_type(&field.type_)?,
         })
@@ -1456,6 +1483,7 @@ fn render_dts_record_fragment(record: &RecordModel) -> Result<String> {
 }
 
 struct CallbackInterfaceDtsView {
+    doc_comment: String,
     name: String,
     methods: Vec<CallbackMethodDtsView>,
 }
@@ -1463,6 +1491,7 @@ struct CallbackInterfaceDtsView {
 impl CallbackInterfaceDtsView {
     fn from_callback_interface(callback_interface: &CallbackInterfaceModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(callback_interface.docstring.as_deref(), ""),
             name: callback_interface.name.clone(),
             methods: callback_interface
                 .methods
@@ -1474,6 +1503,7 @@ impl CallbackInterfaceDtsView {
 }
 
 struct CallbackMethodDtsView {
+    doc_comment: String,
     name: String,
     params: String,
     return_type: String,
@@ -1482,6 +1512,7 @@ struct CallbackMethodDtsView {
 impl CallbackMethodDtsView {
     fn from_method(method: &MethodModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(method.docstring.as_deref(), "  "),
             name: js_member_identifier(&method.name),
             params: render_dts_params(&method.arguments)?,
             return_type: render_return_type(method.return_type.as_ref(), method.is_async)?,
@@ -1498,6 +1529,7 @@ fn render_dts_callback_interface_fragment(
 }
 
 struct FunctionDtsView {
+    doc_comment: String,
     name: String,
     params: String,
     return_type: String,
@@ -1506,6 +1538,7 @@ struct FunctionDtsView {
 impl FunctionDtsView {
     fn from_function(function: &FunctionModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(function.docstring.as_deref(), ""),
             name: js_member_identifier(&function.name),
             params: render_dts_params(&function.arguments)?,
             return_type: render_return_type(function.return_type.as_ref(), function.is_async)?,
@@ -1520,6 +1553,7 @@ fn render_dts_function_fragment(function: &FunctionModel) -> Result<String> {
 }
 
 struct FlatEnumDtsView {
+    doc_comment: String,
     name: String,
     variants: Vec<FlatEnumVariantDtsView>,
 }
@@ -1527,6 +1561,7 @@ struct FlatEnumDtsView {
 impl FlatEnumDtsView {
     fn from_enum(enum_def: &EnumModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(enum_def.docstring.as_deref(), ""),
             name: enum_def.name.clone(),
             variants: enum_def
                 .variants
@@ -1538,6 +1573,7 @@ impl FlatEnumDtsView {
 }
 
 struct FlatEnumVariantDtsView {
+    doc_comment: String,
     property_name: String,
     value_literal: String,
 }
@@ -1545,6 +1581,7 @@ struct FlatEnumVariantDtsView {
 impl FlatEnumVariantDtsView {
     fn from_variant(variant: &VariantModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(variant.docstring.as_deref(), "  "),
             property_name: quoted_property_name(&variant.name)?,
             value_literal: json_string_literal(&variant.name)?,
         })
@@ -1558,6 +1595,7 @@ fn render_dts_flat_enum_fragment(enum_def: &EnumModel) -> Result<String> {
 }
 
 struct TaggedEnumDtsView {
+    doc_comment: String,
     name: String,
     variant_types: String,
     variants: Vec<TaggedEnumVariantDtsView>,
@@ -1577,6 +1615,7 @@ impl TaggedEnumDtsView {
             .join(" | ");
 
         Ok(Self {
+            doc_comment: render_doc_comment(enum_def.docstring.as_deref(), ""),
             name: enum_def.name.clone(),
             variant_types,
             variants,
@@ -1585,9 +1624,11 @@ impl TaggedEnumDtsView {
 }
 
 struct TaggedEnumVariantDtsView {
+    doc_comment: String,
     type_name: String,
     tag_literal: String,
     fields: Vec<FieldDtsView>,
+    constructor_doc_comment: String,
     constructor_name: String,
     constructor_params: String,
 }
@@ -1595,6 +1636,7 @@ struct TaggedEnumVariantDtsView {
 impl TaggedEnumVariantDtsView {
     fn from_variant(enum_name: &str, variant: &VariantModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(variant.docstring.as_deref(), ""),
             type_name: variant_type_name(enum_name, &variant.name),
             tag_literal: json_string_literal(&variant.name)?,
             fields: variant
@@ -1602,6 +1644,7 @@ impl TaggedEnumVariantDtsView {
                 .iter()
                 .map(FieldDtsView::from_field)
                 .collect::<Result<_>>()?,
+            constructor_doc_comment: render_doc_comment(variant.docstring.as_deref(), "  "),
             constructor_name: js_member_identifier(&variant.name),
             constructor_params: render_dts_fields_as_params(&variant.fields)?,
         })
@@ -1615,6 +1658,7 @@ fn render_dts_tagged_enum_fragment(enum_def: &EnumModel) -> Result<String> {
 }
 
 struct ErrorDtsView {
+    doc_comment: String,
     name: String,
     variants: Vec<ErrorVariantDtsView>,
 }
@@ -1622,6 +1666,7 @@ struct ErrorDtsView {
 impl ErrorDtsView {
     fn from_error(error: &ErrorModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(error.docstring.as_deref(), ""),
             name: error.name.clone(),
             variants: error
                 .variants
@@ -1633,6 +1678,7 @@ impl ErrorDtsView {
 }
 
 struct ErrorVariantDtsView {
+    doc_comment: String,
     class_name: String,
     tag_literal: String,
     fields: Vec<FieldDtsView>,
@@ -1642,6 +1688,7 @@ struct ErrorVariantDtsView {
 impl ErrorVariantDtsView {
     fn from_variant(error: &ErrorModel, variant: &VariantModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(variant.docstring.as_deref(), ""),
             class_name: variant_type_name(&error.name, &variant.name),
             tag_literal: json_string_literal(&variant.name)?,
             fields: variant
@@ -1665,8 +1712,10 @@ fn render_dts_error_fragment(error: &ErrorModel) -> Result<String> {
 }
 
 struct ObjectDtsView {
+    doc_comment: String,
     name: String,
     has_primary_constructor: bool,
+    primary_constructor_doc_comment: String,
     primary_constructor_params: String,
     constructors: Vec<ConstructorDtsView>,
     methods: Vec<ObjectMethodDtsView>,
@@ -1680,8 +1729,13 @@ impl ObjectDtsView {
             .find(|constructor| constructor.is_primary && !constructor.is_async);
 
         Ok(Self {
+            doc_comment: render_doc_comment(object.docstring.as_deref(), ""),
             name: object.name.clone(),
             has_primary_constructor: primary_constructor.is_some(),
+            primary_constructor_doc_comment: render_doc_comment(
+                primary_constructor.and_then(|constructor| constructor.docstring.as_deref()),
+                "  ",
+            ),
             primary_constructor_params: primary_constructor
                 .map(|constructor| render_dts_params(&constructor.arguments))
                 .transpose()?
@@ -1702,6 +1756,7 @@ impl ObjectDtsView {
 }
 
 struct ConstructorDtsView {
+    doc_comment: String,
     name: String,
     params: String,
     return_type: String,
@@ -1710,6 +1765,7 @@ struct ConstructorDtsView {
 impl ConstructorDtsView {
     fn from_constructor(object_name: &str, constructor: &ConstructorModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(constructor.docstring.as_deref(), "  "),
             name: js_member_identifier(&constructor.name),
             params: render_dts_params(&constructor.arguments)?,
             return_type: render_named_return_type(object_name, constructor.is_async),
@@ -1718,6 +1774,7 @@ impl ConstructorDtsView {
 }
 
 struct ObjectMethodDtsView {
+    doc_comment: String,
     name: String,
     params: String,
     return_type: String,
@@ -1726,6 +1783,7 @@ struct ObjectMethodDtsView {
 impl ObjectMethodDtsView {
     fn from_method(method: &MethodModel) -> Result<Self> {
         Ok(Self {
+            doc_comment: render_doc_comment(method.docstring.as_deref(), "  "),
             name: js_member_identifier(&method.name),
             params: render_dts_params(&method.arguments)?,
             return_type: render_return_type(method.return_type.as_ref(), method.is_async)?,

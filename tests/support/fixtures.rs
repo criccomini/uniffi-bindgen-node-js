@@ -66,6 +66,12 @@ pub fn fixture_spec(name: &str) -> FixtureSpec {
             crate_name: "fixture_callbacks",
             udl_file: "callbacks_fixture.udl",
         },
+        "docs" => FixtureSpec {
+            dir_name: "docs-fixture",
+            namespace: "docs_fixture",
+            crate_name: "fixture_docs",
+            udl_file: "docs_fixture.udl",
+        },
         _ => panic!("unknown fixture '{name}'"),
     }
 }

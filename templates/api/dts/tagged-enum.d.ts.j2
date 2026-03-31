@@ -1,12 +1,12 @@
-{%- for variant in enum_def.variants %}export interface {{ variant.type_name }} {
+{%- for variant in enum_def.variants %}{{ variant.doc_comment }}export interface {{ variant.type_name }} {
   tag: {{ variant.tag_literal }};
-{% for field in variant.fields %}  {{ field.property_name }}: {{ field.type_name }};
+{% for field in variant.fields %}{{ field.doc_comment }}  {{ field.property_name }}: {{ field.type_name }};
 {% endfor %}}{% if !loop.last %}
 
 {% endif -%}
 {% endfor %}
 
-export type {{ enum_def.name }} = {{ enum_def.variant_types }};
-export declare const {{ enum_def.name }}: Readonly<{
-{% for variant in enum_def.variants %}  {{ variant.constructor_name }}({{ variant.constructor_params }}): {{ variant.type_name }};
+{{ enum_def.doc_comment }}export type {{ enum_def.name }} = {{ enum_def.variant_types }};
+{{ enum_def.doc_comment }}export declare const {{ enum_def.name }}: Readonly<{
+{% for variant in enum_def.variants %}{{ variant.constructor_doc_comment }}  {{ variant.constructor_name }}({{ variant.constructor_params }}): {{ variant.type_name }};
 {% endfor %}}>;

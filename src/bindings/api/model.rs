@@ -14,6 +14,7 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ComponentModel {
+    pub namespace_docstring: Option<String>,
     pub functions: Vec<FunctionModel>,
     pub records: Vec<RecordModel>,
     pub flat_enums: Vec<EnumModel>,
@@ -27,6 +28,7 @@ pub(crate) struct ComponentModel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RenderedComponentApi {
+    pub namespace_doc_comment: String,
     pub js: String,
     pub dts: String,
     pub requires_async_rust_future_hooks: bool,
@@ -69,6 +71,7 @@ impl ComponentModel {
             .collect::<BTreeSet<_>>();
 
         let model = Self {
+            namespace_docstring: ci.namespace_docstring().map(str::to_owned),
             functions: ci
                 .function_definitions()
                 .iter()
@@ -104,6 +107,7 @@ impl ComponentModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FunctionModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub is_async: bool,
     pub arguments: Vec<ArgumentModel>,
     pub return_type: Option<Type>,
@@ -116,6 +120,7 @@ impl FunctionModel {
     fn from_function(function: &Function, ci: &ComponentInterface) -> Self {
         Self {
             name: function.name().to_string(),
+            docstring: function.docstring().map(str::to_owned),
             is_async: function.is_async(),
             arguments: function
                 .full_arguments()
@@ -133,6 +138,7 @@ impl FunctionModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecordModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub fields: Vec<FieldModel>,
 }
 
@@ -140,6 +146,7 @@ impl RecordModel {
     fn from_record(record: &uniffi_bindgen::interface::Record) -> Self {
         Self {
             name: record.name().to_string(),
+            docstring: record.docstring().map(str::to_owned),
             fields: record.fields().iter().map(FieldModel::from_field).collect(),
         }
     }
@@ -148,6 +155,7 @@ impl RecordModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct EnumModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub variants: Vec<VariantModel>,
 }
 
@@ -155,6 +163,7 @@ impl EnumModel {
     fn from_enum(enum_def: &Enum) -> Self {
         Self {
             name: enum_def.name().to_string(),
+            docstring: enum_def.docstring().map(str::to_owned),
             variants: enum_def
                 .variants()
                 .iter()
@@ -167,6 +176,7 @@ impl EnumModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ErrorModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub is_flat: bool,
     pub variants: Vec<VariantModel>,
 }
@@ -175,6 +185,7 @@ impl ErrorModel {
     fn from_enum(enum_def: &Enum) -> Self {
         Self {
             name: enum_def.name().to_string(),
+            docstring: enum_def.docstring().map(str::to_owned),
             is_flat: enum_def.is_flat(),
             variants: enum_def
                 .variants()
@@ -188,6 +199,7 @@ impl ErrorModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CallbackInterfaceModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub methods: Vec<MethodModel>,
     pub ffi_init_callback_identifier: String,
     pub ffi_object_clone_identifier: String,
@@ -201,6 +213,7 @@ impl CallbackInterfaceModel {
     ) -> Self {
         Self {
             name: callback_interface.name().to_string(),
+            docstring: callback_interface.docstring().map(str::to_owned),
             methods: callback_interface
                 .methods()
                 .into_iter()
@@ -226,6 +239,7 @@ impl CallbackInterfaceModel {
     fn from_object(object: &Object, ci: &ComponentInterface) -> Self {
         Self {
             name: object.name().to_string(),
+            docstring: object.docstring().map(str::to_owned),
             methods: object
                 .methods()
                 .into_iter()
@@ -244,6 +258,7 @@ impl CallbackInterfaceModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ObjectModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub constructors: Vec<ConstructorModel>,
     pub methods: Vec<MethodModel>,
     pub ffi_object_clone_identifier: String,
@@ -254,6 +269,7 @@ impl ObjectModel {
     fn from_object(object: &Object, ci: &ComponentInterface) -> Self {
         Self {
             name: object.name().to_string(),
+            docstring: object.docstring().map(str::to_owned),
             constructors: object
                 .constructors()
                 .into_iter()
@@ -273,6 +289,7 @@ impl ObjectModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConstructorModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub is_primary: bool,
     pub is_async: bool,
     pub arguments: Vec<ArgumentModel>,
@@ -285,6 +302,7 @@ impl ConstructorModel {
     fn from_constructor(constructor: &Constructor, ci: &ComponentInterface) -> Self {
         Self {
             name: constructor.name().to_string(),
+            docstring: constructor.docstring().map(str::to_owned),
             is_primary: constructor.is_primary_constructor(),
             is_async: constructor.is_async(),
             arguments: constructor
@@ -302,6 +320,7 @@ impl ConstructorModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MethodModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub is_async: bool,
     pub arguments: Vec<ArgumentModel>,
     pub return_type: Option<Type>,
@@ -316,6 +335,7 @@ impl MethodModel {
     fn from_method(method: &Method, ci: &ComponentInterface) -> Self {
         Self {
             name: method.name().to_string(),
+            docstring: method.docstring().map(str::to_owned),
             is_async: method.is_async(),
             arguments: method
                 .arguments()
@@ -400,6 +420,7 @@ impl AsyncScaffoldingModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VariantModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub fields: Vec<FieldModel>,
 }
 
@@ -407,6 +428,7 @@ impl VariantModel {
     fn from_variant(variant: &Variant) -> Self {
         Self {
             name: variant.name().to_string(),
+            docstring: variant.docstring().map(str::to_owned),
             fields: variant
                 .fields()
                 .iter()
@@ -419,6 +441,7 @@ impl VariantModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FieldModel {
     pub name: String,
+    pub docstring: Option<String>,
     pub type_: Type,
 }
 
@@ -426,6 +449,7 @@ impl FieldModel {
     fn from_field(field: &Field) -> Self {
         Self {
             name: field.name().to_string(),
+            docstring: field.docstring().map(str::to_owned),
             type_: field.as_type(),
         }
     }

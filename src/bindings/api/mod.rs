@@ -27,6 +27,7 @@ impl ComponentModel {
         let js_sections = self.build_js_render_sections(requires_async_rust_future_hooks)?;
 
         Ok(RenderedComponentApi {
+            namespace_doc_comment: render_doc_comment(self.namespace_docstring.as_deref(), ""),
             js: renderer.render_js(js_sections)?,
             dts: renderer.render_dts()?,
             requires_async_rust_future_hooks,

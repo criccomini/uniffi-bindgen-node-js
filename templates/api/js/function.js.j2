@@ -1,3 +1,3 @@
-export {% if function.is_async %}async {% endif %}function {{ function.name }}({{ function.params }}) {
+{{ function.doc_comment }}export {% if function.is_async %}async {% endif %}function {{ function.name }}({{ function.params }}) {
 {% for line in function.body_lines %}{{ line }}
 {% endfor %}}

@@ -1,5 +1,5 @@
-export const {{ enum_def.name }} = Object.freeze({
-{% for variant in enum_def.variants %}  {{ variant.constructor_name }}({{ variant.params }}) {
+{{ enum_def.doc_comment }}export const {{ enum_def.name }} = Object.freeze({
+{% for variant in enum_def.variants %}{{ variant.doc_comment }}  {{ variant.constructor_name }}({{ variant.params }}) {
     return Object.freeze({
       tag: {{ variant.tag_literal }},
 {% for field in variant.fields %}      {{ field.property_name }}: {{ field.value_expr }},

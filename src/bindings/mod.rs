@@ -537,6 +537,7 @@ impl GeneratedPackage {
                 self.layout.component_js_path(),
                 ComponentJsTemplate {
                     namespace: self.layout.namespace.clone(),
+                    namespace_doc_comment: self.public_api.namespace_doc_comment.clone(),
                     namespace_json: template_context.namespace_json.clone(),
                     package_name_json: template_context.package_name_json.clone(),
                     cdylib_name_json: template_context.cdylib_name_json.clone(),
@@ -559,6 +560,7 @@ impl GeneratedPackage {
                 self.layout.component_dts_path(),
                 ComponentDtsTemplate {
                     namespace: self.layout.namespace.clone(),
+                    namespace_doc_comment: self.public_api.namespace_doc_comment.clone(),
                     manual_load: self.manual_load,
                     public_api_dts: self.public_api.dts.clone(),
                 }
@@ -894,6 +896,7 @@ struct PackageIndexDtsTemplate {
 #[template(path = "component/component.js.j2", escape = "none")]
 struct ComponentJsTemplate {
     namespace: String,
+    namespace_doc_comment: String,
     namespace_json: String,
     package_name_json: String,
     cdylib_name_json: String,
@@ -915,6 +918,7 @@ struct ComponentJsTemplate {
 #[template(path = "component/component.d.ts.j2", escape = "none")]
 struct ComponentDtsTemplate {
     namespace: String,
+    namespace_doc_comment: String,
     manual_load: bool,
     public_api_dts: String,
 }

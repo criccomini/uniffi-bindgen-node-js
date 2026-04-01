@@ -10,6 +10,7 @@ use crate::node_v2::package_layout::GeneratedPackageLayout;
 
 mod api;
 mod ffi;
+mod ffi_ir;
 
 use self::{
     api::{RenderedComponentApi, build_public_api_ir, render_public_api},

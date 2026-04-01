@@ -181,6 +181,43 @@ fn node_engine_override_is_written_to_package_json() {
 }
 
 #[test]
+fn bundled_prebuilds_option_emits_bundled_loader_metadata() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("bundled-prebuild-loader");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: true,
+        manual_load: false,
+    })
+    .expect("package generation should keep bundled-prebuild loader support");
+
+    let ffi_js = fs::read_to_string(
+        package_dir
+            .join(format!("{}-ffi.js", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component ffi js should be readable");
+
+    assert!(
+        ffi_js.contains("bundledPrebuilds: true"),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+    assert!(
+        ffi_js.contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
     let built_fixture = build_fixture_cdylib("callbacks");
     let package_dir = temp_dir_path("callbacks-manifest-path-package");

@@ -185,7 +185,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Decide and implement how package naming defaults are derived in v2.
 - [x] Keep --package-name override support.
 - [x] Keep --node-engine override support.
-- [ ] Keep --bundled-prebuilds flag support.
+- [x] Keep --bundled-prebuilds flag support.
 - [ ] Keep --manual-load flag support.
 - [ ] Preserve ESM-only output policy in validation and docs.
 - [ ] Remove v1 CommonJS-compatibility checks that only exist because of legacy config surface.

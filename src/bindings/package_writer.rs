@@ -31,10 +31,11 @@ struct GeneratedPackage {
 impl GeneratedPackage {
     fn from_component(
         out_dir: &Utf8Path,
+        lib_source: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<Self> {
         let public_api = render_public_api(&build_public_api_ir(&component.ci)?)?;
-        let layout = GeneratedPackageLayout::from_component(out_dir, component)?;
+        let layout = GeneratedPackageLayout::from_component(out_dir, lib_source, component)?;
         let cdylib_name = component
             .config
             .cdylib_name
@@ -182,9 +183,10 @@ impl GeneratedPackage {
 
 pub(crate) fn write_generated_package(
     out_dir: &Utf8Path,
+    lib_source: &Utf8Path,
     component: &Component<NodeBindingGeneratorConfig>,
 ) -> Result<()> {
-    let package = GeneratedPackage::from_component(out_dir, component)?;
+    let package = GeneratedPackage::from_component(out_dir, lib_source, component)?;
     package.ensure_root_dir()?;
     package.write_package_files()
 }

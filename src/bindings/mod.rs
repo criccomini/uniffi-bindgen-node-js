@@ -76,7 +76,8 @@ mod tests {
         output_dir: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<()> {
-        write_generated_package(output_dir, component)
+        let lib_source = Utf8PathBuf::from("/tmp/uniffi-bindgen-node-js-tests/libfixture.dylib");
+        write_generated_package(output_dir, &lib_source, component)
     }
 
     fn extract_section(contents: &str, start_marker: &str, end_marker: &str) -> String {

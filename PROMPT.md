@@ -202,7 +202,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update DEVELOPMENT.md contributor commands if CLI shape changes.
 - [x] Update DEVELOPMENT.md leak-probe instructions if package staging behavior changes.
 - [x] Remove outdated references to v1 wording from docs and error strings.
-- [ ] Design the new internal package layout abstraction around actual staged artifacts.
+- [x] Design the new internal package layout abstraction around actual staged artifacts.
 - [ ] Make the package writer create the output directory structure.
 - [ ] Make the package writer emit metadata files.
 - [ ] Make the package writer emit namespace API JS/TS files.

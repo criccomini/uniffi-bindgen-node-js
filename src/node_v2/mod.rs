@@ -81,7 +81,7 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
         )
     })?;
 
-    write_generated_package(&options.out_dir, &component).with_context(|| {
+    write_generated_package(&options.out_dir, &options.lib_source, &component).with_context(|| {
         format!(
             "failed to generate Node bindings for crate '{}' from '{}'",
             component.ci.crate_name(),

@@ -24,17 +24,23 @@ fn validate_output_dir(options: &GenerateNodePackageOptions) -> Result<()> {
 
 fn validate_library_input_path(options: &GenerateNodePackageOptions) -> Result<()> {
     if options.lib_source.as_str().trim().is_empty() {
-        bail!("lib_source cannot be empty");
+        bail!("<LIB_SOURCE> cannot be empty");
     }
     if !options.lib_source.exists() {
-        bail!("library source '{}' does not exist", options.lib_source);
+        bail!(
+            "built UniFFI cdylib '{}' does not exist",
+            options.lib_source
+        );
     }
     if !options.lib_source.is_file() {
-        bail!("library source '{}' is not a file", options.lib_source);
+        bail!(
+            "built UniFFI cdylib '{}' is not a file",
+            options.lib_source
+        );
     }
     if !uniffi_bindgen::is_cdylib(&options.lib_source) {
         bail!(
-            "library source '{}' is not a supported cdylib (.so, .dylib, or .dll)",
+            "built UniFFI cdylib '{}' must end in .so, .dylib, or .dll",
             options.lib_source
         );
     }
@@ -54,7 +60,10 @@ fn validate_manifest_path(options: &GenerateNodePackageOptions) -> Result<()> {
         bail!("manifest path '{}' does not exist", manifest_path);
     }
     if !manifest_path.is_file() {
-        bail!("manifest path '{}' is not a file", manifest_path);
+        bail!(
+            "--manifest-path '{}' must point to a Cargo.toml file",
+            manifest_path
+        );
     }
 
     Ok(())

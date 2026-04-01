@@ -59,7 +59,9 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
     if let Some(crate_name) = args.crate_name.as_deref() {
         if crate_name.trim().is_empty() {
-            bail!("--crate-name cannot be empty");
+            bail!(
+                "--crate-name cannot be empty; omit it to infer the only UniFFI component in the library"
+            );
         }
     }
     if args.out_dir.as_str().trim().is_empty() {
@@ -69,17 +71,17 @@ fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
         bail!("--out-dir '{}' exists but is not a directory", args.out_dir);
     }
     if args.lib_source.as_str().trim().is_empty() {
-        bail!("lib_source cannot be empty");
+        bail!("<LIB_SOURCE> cannot be empty");
     }
     if !args.lib_source.exists() {
-        bail!("library source '{}' does not exist", args.lib_source);
+        bail!("built UniFFI cdylib '{}' does not exist", args.lib_source);
     }
     if !args.lib_source.is_file() {
-        bail!("library source '{}' is not a file", args.lib_source);
+        bail!("built UniFFI cdylib '{}' is not a file", args.lib_source);
     }
     if !uniffi_bindgen::is_cdylib(&args.lib_source) {
         bail!(
-            "library source '{}' is not a supported cdylib (.so, .dylib, or .dll)",
+            "built UniFFI cdylib '{}' must end in .so, .dylib, or .dll",
             args.lib_source
         );
     }

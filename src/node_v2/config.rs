@@ -116,7 +116,7 @@ impl NodeBindingGeneratorConfig {
     fn validate_library_loading(&self) -> Result<()> {
         if self.bundled_prebuilds && self.lib_path_literal.is_some() {
             bail!(
-                "node binding bundled_prebuilds cannot be enabled together with lib_path_literal"
+                "bindings.node.bundled_prebuilds cannot be combined with bindings.node.lib_path_literal; v2 stages the native library automatically"
             );
         }
         Ok(())
@@ -137,7 +137,7 @@ fn validate_optional_non_empty(field_name: &str, value: Option<&str>) -> Result<
 
 fn validate_non_empty(field_name: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        bail!("node binding {field_name} cannot be empty");
+        bail!("bindings.node.{field_name} cannot be empty");
     }
 
     Ok(())
@@ -150,21 +150,23 @@ fn validate_module_format(module_format: Option<&str>) -> Result<()> {
 
     let normalized = module_format.trim();
     if normalized.is_empty() {
-        bail!("node binding module_format cannot be empty");
+        bail!("bindings.node.module_format cannot be empty");
     }
     if normalized.eq_ignore_ascii_case("esm") {
         return Ok(());
     }
     if normalized.eq_ignore_ascii_case("commonjs") || normalized.eq_ignore_ascii_case("cjs") {
-        bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
+        bail!("generated Node packages are ESM-only; CommonJS output is not supported");
     }
 
-    bail!("unsupported node binding module_format '{normalized}': v1 only supports 'esm'");
+    bail!(
+        "unsupported bindings.node.module_format '{normalized}'; generated Node packages are ESM-only, so use 'esm'"
+    );
 }
 
 fn reject_commonjs(commonjs: Option<bool>) -> Result<()> {
     if commonjs == Some(true) {
-        bail!("node bindings v1 are ESM-only; CommonJS output is not supported");
+        bail!("generated Node packages are ESM-only; CommonJS output is not supported");
     }
 
     Ok(())
@@ -325,7 +327,43 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("bundled_prebuilds cannot be enabled together with lib_path_literal"),
+                .contains(
+                    "bindings.node.bundled_prebuilds cannot be combined with bindings.node.lib_path_literal"
+                ),
+            "unexpected error: {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn finalize_config_rejects_commonjs_with_v2_message() -> Result<()> {
+        let ci = uniffi_bindgen::ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                u32 add(u32 lhs, u32 rhs);
+            };
+            "#,
+            "fixture_crate",
+        )?;
+        let mut config = parse_node_config(
+            r#"
+            [bindings.node]
+            module_format = "commonjs"
+            "#,
+        );
+
+        let error = finalize_node_binding_config(
+            &ci,
+            &mut config,
+            Some("fixture_from_loader"),
+            &NodeBindingCliOverrides::default(),
+        )
+        .expect_err("CommonJS output should be rejected with a v2 message");
+
+        assert!(
+            error
+                .to_string()
+                .contains("generated Node packages are ESM-only"),
             "unexpected error: {error}"
         );
         Ok(())

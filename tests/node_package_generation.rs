@@ -118,7 +118,7 @@ fn rejects_missing_library_source_from_programmatic_entrypoint() {
 
     assert!(
         error.to_string().contains(&format!(
-            "library source '{}' does not exist",
+            "built UniFFI cdylib '{}' does not exist",
             missing_library_path
         )),
         "unexpected error: {error:#}"
@@ -178,7 +178,7 @@ fn rejects_directory_manifest_path_from_programmatic_entrypoint() {
 
     assert!(
         error.to_string().contains(&format!(
-            "manifest path '{}' is not a file",
+            "--manifest-path '{}' must point to a Cargo.toml file",
             built_fixture.workspace_dir
         )),
         "unexpected error: {error:#}"

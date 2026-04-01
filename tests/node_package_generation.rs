@@ -178,6 +178,67 @@ fn infers_the_only_component_when_crate_name_is_omitted() {
 }
 
 #[test]
+fn applies_rename_config_before_rendering_generated_bindings() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("rename-config-package");
+    let manifest_dir = built_fixture
+        .manifest_path
+        .parent()
+        .expect("fixture manifest path should have a parent directory");
+    let rename_config_path = manifest_dir.join("uniffi.toml");
+
+    fs::write(
+        rename_config_path.as_std_path(),
+        r#"
+[bindings.node.rename]
+"echo_byte_map.value" = "entries"
+"#,
+    )
+    .expect("test should write a rename config next to the fixture manifest");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("package generation should apply loader-resolved rename config");
+
+    let component_js = fs::read_to_string(
+        package_dir
+            .join(format!("{}.js", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component js should be readable");
+    let component_dts = fs::read_to_string(
+        package_dir
+            .join(format!("{}.d.ts", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component d.ts should be readable");
+
+    assert!(
+        component_js.contains("export function echo_byte_map(entries) {"),
+        "unexpected component JS contents: {component_js}"
+    );
+    assert!(
+        !component_js.contains("export function echo_byte_map(value) {"),
+        "unexpected component JS contents: {component_js}"
+    );
+    assert!(
+        component_dts.contains("export declare function echo_byte_map(entries: Map<string, Uint8Array>): Map<string, Uint8Array>;"),
+        "unexpected component DTS contents: {component_dts}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn generated_async_helpers_use_loader_derived_uniffi_symbol_names() {
     let generated = generate_fixture_package("basic");
     let ffi_js =

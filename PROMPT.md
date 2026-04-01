@@ -260,7 +260,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Audit current supported surface against UniFFI 0.31 so v2 diagnostics are complete.
 - [x] Update diagnostics to stop saying “v1” unless the message is intentionally historical.
 - [x] Keep diagnostics actionable and grouped by unsupported feature family.
-- [ ] Add coverage for rename config behavior.
+- [x] Add coverage for rename config behavior.
 - [ ] Add coverage for full module_path names.
 - [ ] Add coverage for multi-component library detection and error messages.
 - [ ] Add coverage for component selection when --crate-name is present.

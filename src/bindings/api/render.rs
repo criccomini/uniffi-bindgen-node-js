@@ -1224,7 +1224,7 @@ const SYNC_CALLBACK_TRAILING_PARAMS: &[&str] = &["uniffiOutReturn", "callStatus"
 const ASYNC_CALLBACK_TRAILING_PARAMS: &[&str] = &[
     "uniffiFutureCallback",
     "uniffiCallbackData",
-    "uniffiOutReturn",
+    "uniffiOutDroppedCallback",
 ];
 
 impl CallbackVtableRegistrationBase {
@@ -1313,6 +1313,7 @@ struct AsyncCallbackVtableRegistrationJsView {
     method_name_literal: String,
     lifted_args: Vec<String>,
     complete_callback_identifier: String,
+    dropped_callback_struct_identifier: String,
     dropped_callback_identifier: String,
     ffi_callback_identifier: String,
     lower_error_type: String,
@@ -1326,6 +1327,7 @@ struct AsyncCallbackVtableRegistrationJsView {
 struct AsyncCallbackRegistrationMetadata {
     future_free_name: String,
     complete_callback_identifier: String,
+    dropped_callback_struct_identifier: String,
     dropped_callback_identifier: String,
 }
 
@@ -1334,6 +1336,9 @@ impl AsyncCallbackRegistrationMetadata {
         Self {
             future_free_name: format!("{}FutureFree", js_identifier(&method.name)),
             complete_callback_identifier: async_callback_ffi.complete_identifier.clone(),
+            dropped_callback_struct_identifier: async_callback_ffi
+                .dropped_callback_struct_identifier
+                .clone(),
             dropped_callback_identifier: async_callback_ffi.dropped_callback_identifier.clone(),
         }
     }
@@ -1381,6 +1386,7 @@ impl AsyncCallbackVtableRegistrationJsView {
             method_name_literal: registration.method_name_literal,
             lifted_args: registration.lifted_args,
             complete_callback_identifier: async_metadata.complete_callback_identifier,
+            dropped_callback_struct_identifier: async_metadata.dropped_callback_struct_identifier,
             dropped_callback_identifier: async_metadata.dropped_callback_identifier,
             ffi_callback_identifier: registration.ffi_callback_identifier,
             lower_error_type: error_lowering.lower_error_type,

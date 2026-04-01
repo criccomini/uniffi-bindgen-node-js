@@ -21,7 +21,7 @@
         defaultReturnValue: {{ registration.default_return_value_expr }},
 {% endif %}        lowerString: (value) => uniffiLowerString(value),
       });
-      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+      koffi.encode(uniffiOutDroppedCallback, bindings.ffiStructs.{{ registration.dropped_callback_struct_identifier }}, {
         handle: uniffiFutureHandle,
         free: {{ registration.future_free_name }},
       });

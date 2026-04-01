@@ -1277,7 +1277,7 @@ function createCallbacksFixtureRuntime(libraryPath) {
   }
 
   function invokeAsyncLogSinkCallback(handle, methodName, args, callbackData, completionCallback) {
-    const outReturn = {};
+    const outDroppedCallback = {};
     requireCallbackMethod(
       asyncLogSinkVtable,
       "AsyncLogSink",
@@ -1288,16 +1288,19 @@ function createCallbacksFixtureRuntime(libraryPath) {
       ...args,
       completionCallback,
       normalizeBigInt(callbackData),
-      outReturn,
+      outDroppedCallback,
     );
-    if (outReturn.handle == null || typeof outReturn.free !== "function") {
+    if (
+      outDroppedCallback.handle == null
+      || typeof outDroppedCallback.free !== "function"
+    ) {
       throw new Error(
-        `AsyncLogSink.${methodName} did not populate a ForeignFuture return handle`,
+        `AsyncLogSink.${methodName} did not populate a dropped-callback handle`,
       );
     }
     return {
-      free: outReturn.free,
-      handle: normalizeBigInt(outReturn.handle),
+      free: outDroppedCallback.free,
+      handle: normalizeBigInt(outDroppedCallback.handle),
     };
   }
 

@@ -241,7 +241,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revalidate async Rust future helper symbol names against UniFFI 0.30/0.31.
 - [x] Revalidate foreign-future callback naming against UniFFI 0.30/0.31.
 - [x] Revalidate callback vtable field ordering against UniFFI 0.30/0.31.
-- [ ] Update generated callback registration code to the new ordering and semantics.
+- [x] Update generated callback registration code to the new ordering and semantics.
 - [ ] Update generated callback cleanup/unload logic if the new ABI requires it.
 - [ ] Revalidate object finalization and unload behavior with the new handle ABI.
 - [ ] Revalidate manual-load reentrancy/idempotence under the new runtime model.

@@ -2203,7 +2203,7 @@ mod tests {
         );
         assert!(
             rendered.js.contains(
-                "(uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {"
+                "(uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutDroppedCallback) => {"
             ),
             "unexpected JS output: {}",
             rendered.js
@@ -2211,7 +2211,9 @@ mod tests {
         assert!(
             rendered
                 .js
-                .contains("koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {"),
+                .contains(
+                    "koffi.encode(uniffiOutDroppedCallback, bindings.ffiStructs.ForeignFutureDroppedCallbackStruct, {"
+                ),
             "unexpected JS output: {}",
             rendered.js
         );

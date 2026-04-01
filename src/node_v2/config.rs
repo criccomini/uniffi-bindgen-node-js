@@ -391,5 +391,9 @@ mod tests {
             message.contains("bindings.node.commonjs was removed in v2"),
             "unexpected error: {error}"
         );
+        assert!(
+            !message.contains("v1"),
+            "diagnostics should not mention v1: {error}"
+        );
     }
 }

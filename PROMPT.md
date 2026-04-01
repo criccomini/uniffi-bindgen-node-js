@@ -258,7 +258,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Decide whether exported trait methods on records/enums are supported in v2.
 - [x] If exported trait methods are not supported, add explicit diagnostics for them.
 - [x] Audit current supported surface against UniFFI 0.31 so v2 diagnostics are complete.
-- [ ] Update diagnostics to stop saying “v1” unless the message is intentionally historical.
+- [x] Update diagnostics to stop saying “v1” unless the message is intentionally historical.
 - [ ] Keep diagnostics actionable and grouped by unsupported feature family.
 - [ ] Add coverage for rename config behavior.
 - [ ] Add coverage for full module_path names.

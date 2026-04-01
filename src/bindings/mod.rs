@@ -5,7 +5,6 @@ use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
 use uniffi_bindgen::Component;
 
-pub use crate::node_v2::config::NodeBindingCliOverrides;
 use crate::node_v2::config::NodeBindingGeneratorConfig;
 use crate::node_v2::package_layout::GeneratedPackageLayout;
 
@@ -600,7 +599,7 @@ mod tests {
     };
 
     use uniffi_bindgen::interface::ComponentInterface;
-    use crate::node_v2::config::parse_node_binding_config;
+    use crate::node_v2::config::{NodeBindingCliOverrides, parse_node_binding_config};
 
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {

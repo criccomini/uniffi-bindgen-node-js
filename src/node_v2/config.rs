@@ -3,7 +3,7 @@ use serde::Deserialize;
 use uniffi_bindgen::ComponentInterface;
 
 #[derive(Debug, Clone, Default)]
-pub struct NodeBindingCliOverrides {
+pub(crate) struct NodeBindingCliOverrides {
     package_name: Option<String>,
     cdylib_name: Option<String>,
     node_engine: Option<String>,

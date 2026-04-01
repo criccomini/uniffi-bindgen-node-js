@@ -142,7 +142,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Remove reliance on CrateConfigSupplier as the primary architecture.
 - [x] Remove or demote public exposure of NodeBindingGenerator.
 - [x] Remove or demote public exposure of NodeBindingGeneratorConfig.
-- [ ] Remove or demote public exposure of NodeBindingCliOverrides.
+- [x] Remove or demote public exposure of NodeBindingCliOverrides.
 - [x] Design and add a single v2 programmatic entrypoint for Node package generation.
 - [x] Define a new request/options struct for the v2 programmatic entrypoint.
 - [x] Define the internal result/data flow for generation so orchestration is explicit and testable.

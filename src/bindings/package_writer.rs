@@ -63,8 +63,8 @@ impl GeneratedPackage {
         })
     }
 
-    fn ensure_root_dir(&self) -> Result<()> {
-        self.layout.ensure_root_dir()
+    fn ensure_output_dirs(&self) -> Result<()> {
+        self.layout.ensure_output_dirs()
     }
 
     fn write_package_files(&self) -> Result<()> {
@@ -187,7 +187,7 @@ pub(crate) fn write_generated_package(
     component: &Component<NodeBindingGeneratorConfig>,
 ) -> Result<()> {
     let package = GeneratedPackage::from_component(out_dir, lib_source, component)?;
-    package.ensure_root_dir()?;
+    package.ensure_output_dirs()?;
     package.write_package_files()
 }
 

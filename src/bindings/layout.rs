@@ -104,8 +104,10 @@ impl GeneratedPackageLayout {
         })
     }
 
-    pub(crate) fn ensure_root_dir(&self) -> Result<()> {
-        fs::create_dir_all(self.root_dir.as_std_path())?;
+    pub(crate) fn ensure_output_dirs(&self) -> Result<()> {
+        for directory in self.output_directories() {
+            fs::create_dir_all(directory.as_std_path())?;
+        }
         Ok(())
     }
 
@@ -155,6 +157,16 @@ impl GeneratedPackageLayout {
 
     pub(crate) fn runtime_path(&self, file_name: &str) -> Utf8PathBuf {
         self.runtime.dir.join(file_name)
+    }
+
+    fn output_directories(&self) -> Vec<Utf8PathBuf> {
+        let mut directories = vec![self.root_dir.clone(), self.runtime.dir.clone()];
+        if let Some(native_library_dir) = self.native_library.output_path.parent()
+            && native_library_dir != self.root_dir
+        {
+            directories.push(native_library_dir.to_path_buf());
+        }
+        directories
     }
 }
 
@@ -423,5 +435,45 @@ mod tests {
                 .join(&target)
                 .join("libexample.so")
         );
+    }
+
+    #[test]
+    fn generated_package_layout_creates_the_runtime_and_native_output_directories() {
+        let out_dir = Utf8PathBuf::from("/tmp/uniffi-bindgen-node-js-layout-created-dirs");
+        let lib_source = fixture_library_path("libexample.so");
+        let mut component = component_with_namespace("example");
+        component.config.bundled_prebuilds = true;
+        let layout = GeneratedPackageLayout::from_component(&out_dir, &lib_source, &component)
+            .expect("layout");
+
+        if out_dir.exists() {
+            fs::remove_dir_all(out_dir.as_std_path()).expect("cleanup pre-existing temp dir");
+        }
+
+        layout
+            .ensure_output_dirs()
+            .expect("expected package directories to be created");
+
+        assert!(
+            layout.root_dir.is_dir(),
+            "expected package root at {}",
+            layout.root_dir
+        );
+        assert!(
+            layout.runtime.dir.is_dir(),
+            "expected runtime directory at {}",
+            layout.runtime.dir
+        );
+        let native_parent = layout
+            .native_library
+            .output_path
+            .parent()
+            .expect("bundled native library should have a parent");
+        assert!(
+            native_parent.is_dir(),
+            "expected native library directory at {native_parent}"
+        );
+
+        fs::remove_dir_all(out_dir.as_std_path()).expect("cleanup temp dir");
     }
 }

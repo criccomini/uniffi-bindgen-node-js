@@ -22,6 +22,21 @@ Inspect the generator subcommand:
 cargo run -- generate --help
 ```
 
+Run the v2 generator against a built cdylib:
+
+```sh
+cargo run -- generate path/to/libyour_fixture.dylib \
+  --out-dir /tmp/uniffi-package
+```
+
+Pass `--manifest-path` when loader-based UDL or config resolution needs an explicit Cargo manifest hint:
+
+```sh
+cargo run -- generate path/to/libyour_fixture.dylib \
+  --manifest-path path/to/Cargo.toml \
+  --out-dir /tmp/uniffi-package
+```
+
 ## Common Commands
 
 Run the Rust test suite:

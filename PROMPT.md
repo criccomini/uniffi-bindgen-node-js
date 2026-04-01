@@ -178,7 +178,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Validate --manifest-path if provided.
 - [ ] Validate mutually incompatible Node options in the new v2 surface.
 - [x] Remove --config-override from CLI parsing.
-- [ ] Remove --cdylib-name from CLI parsing.
+- [x] Remove --cdylib-name from CLI parsing.
 - [ ] Remove --lib-path-literal from CLI parsing.
 - [ ] Update CLI help text to reflect the v2 surface.
 - [ ] Update CLI error messages to mention v2 behavior rather than v1 terminology.

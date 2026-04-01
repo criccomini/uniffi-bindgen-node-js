@@ -30,7 +30,6 @@ pub struct GenerateNodePackageOptions {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GenerateNodePackageCliOverrides {
-    pub cdylib_name: Option<String>,
     pub lib_path_literal: Option<String>,
 }
 
@@ -46,7 +45,6 @@ pub(crate) fn generate_node_package_with_cli_overrides(
 
     let cli_overrides = NodeBindingCliOverrides::from_parts(
         options.package_name.clone(),
-        cli_compat_overrides.cdylib_name,
         options.node_engine.clone(),
         cli_compat_overrides.lib_path_literal,
         options.bundled_prebuilds,

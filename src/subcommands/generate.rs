@@ -21,9 +21,6 @@ pub struct GenerateArgs {
     pub package_name: Option<String>,
 
     #[arg(long)]
-    pub cdylib_name: Option<String>,
-
-    #[arg(long)]
     pub node_engine: Option<String>,
 
     #[arg(long)]
@@ -50,7 +47,6 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
             manual_load: args.manual_load,
         },
         GenerateNodePackageCliOverrides {
-            cdylib_name: args.cdylib_name,
             lib_path_literal: args.lib_path_literal,
         },
     )

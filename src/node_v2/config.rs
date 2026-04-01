@@ -7,7 +7,6 @@ use uniffi_bindgen::{Component, ComponentInterface, interface::rename as apply_c
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NodeBindingCliOverrides {
     package_name: Option<String>,
-    cdylib_name: Option<String>,
     node_engine: Option<String>,
     lib_path_literal: Option<String>,
     bundled_prebuilds: bool,
@@ -17,7 +16,6 @@ pub(crate) struct NodeBindingCliOverrides {
 impl NodeBindingCliOverrides {
     pub fn from_parts(
         package_name: Option<String>,
-        cdylib_name: Option<String>,
         node_engine: Option<String>,
         lib_path_literal: Option<String>,
         bundled_prebuilds: bool,
@@ -25,7 +23,6 @@ impl NodeBindingCliOverrides {
     ) -> Result<Self> {
         Ok(Self {
             package_name: normalize_optional_value("--package-name", package_name)?,
-            cdylib_name: normalize_optional_value("--cdylib-name", cdylib_name)?,
             node_engine: normalize_optional_value("--node-engine", node_engine)?,
             lib_path_literal: normalize_optional_value("--lib-path-literal", lib_path_literal)?,
             bundled_prebuilds,
@@ -35,7 +32,6 @@ impl NodeBindingCliOverrides {
 
     pub(crate) fn apply_to(&self, config: &mut NodeBindingGeneratorConfig) {
         apply_optional_string_override(&mut config.package_name, self.package_name.as_ref());
-        apply_optional_string_override(&mut config.cdylib_name, self.cdylib_name.as_ref());
         apply_optional_value_override(&mut config.node_engine, self.node_engine.as_ref());
         apply_optional_string_override(
             &mut config.lib_path_literal,
@@ -236,7 +232,10 @@ mod tests {
     use anyhow::Result;
     use uniffi_bindgen::Component;
 
-    use super::{NodeBindingGeneratorConfig, apply_component_renames, parse_node_binding_config};
+    use super::{
+        NodeBindingCliOverrides, NodeBindingGeneratorConfig, apply_component_renames,
+        finalize_node_binding_config, parse_node_binding_config,
+    };
 
     fn parse_node_config(source: &str) -> NodeBindingGeneratorConfig {
         let root = toml::from_str::<toml::Value>(source).expect("test TOML should deserialize");
@@ -278,6 +277,29 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(argument_names, vec!["lhs", "rhs"]);
+        Ok(())
+    }
+
+    #[test]
+    fn finalize_config_defaults_cdylib_name_from_loaded_library_name() -> Result<()> {
+        let ci = uniffi_bindgen::ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                u32 add(u32 lhs, u32 rhs);
+            };
+            "#,
+            "fixture_crate",
+        )?;
+        let mut config = NodeBindingGeneratorConfig::default();
+
+        finalize_node_binding_config(
+            &ci,
+            &mut config,
+            Some("fixture_from_loader"),
+            &NodeBindingCliOverrides::default(),
+        )?;
+
+        assert_eq!(config.cdylib_name.as_deref(), Some("fixture_from_loader"));
         Ok(())
     }
 }

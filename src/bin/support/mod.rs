@@ -148,7 +148,6 @@ pub fn generate_fixture_package(
         crate_name: Some(built_fixture.crate_name.clone()),
         out_dir: out_dir.clone(),
         package_name: Some(spec.package_name()),
-        cdylib_name: Some(built_fixture.crate_name.clone()),
         node_engine: None,
         lib_path_literal: None,
         bundled_prebuilds: false,

@@ -47,4 +47,24 @@ mod tests {
             "unexpected clap error: {error}"
         );
     }
+
+    #[test]
+    fn generate_cli_rejects_removed_cdylib_name_flag() {
+        let error = Cli::try_parse_from([
+            "uniffi-bindgen-node-js",
+            "generate",
+            "/tmp/libfixture.dylib",
+            "--out-dir",
+            "/tmp/out",
+            "--cdylib-name",
+            "fixture_override",
+        ])
+        .expect_err("removed --cdylib-name flag should not parse");
+
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert!(
+            error.to_string().contains("--cdylib-name"),
+            "unexpected clap error: {error}"
+        );
+    }
 }

@@ -154,7 +154,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Introduce a new FFI-IR builder module or boundary.
 - [x] Move package-writing logic out of the legacy monolithic src/bindings/mod.rs shape.
 - [x] Keep template rendering reusable but isolate it from loader/config orchestration.
-- [ ] Keep runtime asset emission separate from component-specific rendering.
+- [x] Keep runtime asset emission separate from component-specific rendering.
 - [ ] Define the final v2 module layout and move code accordingly.
 - [x] Build BindgenPaths in the new orchestration path.
 - [ ] Support --manifest-path for path/config/UDL resolution.

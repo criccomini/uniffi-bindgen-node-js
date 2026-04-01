@@ -6,7 +6,7 @@ use uniffi_bindgen::Component;
 use super::{
     api::{RenderedComponentApi, build_public_api_ir, render_public_api},
     ffi::{RenderedComponentFfi, render_component_ffi},
-    runtime_files,
+    runtime::emit_runtime_files,
     templates::{
         ComponentDtsTemplate, ComponentJsTemplate, PackageIndexDtsTemplate, PackageIndexJsTemplate,
         PackageJsonTemplate, StringTemplate, json_optional_string, json_string, rendered_file,
@@ -176,7 +176,7 @@ impl GeneratedPackage {
     }
 
     fn write_runtime_files(&self) -> Result<()> {
-        write_files(runtime_files(&self.layout)?)
+        emit_runtime_files(&self.layout)
     }
 }
 

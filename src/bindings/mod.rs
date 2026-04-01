@@ -79,7 +79,15 @@ mod tests {
         output_dir: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<()> {
-        let lib_source = output_dir.join("input").join(test_library_filename());
+        write_test_package_with_library_filename(output_dir, component, &test_library_filename())
+    }
+
+    fn write_test_package_with_library_filename(
+        output_dir: &Utf8Path,
+        component: &Component<NodeBindingGeneratorConfig>,
+        library_filename: &str,
+    ) -> Result<()> {
+        let lib_source = output_dir.join("input").join(library_filename);
         fs::create_dir_all(
             lib_source
                 .parent()
@@ -394,6 +402,34 @@ mod tests {
             fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
             b"fixture-native-library",
             "unexpected staged library contents"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_stages_the_input_filename_instead_of_cdylib_name() {
+        let output_dir = temp_dir_path("staged-input-filename");
+        let mut component = component_with_namespace("example");
+        component.config.cdylib_name = Some("ffi_symbol_name".to_string());
+        let input_library_filename = format!("host-artifact.{}", std::env::consts::DLL_EXTENSION);
+        let cdylib_named_path = output_dir.join(format!(
+            "{}ffi_symbol_name.{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_EXTENSION
+        ));
+
+        write_test_package_with_library_filename(&output_dir, &component, &input_library_filename)
+            .expect("write_bindings should succeed");
+
+        let staged_library_path = output_dir.join(&input_library_filename);
+        assert!(
+            staged_library_path.is_file(),
+            "expected staged native library at {staged_library_path}"
+        );
+        assert!(
+            !cdylib_named_path.exists(),
+            "staged library path should come from the input filename, not cdylib_name: {cdylib_named_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

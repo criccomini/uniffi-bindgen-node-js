@@ -224,7 +224,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revisit namespace file generation to ensure imports are minimal and correct after refactor.
 - [x] Revisit runtime-helper file set to ensure only needed helpers are emitted.
 - [x] Rebuild the normalized IR used by templates so orchestration concerns are not mixed into rendering structs.
-- [ ] Audit all ComponentInterface-to-IR conversion assumptions against UniFFI 0.31.
+- [x] Audit all ComponentInterface-to-IR conversion assumptions against UniFFI 0.31.
 - [ ] Update object-handle modeling for the post-0.30 handle ABI.
 - [ ] Remove RustArcPtr-specific assumptions where UniFFI now uses handles.
 - [ ] Update object free/clone logic to match UniFFI 0.30/0.31 semantics.

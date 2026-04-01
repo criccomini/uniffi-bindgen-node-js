@@ -7,7 +7,7 @@ use uniffi_bindgen::interface::{
 };
 
 use super::{
-    callback_method_ffi_name, ffi_clone_symbol_name, ffi_free_symbol_name, ffi_symbol_identifier,
+    ffi_clone_symbol_name, ffi_free_symbol_name, ffi_symbol_identifier,
     foreign_future_complete_ffi_name, render_js_default_async_callback_return_value_expression,
     validate_supported_features,
 };
@@ -20,6 +20,11 @@ pub(crate) fn build_public_api_ir(ci: &ComponentInterface) -> Result<ComponentMo
 ///
 /// Template-specific decisions live in the renderer layer so this stays a
 /// reusable conversion boundary between UniFFI metadata loading and codegen.
+///
+/// The input `ComponentInterface` is expected to already have passed through
+/// `derive_ffi_funcs()`, matching the v2 loader pipeline. UniFFI 0.31 only
+/// materializes some callback-trait object FFI metadata, such as
+/// `ffi_init_callback()`, during that step.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ComponentModel {
     pub namespace_docstring: Option<String>,
@@ -215,17 +220,20 @@ impl CallbackInterfaceModel {
         Self {
             name: callback_interface.name().to_string(),
             docstring: callback_interface.docstring().map(str::to_owned),
-            methods: callback_interface
-                .methods()
-                .into_iter()
-                .enumerate()
-                .map(|(index, method)| {
-                    MethodModel::from_callback_method(method, ci, callback_interface.name(), index)
-                })
-                .collect(),
+            methods: callback_method_models(
+                callback_interface.methods(),
+                callback_interface
+                    .ffi_callbacks()
+                    .into_iter()
+                    .map(|callback| callback.name().to_string())
+                    .collect(),
+                ci,
+            ),
             ffi_init_callback_identifier: ffi_symbol_identifier(
                 callback_interface.ffi_init_callback().name(),
             ),
+            // UniFFI 0.31 still exposes only the init symbol directly for callback
+            // interfaces; clone/free names remain derived from the module path.
             ffi_object_clone_identifier: ffi_symbol_identifier(&ffi_clone_symbol_name(
                 callback_interface.module_path(),
                 callback_interface.name(),
@@ -241,14 +249,15 @@ impl CallbackInterfaceModel {
         Self {
             name: object.name().to_string(),
             docstring: object.docstring().map(str::to_owned),
-            methods: object
-                .methods()
-                .into_iter()
-                .enumerate()
-                .map(|(index, method)| {
-                    MethodModel::from_callback_method(method, ci, object.name(), index)
-                })
-                .collect(),
+            methods: callback_method_models(
+                object.methods(),
+                object
+                    .ffi_callbacks()
+                    .into_iter()
+                    .map(|callback| callback.name().to_string())
+                    .collect(),
+                ci,
+            ),
             ffi_init_callback_identifier: ffi_symbol_identifier(object.ffi_init_callback().name()),
             ffi_object_clone_identifier: ffi_symbol_identifier(object.ffi_object_clone().name()),
             ffi_object_free_identifier: ffi_symbol_identifier(object.ffi_object_free().name()),
@@ -306,6 +315,8 @@ impl ConstructorModel {
             docstring: constructor.docstring().map(str::to_owned),
             is_primary: constructor.is_primary_constructor(),
             is_async: constructor.is_async(),
+            // UniFFI 0.31 constructors expose their actual FFI call shape through
+            // `full_arguments()`; there is no implicit receiver slot to strip.
             arguments: constructor
                 .full_arguments()
                 .into_iter()
@@ -338,6 +349,9 @@ impl MethodModel {
             name: method.name().to_string(),
             docstring: method.docstring().map(str::to_owned),
             is_async: method.is_async(),
+            // UniFFI 0.31 `Method::full_arguments()` includes the implicit receiver
+            // handle. The Node runtime supplies that from `this`, so the public IR
+            // must keep only the explicit user-facing arguments here.
             arguments: method
                 .arguments()
                 .into_iter()
@@ -356,17 +370,33 @@ impl MethodModel {
     fn from_callback_method(
         method: &Method,
         ci: &ComponentInterface,
-        callback_interface_name: &str,
-        index: usize,
+        ffi_callback_name: &str,
     ) -> Self {
         let mut model = Self::from_method(method, ci);
-        model.ffi_callback_identifier = Some(ffi_symbol_identifier(&callback_method_ffi_name(
-            callback_interface_name,
-            index,
-        )));
+        model.ffi_callback_identifier = Some(ffi_symbol_identifier(ffi_callback_name));
         model.async_callback_ffi = AsyncCallbackMethodModel::from_method(method);
         model
     }
+}
+
+fn callback_method_models(
+    methods: Vec<&Method>,
+    ffi_callback_names: Vec<String>,
+    ci: &ComponentInterface,
+) -> Vec<MethodModel> {
+    assert_eq!(
+        methods.len(),
+        ffi_callback_names.len(),
+        "UniFFI callback method metadata and callback symbol lists diverged"
+    );
+
+    methods
+        .into_iter()
+        .zip(ffi_callback_names)
+        .map(|(method, ffi_callback_name)| {
+            MethodModel::from_callback_method(method, ci, &ffi_callback_name)
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

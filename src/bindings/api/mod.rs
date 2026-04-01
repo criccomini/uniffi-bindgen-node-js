@@ -828,6 +828,81 @@ mod tests {
     }
 
     #[test]
+    fn component_model_uses_uniffi_callback_symbols_for_callback_interfaces() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            callback interface Logger {
+                void write(string message);
+                [Async] string latest();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let model = ComponentModel::from_ci(&ci).expect("callback interfaces should build");
+        let expected_identifiers = ci.callback_interface_definitions()[0]
+            .ffi_callbacks()
+            .into_iter()
+            .map(|callback| ffi_symbol_identifier(callback.name()))
+            .collect::<Vec<_>>();
+        let actual_identifiers = model.callback_interfaces[0]
+            .methods
+            .iter()
+            .map(|method| {
+                method
+                    .ffi_callback_identifier
+                    .clone()
+                    .expect("callback methods should capture their FFI callback name")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual_identifiers, expected_identifiers);
+    }
+
+    #[test]
+    fn component_model_uses_uniffi_callback_symbols_for_callback_trait_objects() {
+        let mut ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            [Trait, WithForeign]
+            interface Logger {
+                void write(string message);
+                [Async] string latest();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+        ci.derive_ffi_funcs()
+            .expect("trait callback objects should derive their FFI symbols");
+
+        let model = ComponentModel::from_ci(&ci).expect("callback trait objects should build");
+        let expected_identifiers = ci.object_definitions()[0]
+            .ffi_callbacks()
+            .into_iter()
+            .map(|callback| ffi_symbol_identifier(callback.name()))
+            .collect::<Vec<_>>();
+        let actual_identifiers = model.callback_interfaces[0]
+            .methods
+            .iter()
+            .map(|method| {
+                method
+                    .ffi_callback_identifier
+                    .clone()
+                    .expect("callback trait methods should capture their FFI callback name")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(model.callback_interfaces.len(), 1);
+        assert!(model.objects.is_empty());
+        assert_eq!(actual_identifiers, expected_identifiers);
+    }
+
+    #[test]
     fn component_model_accepts_async_callback_interfaces() {
         let ci = ComponentInterface::from_webidl(
             r#"
@@ -879,7 +954,7 @@ mod tests {
         );
         assert_eq!(
             async_callback_ffi.result_struct_identifier,
-            "ForeignFutureStructRustBuffer"
+            "ForeignFutureResultRustBuffer"
         );
         assert!(async_callback_ffi.result_struct_has_return_value);
         assert_eq!(
@@ -917,7 +992,7 @@ mod tests {
         );
         assert_eq!(
             async_callback_ffi.result_struct_identifier,
-            "ForeignFutureStructVoid"
+            "ForeignFutureResultVoid"
         );
         assert!(!async_callback_ffi.result_struct_has_return_value);
         assert!(
@@ -985,6 +1060,34 @@ mod tests {
             }
         );
         assert_eq!(model.functions[0].arguments[0].type_.as_type().name(), None);
+    }
+
+    #[test]
+    fn component_model_keeps_object_method_arguments_receiverless() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            interface Store {
+                constructor(string prefix);
+                void put(string key, string value);
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let object = &ci.object_definitions()[0];
+        let constructor = object.constructors()[0];
+        let method = object.methods()[0];
+        let model = ComponentModel::from_ci(&ci).expect("component model should build");
+
+        assert_eq!(constructor.full_arguments().len(), 1);
+        assert_eq!(method.full_arguments().len(), 3);
+        assert_eq!(model.objects[0].constructors[0].arguments.len(), 1);
+        assert_eq!(model.objects[0].methods[0].arguments.len(), 2);
+        assert_eq!(model.objects[0].methods[0].arguments[0].name, "key");
+        assert_eq!(model.objects[0].methods[0].arguments[1].name, "value");
     }
 
     #[test]

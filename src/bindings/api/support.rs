@@ -734,10 +734,6 @@ pub(crate) fn ffi_free_symbol_name(namespace: &str, object_name: &str) -> String
     format!("uniffi_{namespace}_fn_free_{object_name}")
 }
 
-pub(crate) fn callback_method_ffi_name(callback_interface_name: &str, index: usize) -> String {
-    format!("CallbackInterface{callback_interface_name}Method{index}")
-}
-
 pub(crate) fn foreign_future_complete_ffi_name(return_ffi_type: Option<&FfiType>) -> String {
     format!(
         "ForeignFutureComplete{}",

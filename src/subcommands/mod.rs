@@ -5,7 +5,10 @@ use clap::{Parser, Subcommand};
 use crate::CRATE_NAME;
 
 #[derive(Debug, Parser)]
-#[command(name = CRATE_NAME, about = "Generate Node.js bindings for UniFFI components")]
+#[command(
+    name = CRATE_NAME,
+    about = "Generate a self-contained ESM Node package for a built UniFFI cdylib"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -24,9 +27,41 @@ pub fn run(command: Command) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use clap::{Parser, error::ErrorKind};
+    use clap::{CommandFactory, Parser, error::ErrorKind};
 
     use super::Cli;
+
+    #[test]
+    fn generate_cli_help_describes_v2_surface() {
+        let mut command = Cli::command();
+        let generate = command
+            .find_subcommand_mut("generate")
+            .expect("generate subcommand should exist");
+        let help = generate.render_long_help().to_string();
+
+        assert!(
+            help.contains("Generate a self-contained ESM Node package from a built UniFFI cdylib"),
+            "unexpected help output: {help}"
+        );
+        assert!(
+            help.contains("--manifest-path <Cargo.toml>"),
+            "unexpected help output: {help}"
+        );
+        assert!(
+            help.contains("prebuilds/<host-target>/"),
+            "unexpected help output: {help}"
+        );
+        assert!(
+            help.contains("--manual-load"),
+            "unexpected help output: {help}"
+        );
+        assert!(
+            !help.contains("--config-override")
+                && !help.contains("--cdylib-name")
+                && !help.contains("--lib-path-literal"),
+            "unexpected help output: {help}"
+        );
+    }
 
     #[test]
     fn generate_cli_rejects_removed_config_override_flag() {

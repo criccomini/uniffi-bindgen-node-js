@@ -180,7 +180,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Remove --config-override from CLI parsing.
 - [x] Remove --cdylib-name from CLI parsing.
 - [x] Remove --lib-path-literal from CLI parsing.
-- [ ] Update CLI help text to reflect the v2 surface.
+- [x] Update CLI help text to reflect the v2 surface.
 - [ ] Update CLI error messages to mention v2 behavior rather than v1 terminology.
 - [ ] Decide and implement how package naming defaults are derived in v2.
 - [ ] Keep --package-name override support.

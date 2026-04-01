@@ -4,27 +4,40 @@ use camino::Utf8PathBuf;
 use clap::Args;
 
 #[derive(Debug, Clone, Args)]
+#[command(
+    about = "Generate a self-contained ESM Node package from a built UniFFI cdylib",
+    long_about = "Generate a self-contained ESM Node package from a built UniFFI cdylib.\n\nThe generator loads UniFFI component metadata from the native library, selects one component, renders the Node package files, and stages the native library into the generated package layout."
+)]
 pub struct GenerateArgs {
+    /// Path to the built UniFFI cdylib (.so, .dylib, or .dll) to package.
+    #[arg(value_name = "LIB_SOURCE")]
     pub lib_source: Utf8PathBuf,
 
-    #[arg(long)]
+    /// Cargo.toml hint used to resolve UDL and uniffi.toml inputs when needed.
+    #[arg(long, value_name = "Cargo.toml")]
     pub manifest_path: Option<Utf8PathBuf>,
 
-    #[arg(long)]
+    /// Select a component when the library exposes more than one UniFFI component.
+    #[arg(long, value_name = "CRATE_NAME")]
     pub crate_name: Option<String>,
 
-    #[arg(long)]
+    /// Output directory for the generated ESM package.
+    #[arg(long, value_name = "OUT_DIR")]
     pub out_dir: Utf8PathBuf,
 
-    #[arg(long)]
+    /// Override the generated npm package name.
+    #[arg(long, value_name = "PACKAGE_NAME")]
     pub package_name: Option<String>,
 
-    #[arg(long)]
+    /// Override the package.json engines.node range.
+    #[arg(long, value_name = "NODE_ENGINE")]
     pub node_engine: Option<String>,
 
+    /// Stage the native library into prebuilds/<host-target>/ instead of the package root.
     #[arg(long)]
     pub bundled_prebuilds: bool,
 
+    /// Emit manual load and unload helpers instead of auto-loading on import.
     #[arg(long)]
     pub manual_load: bool,
 }

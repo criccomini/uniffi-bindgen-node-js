@@ -234,7 +234,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update return-value normalizers if the new handle ABI changes numeric handling.
 - [x] Audit and update any module_path-derived symbol synthesis now that full module paths are present.
 - [x] Remove any symbol synthesis that duplicates information UniFFI now exposes directly.
-- [ ] Revalidate checksum extraction logic against UniFFI 0.31.
+- [x] Revalidate checksum extraction logic against UniFFI 0.31.
 - [ ] Revalidate contract-version lookup logic against UniFFI 0.31.
 - [ ] Update checksum mismatch diagnostics if needed for the new naming/layout.
 - [ ] Update contract mismatch diagnostics if needed for the new naming/layout.

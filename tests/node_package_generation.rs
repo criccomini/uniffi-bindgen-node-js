@@ -1,14 +1,63 @@
 mod support;
 
-use std::fs;
+use std::{collections::BTreeMap, fs};
 
 use self::support::{
     FixturePackageOptions, build_fixture_cdylib, fixtures::fixture_spec, generate_fixture_package,
     generate_fixture_package_with_options, install_fixture_package_dependencies,
-    read_package_file_tree, remove_dir_all, temp_dir_path,
+    load_fixture_component_interface, read_package_file_tree, remove_dir_all, temp_dir_path,
 };
 use serde_json::Value;
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
+
+fn read_generated_component_ffi_js(package_dir: &camino::Utf8PathBuf, namespace: &str) -> String {
+    fs::read_to_string(
+        package_dir
+            .join(format!("{namespace}-ffi.js"))
+            .as_std_path(),
+    )
+    .expect("component ffi js should be readable")
+}
+
+fn extract_generated_ffi_integrity_block(ffi_js: &str) -> &str {
+    let start = ffi_js
+        .find("export const ffiIntegrity = Object.freeze({")
+        .expect("generated ffi js should include ffiIntegrity metadata");
+    let end = ffi_js[start..]
+        .find("\n\nlet loadedBindings = null;")
+        .map(|offset| start + offset)
+        .expect("generated ffi js should terminate ffiIntegrity metadata before bindings state");
+    &ffi_js[start..end]
+}
+
+fn parse_generated_checksums(ffi_js: &str) -> BTreeMap<String, u16> {
+    let integrity_block = extract_generated_ffi_integrity_block(ffi_js);
+    let checksums_start = integrity_block
+        .find("  checksums: Object.freeze({\n")
+        .expect("generated ffi js should include checksum integrity metadata");
+    let checksums_body_start = checksums_start + "  checksums: Object.freeze({\n".len();
+    let checksums_body_end = integrity_block[checksums_body_start..]
+        .find("\n  }),")
+        .map(|offset| checksums_body_start + offset)
+        .expect("generated ffi js should close checksum integrity metadata");
+
+    integrity_block[checksums_body_start..checksums_body_end]
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let trimmed = line.trim().trim_end_matches(',');
+            let (name_json, expected) = trimmed
+                .split_once(": ")
+                .expect("generated checksum entries should have a name and value");
+            let name = serde_json::from_str(name_json)
+                .expect("generated checksum names should deserialize as JSON strings");
+            let expected = expected
+                .parse()
+                .expect("generated checksum values should parse as u16");
+            (name, expected)
+        })
+        .collect()
+}
 
 #[test]
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
@@ -348,6 +397,41 @@ fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
         package_dir.join("package.json").is_file(),
         "expected generated package manifest at {}",
         package_dir.join("package.json")
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn generated_ffi_integrity_uses_loader_derived_checksums() {
+    let built_fixture = build_fixture_cdylib("callbacks");
+    let component_interface = load_fixture_component_interface(&built_fixture);
+    let package_dir = temp_dir_path("loader-derived-checksums");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("package generation should preserve loader-derived checksum metadata");
+
+    let expected_checksums = component_interface
+        .iter_checksums()
+        .collect::<BTreeMap<_, _>>();
+    let actual_checksums = parse_generated_checksums(&read_generated_component_ffi_js(
+        &package_dir,
+        &built_fixture.namespace,
+    ));
+
+    assert_eq!(
+        actual_checksums, expected_checksums,
+        "generated ffi integrity metadata should match UniFFI loader-derived checksums"
     );
 
     remove_dir_all(&built_fixture.workspace_dir);

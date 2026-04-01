@@ -12,6 +12,7 @@ use std::{
 
 use camino::Utf8PathBuf;
 use serde_json::Value;
+use uniffi_bindgen::{BindgenLoader, BindgenPaths, ComponentInterface};
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 use self::fixtures::fixture_spec;
@@ -148,6 +149,33 @@ pub fn generate_fixture_package_with_options(
         bundled_prebuild_target,
         bundled_prebuild_path,
     }
+}
+
+pub fn load_fixture_component_interface(fixture: &BuiltFixtureCdylib) -> ComponentInterface {
+    let loader = BindgenLoader::new(BindgenPaths::default());
+    let metadata = loader
+        .load_metadata(&fixture.library_path)
+        .unwrap_or_else(|error| {
+            panic!(
+                "failed to load UniFFI metadata from fixture library {}\nerror: {error:#}",
+                fixture.library_path
+            )
+        });
+    let cis = loader.load_cis(metadata).unwrap_or_else(|error| {
+        panic!(
+            "failed to load UniFFI component interfaces from fixture library {}\nerror: {error:#}",
+            fixture.library_path
+        )
+    });
+
+    cis.into_iter()
+        .find(|ci| ci.crate_name() == fixture.crate_name)
+        .unwrap_or_else(|| {
+            panic!(
+                "fixture library {} did not expose component interface for crate {}",
+                fixture.library_path, fixture.crate_name
+            )
+        })
 }
 
 pub fn install_generated_package_dependencies(package_dir: &Utf8PathBuf) {

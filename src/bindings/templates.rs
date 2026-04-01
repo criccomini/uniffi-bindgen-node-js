@@ -65,6 +65,8 @@ pub(crate) struct ComponentJsTemplate {
     pub(crate) lib_path_literal_json: String,
     pub(crate) bundled_prebuilds: bool,
     pub(crate) manual_load: bool,
+    pub(crate) needs_koffi: bool,
+    pub(crate) ffi_imports: Vec<String>,
     pub(crate) ffi_types_imports: Vec<String>,
     pub(crate) ffi_converter_imports: Vec<String>,
     pub(crate) error_imports: Vec<String>,

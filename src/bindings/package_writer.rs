@@ -134,6 +134,8 @@ impl GeneratedPackage {
                     lib_path_literal_json: template_context.lib_path_literal_json.clone(),
                     bundled_prebuilds: template_context.bundled_prebuilds,
                     manual_load: self.manual_load,
+                    needs_koffi: component_js_imports.needs_koffi,
+                    ffi_imports: component_js_imports.ffi_imports,
                     ffi_types_imports: component_js_imports.ffi_types_imports,
                     ffi_converter_imports: component_js_imports.ffi_converter_imports,
                     error_imports: component_js_imports.error_imports,
@@ -256,6 +258,8 @@ pub(crate) fn write_generated_package(
 }
 
 pub(crate) struct ComponentJsImports {
+    pub(crate) needs_koffi: bool,
+    pub(crate) ffi_imports: Vec<String>,
     pub(crate) ffi_types_imports: Vec<String>,
     pub(crate) ffi_converter_imports: Vec<String>,
     pub(crate) error_imports: Vec<String>,
@@ -268,6 +272,16 @@ pub(crate) struct ComponentJsImports {
 impl ComponentJsImports {
     pub(crate) fn from_public_api(public_api_js: &str) -> Self {
         Self {
+            needs_koffi: public_api_js.contains("koffi."),
+            ffi_imports: collect_used_js_imports(
+                public_api_js,
+                &[
+                    "configureRuntimeHooks",
+                    "ffiFunctions",
+                    "getFfiBindings",
+                    "getFfiTypes",
+                ],
+            ),
             ffi_types_imports: collect_used_js_imports(
                 public_api_js,
                 &["createForeignBytes", "EMPTY_RUST_BUFFER", "RustBufferValue"],

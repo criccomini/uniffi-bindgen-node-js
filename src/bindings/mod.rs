@@ -229,6 +229,14 @@ mod tests {
             !component_js.contains("loadFfi()"),
             "unexpected component JS contents: {component_js}"
         );
+        assert!(
+            !component_js.contains("import koffi from \"koffi\";"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            !component_js.contains("import {\n"),
+            "unexpected component JS contents: {component_js}"
+        );
 
         let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
             .expect("index JS should be readable");
@@ -564,6 +572,18 @@ mod tests {
             .expect("component FFI JS should be readable");
         assert!(
             component_js.contains("createCallbackRegistry"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("import koffi from \"koffi\";"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("configureRuntimeHooks,"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            component_js.contains("ffiFunctions,"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(

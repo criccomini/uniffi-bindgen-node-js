@@ -1,10 +1,12 @@
-{{ namespace_doc_comment }}import koffi from "koffi";
+{{ namespace_doc_comment }}{% if needs_koffi %}import koffi from "koffi";
+{% endif %}
+{% if !ffi_imports.is_empty() %}
 import {
-  configureRuntimeHooks,
-  ffiFunctions,
-  getFfiBindings,
-  getFfiTypes,
+{% for item in ffi_imports %}
+  {{ item }},
+{% endfor %}
 } from "./{{ namespace }}-ffi.js";
+{% endif %}
 {% if !ffi_types_imports.is_empty() %}
 import {
 {% for item in ffi_types_imports %}

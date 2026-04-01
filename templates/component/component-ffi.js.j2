@@ -347,7 +347,12 @@ export function validateContractVersion(bindings = getFfiBindings()) {
   const actual = getContractVersion(bindings);
   const expected = ffiIntegrity.expectedContractVersion;
   if (actual !== expected) {
-    throw new ContractVersionMismatchError(expected, actual);
+    throw new ContractVersionMismatchError(expected, actual, {
+      details: {
+        libraryPath: bindings.libraryPath,
+        symbolName: ffiIntegrity.contractVersionFunction,
+      },
+    });
   }
   return actual;
 }

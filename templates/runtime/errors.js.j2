@@ -54,11 +54,25 @@ export class LibraryNotLoadedError extends UniffiRuntimeError {
 
 export class ContractVersionMismatchError extends UniffiRuntimeError {
   constructor(expected, actual, options = {}) {
+    const details =
+      options.details != null && typeof options.details === "object"
+        ? options.details
+        : {};
+    const libraryPath = details.libraryPath;
+    const symbolName = details.symbolName;
     super(
-      `UniFFI contract version mismatch: expected ${String(expected)}, got ${String(actual)}.`,
+      `UniFFI contract version mismatch${
+        symbolName == null ? "" : ` for ${String(symbolName)}`
+      }${
+        libraryPath == null ? "" : ` in ${JSON.stringify(libraryPath)}`
+      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. Regenerate the package from this library or load the intended staged binary.`,
       {
         ...options,
-        details: { expected, actual },
+        details: {
+          ...details,
+          expected,
+          actual,
+        },
       },
     );
   }

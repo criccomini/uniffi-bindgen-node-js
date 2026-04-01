@@ -1081,7 +1081,9 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("throw new ContractVersionMismatchError(expected, actual);"),
+            component_ffi_js.contains(
+                "throw new ContractVersionMismatchError(expected, actual, {"
+            ),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

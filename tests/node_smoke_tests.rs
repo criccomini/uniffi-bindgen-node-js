@@ -198,6 +198,71 @@ assert.throws(
 }
 
 #[test]
+fn generated_contract_mismatch_diagnostic_mentions_the_staged_library_path() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            bundled_prebuilds: false,
+            manual_load: true,
+        },
+    );
+    let output_dir = generated.package_dir.clone();
+    let namespace = generated.built_fixture.namespace.clone();
+    let staged_library_path = generated
+        .sibling_library_path
+        .clone()
+        .expect("manual-load packages should still stage the native library");
+
+    install_fixture_package_dependencies(&output_dir);
+    run_node_script(
+        &output_dir,
+        "contract-diagnostic-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{ ffiIntegrity, validateContractVersion }} from "./{namespace}-ffi.js";
+import {{ ContractVersionMismatchError }} from "./runtime/errors.js";
+
+const expected = ffiIntegrity.expectedContractVersion;
+const symbolName = ffiIntegrity.contractVersionFunction;
+const libraryPath = {library_path_json};
+const fakeBindings = {{
+  libraryPath,
+  ffiFunctions: {{
+    [symbolName]: () => expected + 1,
+  }},
+}};
+
+assert.throws(
+  () => validateContractVersion(fakeBindings),
+  (error) => {{
+    assert(error instanceof ContractVersionMismatchError);
+    assert(error.message.includes(`UniFFI contract version mismatch for ${{symbolName}}`));
+    assert(error.message.includes(JSON.stringify(libraryPath)));
+    assert(error.message.includes("generated package expects"));
+    assert(error.message.includes("loaded library reported"));
+    assert(error.message.includes("load the intended staged binary"));
+    assert.deepStrictEqual(error.details, {{
+      libraryPath,
+      symbolName,
+      expected,
+      actual: expected + 1,
+    }});
+    return true;
+  }},
+);
+"#,
+            namespace = namespace,
+            library_path_json =
+                serde_json::to_string(staged_library_path.as_str()).expect("path should serialize"),
+        ),
+    );
+
+    remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+}
+
+#[test]
 fn runtime_object_factory_keeps_raw_handles_for_follow_up_calls() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();

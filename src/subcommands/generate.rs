@@ -9,6 +9,9 @@ pub struct GenerateArgs {
     pub lib_source: Utf8PathBuf,
 
     #[arg(long)]
+    pub manifest_path: Option<Utf8PathBuf>,
+
+    #[arg(long)]
     pub crate_name: Option<String>,
 
     #[arg(long)]
@@ -41,6 +44,7 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     generate_node_package_with_cli_overrides(
         GenerateNodePackageOptions {
             lib_source: args.lib_source,
+            manifest_path: args.manifest_path,
             crate_name: args.crate_name,
             out_dir: args.out_dir,
             package_name: args.package_name,

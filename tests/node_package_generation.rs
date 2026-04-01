@@ -52,6 +52,7 @@ fn infers_the_only_component_when_crate_name_is_omitted() {
 
     generate_node_package(GenerateNodePackageOptions {
         lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
         crate_name: None,
         out_dir: package_dir.clone(),
         package_name: Some(format!("{}-package", built_fixture.namespace)),
@@ -60,6 +61,33 @@ fn infers_the_only_component_when_crate_name_is_omitted() {
         manual_load: false,
     })
     .expect("single-component library should not require --crate-name");
+
+    assert!(
+        package_dir.join("package.json").is_file(),
+        "expected generated package manifest at {}",
+        package_dir.join("package.json")
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
+    let built_fixture = build_fixture_cdylib("callbacks");
+    let package_dir = temp_dir_path("callbacks-manifest-path-package");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("UDL-backed library should load with --manifest-path");
 
     assert!(
         package_dir.join("package.json").is_file(),

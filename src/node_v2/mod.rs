@@ -1,20 +1,23 @@
 mod component_selection;
 pub(crate) mod config;
+mod paths;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use uniffi_bindgen::{BindgenLoader, BindgenPaths, Component};
+use uniffi_bindgen::{BindgenLoader, Component};
 
 use self::component_selection::{normalize_crate_name_selector, select_component};
 use self::config::{
     NodeBindingCliOverrides, NodeBindingGeneratorConfig, finalize_node_binding_config,
     parse_node_binding_config,
 };
+use self::paths::build_bindgen_paths;
 use crate::bindings::write_generated_package;
 
 #[derive(Debug, Clone)]
 pub struct GenerateNodePackageOptions {
     pub lib_source: Utf8PathBuf,
+    pub manifest_path: Option<Utf8PathBuf>,
     pub crate_name: Option<String>,
     pub out_dir: Utf8PathBuf,
     pub package_name: Option<String>,
@@ -47,10 +50,8 @@ pub(crate) fn generate_node_package_with_cli_overrides(
         options.manual_load,
         cli_compat_overrides.config_override,
     )?;
-    let mut paths = BindgenPaths::default();
-    paths
-        .add_cargo_metadata_layer(false)
-        .context("failed to build BindgenPaths from cargo metadata")?;
+    let paths = build_bindgen_paths(options.manifest_path.as_deref())
+        .context("failed to build BindgenPaths for node package generation")?;
 
     let loader = BindgenLoader::new(paths);
     let metadata = loader.load_metadata(&options.lib_source).with_context(|| {

@@ -121,6 +121,7 @@ pub fn generate_fixture_package_with_options(
 
     generate_node_package(GenerateNodePackageOptions {
         lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
         crate_name: Some(built_fixture.crate_name.clone()),
         out_dir: package_dir.clone(),
         package_name: Some(format!("{}-package", built_fixture.namespace)),

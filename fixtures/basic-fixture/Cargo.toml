@@ -10,4 +10,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 thiserror = "1"
-uniffi = { version = "=0.29.5", features = ["tokio"] }
+uniffi = { version = "=0.31.0", features = ["tokio"] }

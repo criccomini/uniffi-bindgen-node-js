@@ -134,7 +134,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 ## TODO
 
 - [x] Bump root dependencies to UniFFI 0.31.x.
-- [ ] Bump fixture crate dependencies to UniFFI 0.31.x.
+- [x] Bump fixture crate dependencies to UniFFI 0.31.x.
 - [ ] Update any supporting dependency versions needed to compile cleanly with UniFFI 0.31.x.
 - [ ] Regenerate Cargo.lock.
 - [ ] Remove reliance on deprecated BindingGenerator.

@@ -250,13 +250,13 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Keep root-level default resolution behavior for non-bundled packages.
 - [x] Keep explicit load(path) override behavior in manual-load mode.
 - [x] Ensure generated loader error messages mention staged package paths accurately.
-- [ ] Revisit unsupported-feature validation for v2.
+- [x] Revisit unsupported-feature validation for v2.
 - [x] Keep explicit rejection for custom types unless intentionally added.
 - [x] Keep explicit rejection for external types unless intentionally added.
-- [ ] Decide whether record/enum methods are supported in v2.
-- [ ] If record/enum methods are not supported, add explicit diagnostics for them.
-- [ ] Decide whether exported trait methods on records/enums are supported in v2.
-- [ ] If exported trait methods are not supported, add explicit diagnostics for them.
+- [x] Decide whether record/enum methods are supported in v2.
+- [x] If record/enum methods are not supported, add explicit diagnostics for them.
+- [x] Decide whether exported trait methods on records/enums are supported in v2.
+- [x] If exported trait methods are not supported, add explicit diagnostics for them.
 - [ ] Audit current supported surface against UniFFI 0.31 so v2 diagnostics are complete.
 - [ ] Update diagnostics to stop saying “v1” unless the message is intentionally historical.
 - [ ] Keep diagnostics actionable and grouped by unsupported feature family.

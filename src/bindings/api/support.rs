@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
 use textwrap::dedent;
-use uniffi_bindgen::interface::{ComponentInterface, Type};
+use uniffi_bindgen::interface::{ComponentInterface, Type, UniffiTraitMethods};
 
 use super::{ArgumentModel, FieldModel, RecordModel};
 
@@ -22,6 +22,26 @@ pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()>
             .chain(ci.iter_external_types())
             .filter_map(custom_type_name)
             .collect(),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "record methods are not supported in generated Node bindings",
+        collect_record_method_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "enum methods are not supported in generated Node bindings",
+        collect_enum_method_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "record UniFFI trait methods are not supported in generated Node bindings",
+        collect_record_trait_method_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "enum UniFFI trait methods are not supported in generated Node bindings",
+        collect_enum_trait_method_names(ci),
     );
 
     if unsupported.is_empty() {
@@ -53,6 +73,78 @@ fn custom_type_name(type_: &Type) -> Option<String> {
     match type_ {
         Type::Custom { name, .. } => Some(name.clone()),
         _ => None,
+    }
+}
+
+fn collect_record_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.record_definitions()
+        .iter()
+        .flat_map(|record| {
+            record
+                .methods()
+                .iter()
+                .map(move |method| describe_member(record.name(), method.name()))
+        })
+        .collect()
+}
+
+fn collect_enum_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.enum_definitions()
+        .iter()
+        .flat_map(|enum_def| {
+            enum_def
+                .methods()
+                .iter()
+                .map(move |method| describe_member(enum_def.name(), method.name()))
+        })
+        .collect()
+}
+
+fn collect_record_trait_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.record_definitions()
+        .iter()
+        .filter_map(|record| {
+            describe_uniffi_trait_methods(record.name(), record.uniffi_trait_methods())
+        })
+        .collect()
+}
+
+fn collect_enum_trait_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.enum_definitions()
+        .iter()
+        .filter_map(|enum_def| {
+            describe_uniffi_trait_methods(enum_def.name(), enum_def.uniffi_trait_methods())
+        })
+        .collect()
+}
+
+fn describe_member(type_name: &str, member_name: &str) -> String {
+    format!("{type_name}.{member_name}")
+}
+
+fn describe_uniffi_trait_methods(type_name: &str, methods: UniffiTraitMethods) -> Option<String> {
+    let mut trait_names = Vec::new();
+
+    if methods.debug_fmt.is_some() {
+        trait_names.push("Debug");
+    }
+    if methods.display_fmt.is_some() {
+        trait_names.push("Display");
+    }
+    if methods.eq_eq.is_some() || methods.eq_ne.is_some() {
+        trait_names.push("Eq");
+    }
+    if methods.hash_hash.is_some() {
+        trait_names.push("Hash");
+    }
+    if methods.ord_cmp.is_some() {
+        trait_names.push("Ord");
+    }
+
+    if trait_names.is_empty() {
+        None
+    } else {
+        Some(format!("{type_name} ({})", trait_names.join(", ")))
     }
 }
 
@@ -829,7 +921,122 @@ pub(crate) fn validate_type_renderable(type_: &Type, context: &str) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::render_doc_comment;
+    use std::collections::BTreeSet;
+
+    use uniffi_bindgen::interface::ComponentInterface;
+    use uniffi_meta::{
+        EnumMetadata, EnumShape, Metadata, MetadataGroup, MethodMetadata, NamespaceMetadata,
+        RecordMetadata, UniffiTraitMetadata, VariantMetadata,
+    };
+
+    use super::{render_doc_comment, validate_supported_features};
+
+    fn component_interface_from_metadata(
+        items: impl IntoIterator<Item = Metadata>,
+    ) -> ComponentInterface {
+        let mut metadata_items = BTreeSet::new();
+        metadata_items.extend(items);
+
+        ComponentInterface::from_metadata(MetadataGroup {
+            namespace: NamespaceMetadata {
+                crate_name: "fixture_crate".to_string(),
+                name: "example".to_string(),
+            },
+            namespace_docstring: None,
+            items: metadata_items,
+        })
+        .expect("metadata should build a ComponentInterface")
+    }
+
+    fn record_metadata(name: &str) -> Metadata {
+        RecordMetadata {
+            module_path: "fixture_crate".to_string(),
+            name: name.to_string(),
+            remote: false,
+            fields: vec![],
+            docstring: None,
+        }
+        .into()
+    }
+
+    fn enum_metadata(name: &str) -> Metadata {
+        EnumMetadata {
+            module_path: "fixture_crate".to_string(),
+            name: name.to_string(),
+            shape: EnumShape::Enum,
+            remote: false,
+            discr_type: None,
+            variants: vec![VariantMetadata {
+                name: "Variant".to_string(),
+                discr: None,
+                fields: vec![],
+                docstring: None,
+            }],
+            non_exhaustive: false,
+            docstring: None,
+        }
+        .into()
+    }
+
+    fn method_metadata(self_name: &str, name: &str) -> Metadata {
+        MethodMetadata {
+            module_path: "fixture_crate".to_string(),
+            self_name: self_name.to_string(),
+            name: name.to_string(),
+            is_async: false,
+            inputs: vec![],
+            return_type: Some(uniffi_meta::Type::String),
+            throws: None,
+            takes_self_by_arc: false,
+            checksum: None,
+            docstring: None,
+        }
+        .into()
+    }
+
+    fn uniffi_trait_method(
+        self_name: &str,
+        name: &str,
+        return_type: uniffi_meta::Type,
+    ) -> MethodMetadata {
+        MethodMetadata {
+            module_path: "fixture_crate".to_string(),
+            self_name: self_name.to_string(),
+            name: name.to_string(),
+            is_async: false,
+            inputs: vec![],
+            return_type: Some(return_type),
+            throws: None,
+            takes_self_by_arc: false,
+            checksum: None,
+            docstring: None,
+        }
+    }
+
+    fn debug_trait_metadata(self_name: &str) -> Metadata {
+        UniffiTraitMetadata::Debug {
+            fmt: uniffi_trait_method(self_name, "uniffi_trait_debug", uniffi_meta::Type::String),
+        }
+        .into()
+    }
+
+    fn display_trait_metadata(self_name: &str) -> Metadata {
+        UniffiTraitMetadata::Display {
+            fmt: uniffi_trait_method(
+                self_name,
+                "uniffi_trait_display",
+                uniffi_meta::Type::String,
+            ),
+        }
+        .into()
+    }
+
+    fn hash_trait_metadata(self_name: &str) -> Metadata {
+        UniffiTraitMetadata::Hash {
+            hash: uniffi_trait_method(self_name, "uniffi_trait_hash", uniffi_meta::Type::UInt64),
+        }
+        .into()
+    }
 
     #[test]
     fn render_doc_comment_returns_empty_for_missing_or_blank_docs() {
@@ -859,6 +1066,51 @@ mod tests {
         assert_eq!(
             render_doc_comment(Some("Ends with */ here."), "  "),
             "  /**\n   * Ends with *\\/ here.\n   */\n"
+        );
+    }
+
+    #[test]
+    fn validate_supported_features_rejects_record_and_enum_methods() {
+        let ci = component_interface_from_metadata([
+            record_metadata("Profile"),
+            enum_metadata("Flavor"),
+            method_metadata("Profile", "display_name"),
+            method_metadata("Flavor", "label"),
+        ]);
+
+        let error = validate_supported_features(&ci)
+            .expect_err("record and enum methods should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            concat!(
+                "unsupported UniFFI features for generated Node bindings:\n",
+                "- record methods are not supported in generated Node bindings: Profile.display_name\n",
+                "- enum methods are not supported in generated Node bindings: Flavor.label",
+            )
+        );
+    }
+
+    #[test]
+    fn validate_supported_features_rejects_record_and_enum_uniffi_trait_methods() {
+        let ci = component_interface_from_metadata([
+            record_metadata("Profile"),
+            enum_metadata("Flavor"),
+            debug_trait_metadata("Profile"),
+            hash_trait_metadata("Profile"),
+            display_trait_metadata("Flavor"),
+        ]);
+
+        let error = validate_supported_features(&ci)
+            .expect_err("record and enum UniFFI trait methods should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            concat!(
+                "unsupported UniFFI features for generated Node bindings:\n",
+                "- record UniFFI trait methods are not supported in generated Node bindings: Profile (Debug, Hash)\n",
+                "- enum UniFFI trait methods are not supported in generated Node bindings: Flavor (Display)",
+            )
         );
     }
 }

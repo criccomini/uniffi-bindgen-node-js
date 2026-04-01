@@ -91,10 +91,7 @@ fn parse_generated_expected_contract_version(ffi_js: &str) -> u32 {
         .expect("generated ffi js should include an expected contract version")
 }
 
-fn async_scaffolding_symbols<T: Callable>(
-    callable: &T,
-    ci: &ComponentInterface,
-) -> [String; 4] {
+fn async_scaffolding_symbols<T: Callable>(callable: &T, ci: &ComponentInterface) -> [String; 4] {
     [
         callable.ffi_rust_future_poll(ci),
         callable.ffi_rust_future_cancel(ci),
@@ -183,10 +180,8 @@ fn infers_the_only_component_when_crate_name_is_omitted() {
 #[test]
 fn generated_async_helpers_use_loader_derived_uniffi_symbol_names() {
     let generated = generate_fixture_package("basic");
-    let ffi_js = read_generated_component_ffi_js(
-        &generated.package_dir,
-        &generated.built_fixture.namespace,
-    );
+    let ffi_js =
+        read_generated_component_ffi_js(&generated.package_dir, &generated.built_fixture.namespace);
     let async_runtime_js = fs::read_to_string(
         generated
             .package_dir
@@ -475,6 +470,47 @@ fn manual_load_option_exports_manual_lifecycle_helpers() {
         ffi_js.contains("manualLoad: true"),
         "unexpected component FFI JS contents: {ffi_js}"
     );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn manual_load_loader_codegen_is_reentrant_for_the_same_canonical_path() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("manual-load-loader-reentrancy");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: true,
+    })
+    .expect("package generation should emit the manual-load reentrancy guard");
+
+    let ffi_js = fs::read_to_string(
+        package_dir
+            .join(format!("{}-ffi.js", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component ffi js should be readable");
+
+    for expected in [
+        "function canonicalizeExistingLibraryPath(libraryPath) {",
+        "const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);",
+        "if (loadedBindings.libraryPath === canonicalLibraryPath) {",
+        "return loadedBindings;",
+        "Call unload() before loading a different library path.",
+    ] {
+        assert!(
+            ffi_js.contains(expected),
+            "unexpected component FFI JS contents: {ffi_js}"
+        );
+    }
 
     remove_dir_all(&built_fixture.workspace_dir);
     remove_dir_all(&package_dir);

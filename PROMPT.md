@@ -147,7 +147,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Define a new request/options struct for the v2 programmatic entrypoint.
 - [x] Define the internal result/data flow for generation so orchestration is explicit and testable.
 - [x] Introduce a new Node-v2 orchestration module separate from rendering code.
-- [ ] Introduce a new Node-v2 config parsing/normalization module.
+- [x] Introduce a new Node-v2 config parsing/normalization module.
 - [ ] Introduce a new package-layout/staging module.
 - [ ] Introduce a new component-selection module.
 - [ ] Introduce a new public-API IR builder module or boundary.

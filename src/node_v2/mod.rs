@@ -1,11 +1,14 @@
+pub(crate) mod config;
+
 use anyhow::{Context, Result, bail};
 use camino::Utf8PathBuf;
 use uniffi_bindgen::{BindgenLoader, BindgenPaths, Component};
 
-use crate::bindings::{
+use self::config::{
     NodeBindingCliOverrides, NodeBindingGeneratorConfig, finalize_node_binding_config,
-    parse_node_binding_config, write_generated_package,
+    parse_node_binding_config,
 };
+use crate::bindings::write_generated_package;
 
 #[derive(Debug, Clone)]
 pub struct GenerateNodePackageOptions {

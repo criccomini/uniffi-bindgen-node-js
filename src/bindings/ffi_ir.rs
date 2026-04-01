@@ -233,6 +233,8 @@ fn render_return_normalizer_expr(type_: &FfiType) -> Option<String> {
     match type_ {
         FfiType::Int64 => Some("normalizeInt64".to_string()),
         FfiType::UInt64 => Some("normalizeUInt64".to_string()),
+        // UniFFI 0.31 returns object handles through the dedicated handle ABI,
+        // even though callback plumbing still uses raw uint64 values elsewhere.
         FfiType::Handle => Some("normalizeHandle".to_string()),
         FfiType::RustBuffer(_) => Some("normalizeRustBuffer".to_string()),
         FfiType::RustCallStatus => Some("normalizeRustCallStatus".to_string()),
@@ -291,4 +293,22 @@ fn js_identifier(name: &str) -> String {
 
 fn json_string(value: &str) -> Result<String> {
     Ok(serde_json::to_string(value)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_return_normalizer_expr;
+    use uniffi_bindgen::interface::FfiType;
+
+    #[test]
+    fn handle_returns_keep_a_distinct_normalizer_from_raw_uint64() {
+        assert_eq!(
+            render_return_normalizer_expr(&FfiType::Handle).as_deref(),
+            Some("normalizeHandle")
+        );
+        assert_eq!(
+            render_return_normalizer_expr(&FfiType::UInt64).as_deref(),
+            Some("normalizeUInt64")
+        );
+    }
 }

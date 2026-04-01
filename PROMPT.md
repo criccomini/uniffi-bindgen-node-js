@@ -231,7 +231,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update callback-interface handle logic to match UniFFI 0.30/0.31.
 - [x] Update any generic-ABI object retyping logic in generated runtime/tests.
 - [x] Update FFI type rendering for changed UniFFI FfiType expectations.
-- [ ] Update return-value normalizers if the new handle ABI changes numeric handling.
+- [x] Update return-value normalizers if the new handle ABI changes numeric handling.
 - [ ] Audit and update any module_path-derived symbol synthesis now that full module paths are present.
 - [ ] Remove any symbol synthesis that duplicates information UniFFI now exposes directly.
 - [ ] Revalidate checksum extraction logic against UniFFI 0.31.

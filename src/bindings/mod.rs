@@ -7,6 +7,7 @@ use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
 
 pub use crate::node_v2::config::{NodeBindingCliOverrides, NodeBindingGeneratorConfig};
 use crate::node_v2::config::{finalize_node_binding_config, parse_node_binding_config};
+use crate::node_v2::package_layout::GeneratedPackageLayout;
 
 mod api;
 mod ffi;
@@ -64,76 +65,6 @@ impl BindingGenerator for NodeBindingGenerator {
         };
 
         write_generated_package(&settings.out_dir, component)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct GeneratedPackageLayout {
-    root_dir: Utf8PathBuf,
-    namespace: String,
-    package_name: String,
-}
-
-impl GeneratedPackageLayout {
-    fn from_component(
-        out_dir: &Utf8Path,
-        component: &Component<NodeBindingGeneratorConfig>,
-    ) -> Result<Self> {
-        let namespace = component.ci.namespace().trim();
-        if namespace.is_empty() {
-            bail!("node bindings generation requires a non-empty UniFFI namespace");
-        }
-
-        let package_name = component
-            .config
-            .package_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| anyhow!("node bindings generation requires a package_name"))?;
-
-        Ok(Self {
-            root_dir: out_dir.to_path_buf(),
-            namespace: namespace.to_string(),
-            package_name: package_name.to_string(),
-        })
-    }
-
-    fn ensure_root_dir(&self) -> Result<()> {
-        fs::create_dir_all(self.root_dir.as_std_path())?;
-        Ok(())
-    }
-
-    fn package_json_path(&self) -> Utf8PathBuf {
-        self.root_dir.join("package.json")
-    }
-
-    fn index_js_path(&self) -> Utf8PathBuf {
-        self.root_dir.join("index.js")
-    }
-
-    fn index_dts_path(&self) -> Utf8PathBuf {
-        self.root_dir.join("index.d.ts")
-    }
-
-    fn component_js_path(&self) -> Utf8PathBuf {
-        self.root_dir.join(format!("{}.js", self.namespace))
-    }
-
-    fn component_dts_path(&self) -> Utf8PathBuf {
-        self.root_dir.join(format!("{}.d.ts", self.namespace))
-    }
-
-    fn component_ffi_js_path(&self) -> Utf8PathBuf {
-        self.root_dir.join(format!("{}-ffi.js", self.namespace))
-    }
-
-    fn component_ffi_dts_path(&self) -> Utf8PathBuf {
-        self.root_dir.join(format!("{}-ffi.d.ts", self.namespace))
-    }
-
-    fn runtime_path(&self, file_name: &str) -> Utf8PathBuf {
-        self.root_dir.join("runtime").join(file_name)
     }
 }
 
@@ -1978,42 +1909,6 @@ mod tests {
                 .to_string()
                 .contains("bundled_prebuilds cannot be enabled together with lib_path_literal"),
             "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn generated_package_layout_resolves_output_paths_from_out_dir_and_namespace() {
-        let out_dir = temp_dir_path("layout-paths");
-        let component = component_with_namespace("example");
-
-        let layout = GeneratedPackageLayout::from_component(&out_dir, &component).expect("layout");
-
-        assert_eq!(layout.root_dir, out_dir);
-        assert_eq!(
-            layout.package_json_path(),
-            layout.root_dir.join("package.json")
-        );
-        assert_eq!(layout.index_js_path(), layout.root_dir.join("index.js"));
-        assert_eq!(layout.index_dts_path(), layout.root_dir.join("index.d.ts"));
-        assert_eq!(
-            layout.component_js_path(),
-            layout.root_dir.join("example.js")
-        );
-        assert_eq!(
-            layout.component_dts_path(),
-            layout.root_dir.join("example.d.ts")
-        );
-        assert_eq!(
-            layout.component_ffi_js_path(),
-            layout.root_dir.join("example-ffi.js")
-        );
-        assert_eq!(
-            layout.component_ffi_dts_path(),
-            layout.root_dir.join("example-ffi.d.ts")
-        );
-        assert_eq!(
-            layout.runtime_path("errors.js"),
-            layout.root_dir.join("runtime/errors.js")
         );
     }
 }

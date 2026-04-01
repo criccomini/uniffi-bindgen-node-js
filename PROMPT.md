@@ -148,7 +148,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Define the internal result/data flow for generation so orchestration is explicit and testable.
 - [x] Introduce a new Node-v2 orchestration module separate from rendering code.
 - [x] Introduce a new Node-v2 config parsing/normalization module.
-- [ ] Introduce a new package-layout/staging module.
+- [x] Introduce a new package-layout/staging module.
 - [x] Introduce a new component-selection module.
 - [ ] Introduce a new public-API IR builder module or boundary.
 - [ ] Introduce a new FFI-IR builder module or boundary.

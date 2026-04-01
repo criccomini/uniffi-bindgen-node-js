@@ -100,6 +100,33 @@ fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
 }
 
 #[test]
+fn rejects_missing_library_source_from_programmatic_entrypoint() {
+    let package_dir = temp_dir_path("missing-library-package");
+    let missing_library_path = package_dir.join("missing-library.so");
+
+    let error = generate_node_package(GenerateNodePackageOptions {
+        lib_source: missing_library_path.clone(),
+        manifest_path: None,
+        crate_name: None,
+        out_dir: package_dir.clone(),
+        package_name: Some("missing-library-package".to_string()),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect_err("missing library path should be rejected by the v2 entrypoint");
+
+    assert!(
+        error
+            .to_string()
+            .contains(&format!("library source '{}' does not exist", missing_library_path)),
+        "unexpected error: {error:#}"
+    );
+
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn installs_fixture_package_npm_dependencies_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;

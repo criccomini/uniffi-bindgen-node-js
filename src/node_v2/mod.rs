@@ -1,6 +1,7 @@
 mod component_selection;
 pub(crate) mod config;
 mod paths;
+mod validation;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
@@ -12,6 +13,7 @@ use self::config::{
     finalize_node_binding_config, parse_node_binding_config,
 };
 use self::paths::build_bindgen_paths;
+use self::validation::validate_generate_options;
 use crate::bindings::write_generated_package;
 
 #[derive(Debug, Clone)]
@@ -41,6 +43,8 @@ pub(crate) fn generate_node_package_with_cli_overrides(
     options: GenerateNodePackageOptions,
     cli_compat_overrides: GenerateNodePackageCliOverrides,
 ) -> Result<()> {
+    validate_generate_options(&options)?;
+
     let cli_overrides = NodeBindingCliOverrides::from_parts(
         options.package_name.clone(),
         cli_compat_overrides.cdylib_name,

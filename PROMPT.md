@@ -173,7 +173,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Implement the single-component inference path.
 - [x] Implement multi-component error reporting with discovered crate names.
 - [x] Keep explicit crate filtering behavior when --crate-name is provided.
-- [ ] Validate the library input path in the new flow.
+- [x] Validate the library input path in the new flow.
 - [ ] Validate --out-dir in the new flow.
 - [ ] Validate --manifest-path if provided.
 - [ ] Validate mutually incompatible Node options in the new v2 surface.

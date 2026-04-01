@@ -516,7 +516,10 @@ mod tests {
             "runtime/callbacks.js",
         ] {
             let path = output_dir.join(runtime_path);
-            assert!(path.is_file(), "expected generated runtime helper at {path}");
+            assert!(
+                path.is_file(),
+                "expected generated runtime helper at {path}"
+            );
         }
         assert!(
             component_js.contains("createCallbackRegistry"),
@@ -627,7 +630,11 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("handleType: () => getFfiBindings().ffiTypes.RustArcPtrStore,"),
+            component_js.contains("_fn_clone_store_generic_abi(handle, status),"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
+            !component_js.contains("RustArcPtrStore"),
             "unexpected component JS contents: {component_js}"
         );
         assert!(

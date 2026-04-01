@@ -21,18 +21,9 @@
 const {{ object.factory_name }} = createObjectFactory({
   typeName: {{ object.type_name_literal }},
   createInstance: () => Object.create({{ object.name }}.prototype),
-  handleType: () => getFfiBindings().ffiTypes.{{ object.ffi_opaque_identifier }},
   cloneHandleGeneric(handle) {
-    const genericCloneHandle = uniffiGetCachedLibraryFunction(
-      {{ object.ffi_object_clone_generic_cache_key }},
-      (bindings) => bindings.library.func(
-        {{ object.ffi_object_clone_symbol }},
-        bindings.ffiTypes.RustArcPtr,
-        [bindings.ffiTypes.RustArcPtr, koffi.pointer(bindings.ffiTypes.RustCallStatus)],
-      ),
-    );
     return uniffiRustCaller.rustCall(
-      (status) => genericCloneHandle(handle, status),
+      (status) => ffiFunctions.{{ object.ffi_object_clone_identifier }}_generic_abi(handle, status),
       uniffiRustCallOptions(),
     );
   },

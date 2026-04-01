@@ -213,7 +213,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Compute the host prebuild target directory string in production code rather than only in tests.
 - [x] Reuse one authoritative implementation for target naming between production and tests.
 - [x] Ensure staged library filenames come from the actual input library filename, not a separate config field.
-- [ ] Ensure Windows/non-lib filename handling remains correct.
+- [x] Ensure Windows/non-lib filename handling remains correct.
 - [ ] Ensure root-level staging and bundled-prebuild staging are mutually exclusive in one run.
 - [ ] Ensure manual_load does not suppress native-library staging.
 - [ ] Decide and implement overwrite behavior when a staged library already exists in out_dir.

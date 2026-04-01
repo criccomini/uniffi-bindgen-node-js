@@ -436,6 +436,37 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_preserves_windows_style_filenames_in_bundled_prebuilds() {
+        let output_dir = temp_dir_path("staged-windows-filename");
+        let mut component = component_with_namespace("example");
+        component.config.bundled_prebuilds = true;
+        let input_library_filename = "fixture.dll";
+
+        write_test_package_with_library_filename(&output_dir, &component, input_library_filename)
+            .expect("write_bindings should succeed");
+
+        let bundled_target_path = fs::read_dir(output_dir.join("prebuilds").as_std_path())
+            .expect("prebuilds directory should be readable")
+            .map(|entry| entry.expect("prebuild target entry should be readable"))
+            .map(|entry| Utf8PathBuf::from_path_buf(entry.path()).expect("path should be utf-8"))
+            .next()
+            .expect("expected one bundled prebuild target directory");
+        let staged_library_path = bundled_target_path.join(input_library_filename);
+        let prefixed_library_path = bundled_target_path.join("libfixture.dll");
+
+        assert!(
+            staged_library_path.is_file(),
+            "expected bundled native library at {staged_library_path}"
+        );
+        assert!(
+            !prefixed_library_path.exists(),
+            "bundled staging should preserve the exact input filename instead of forcing a lib-prefixed variant: {prefixed_library_path}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_emits_koffi_callback_and_function_declarations() {
         let output_dir = temp_dir_path("ffi-bindings");
         let component = component_from_webidl(

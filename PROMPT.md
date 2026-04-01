@@ -216,7 +216,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Ensure Windows/non-lib filename handling remains correct.
 - [x] Ensure root-level staging and bundled-prebuild staging are mutually exclusive in one run.
 - [x] Ensure manual_load does not suppress native-library staging.
-- [ ] Decide and implement overwrite behavior when a staged library already exists in out_dir.
+- [x] Decide and implement overwrite behavior when a staged library already exists in out_dir.
 - [ ] Ensure package generation is deterministic when rerun into an empty directory.
 - [ ] Keep generated package structure consistent with current published shape where still appropriate.
 - [ ] Revisit package.json generation for any Node engine or export-field cleanup needed in v2.

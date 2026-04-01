@@ -368,6 +368,27 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_overwrites_an_existing_staged_native_library_file() {
+        let output_dir = temp_dir_path("overwrite-staged-root-library");
+        let staged_library_path = output_dir.join(test_library_filename());
+
+        fs::create_dir_all(output_dir.as_std_path()).expect("create temp dir");
+        fs::write(staged_library_path.as_std_path(), b"stale-native-library")
+            .expect("seed stale staged library");
+
+        write_test_package(&output_dir, &component_with_namespace("example"))
+            .expect("write_bindings should overwrite the staged library");
+
+        assert_eq!(
+            fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
+            b"fixture-native-library",
+            "existing staged native library should be replaced with the input cdylib"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_root_staging_does_not_emit_prebuild_directories() {
         let output_dir = temp_dir_path("staged-root-without-prebuilds");
         write_test_package(&output_dir, &component_with_namespace("example"))

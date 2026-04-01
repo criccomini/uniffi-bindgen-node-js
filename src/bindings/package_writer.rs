@@ -1,6 +1,6 @@
 use std::fs;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
 use uniffi_bindgen::Component;
@@ -181,9 +181,33 @@ impl GeneratedPackage {
     }
 
     fn stage_native_library(&self) -> Result<()> {
+        let source_path = self.layout.native_library.source_path.as_std_path();
+        let output_path = self.layout.native_library.output_path.as_std_path();
+
+        if existing_staged_library_matches_source(source_path, output_path)? {
+            return Ok(());
+        }
+
+        if output_path.exists() {
+            if output_path.is_dir() {
+                bail!(
+                    "failed to stage native library '{}' into '{}': destination is an existing directory",
+                    self.layout.native_library.source_path,
+                    self.layout.native_library.output_path
+                );
+            }
+
+            fs::remove_file(output_path).with_context(|| {
+                format!(
+                    "failed to replace existing staged native library '{}'",
+                    self.layout.native_library.output_path
+                )
+            })?;
+        }
+
         fs::copy(
-            self.layout.native_library.source_path.as_std_path(),
-            self.layout.native_library.output_path.as_std_path(),
+            source_path,
+            output_path,
         )
         .with_context(|| {
             format!(
@@ -194,6 +218,30 @@ impl GeneratedPackage {
 
         Ok(())
     }
+}
+
+fn existing_staged_library_matches_source(
+    source_path: &std::path::Path,
+    output_path: &std::path::Path,
+) -> Result<bool> {
+    if !output_path.exists() {
+        return Ok(false);
+    }
+
+    let canonical_source = fs::canonicalize(source_path).with_context(|| {
+        format!(
+            "failed to canonicalize native library source '{}'",
+            source_path.display()
+        )
+    })?;
+    let canonical_output = fs::canonicalize(output_path).with_context(|| {
+        format!(
+            "failed to canonicalize staged native library '{}'",
+            output_path.display()
+        )
+    })?;
+
+    Ok(canonical_source == canonical_output)
 }
 
 pub(crate) fn write_generated_package(

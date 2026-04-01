@@ -7,9 +7,8 @@ use uniffi_bindgen::interface::{
 };
 
 use super::{
-    ffi_clone_symbol_name, ffi_free_symbol_name, ffi_symbol_identifier,
-    foreign_future_complete_ffi_name, render_js_default_async_callback_return_value_expression,
-    validate_supported_features,
+    ffi_symbol_identifier, foreign_future_complete_ffi_name,
+    render_js_default_async_callback_return_value_expression, validate_supported_features,
 };
 
 pub(crate) fn build_public_api_ir(ci: &ComponentInterface) -> Result<ComponentModel> {
@@ -232,14 +231,11 @@ impl CallbackInterfaceModel {
             ffi_init_callback_identifier: ffi_symbol_identifier(
                 callback_interface.ffi_init_callback().name(),
             ),
-            // UniFFI 0.31 still exposes only the init symbol directly for callback
-            // interfaces; clone/free names still have to be derived through the
-            // crate-aware symbol helpers in `uniffi_meta`.
-            ffi_object_clone_identifier: ffi_symbol_identifier(&ffi_clone_symbol_name(
+            ffi_object_clone_identifier: ffi_symbol_identifier(&uniffi_meta::clone_fn_symbol_name(
                 callback_interface.module_path(),
                 callback_interface.name(),
             )),
-            ffi_object_free_identifier: ffi_symbol_identifier(&ffi_free_symbol_name(
+            ffi_object_free_identifier: ffi_symbol_identifier(&uniffi_meta::free_fn_symbol_name(
                 callback_interface.module_path(),
                 callback_interface.name(),
             )),

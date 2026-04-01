@@ -719,14 +719,6 @@ pub(crate) fn ffi_symbol_identifier(name: &str) -> String {
     }
 }
 
-pub(crate) fn ffi_clone_symbol_name(namespace: &str, object_name: &str) -> String {
-    uniffi_meta::clone_fn_symbol_name(namespace, object_name)
-}
-
-pub(crate) fn ffi_free_symbol_name(namespace: &str, object_name: &str) -> String {
-    uniffi_meta::free_fn_symbol_name(namespace, object_name)
-}
-
 pub(crate) fn foreign_future_complete_ffi_name(return_ffi_type: Option<&FfiType>) -> String {
     format!(
         "ForeignFutureComplete{}",

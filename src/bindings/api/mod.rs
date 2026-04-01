@@ -865,11 +865,11 @@ mod tests {
     #[test]
     fn callback_interface_clone_free_symbols_use_the_crate_name_from_full_module_paths() {
         assert_eq!(
-            ffi_clone_symbol_name("fixture_crate::logging", "Logger"),
+            uniffi_meta::clone_fn_symbol_name("fixture_crate::logging", "Logger"),
             "uniffi_fixture_crate_fn_clone_logger"
         );
         assert_eq!(
-            ffi_free_symbol_name("fixture_crate::logging", "Logger"),
+            uniffi_meta::free_fn_symbol_name("fixture_crate::logging", "Logger"),
             "uniffi_fixture_crate_fn_free_logger"
         );
     }

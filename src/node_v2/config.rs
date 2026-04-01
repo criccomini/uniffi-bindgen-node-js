@@ -182,7 +182,7 @@ fn enable_override(target: &mut bool, enabled: bool) {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct NodeBindingGeneratorConfig {
+pub(crate) struct NodeBindingGeneratorConfig {
     pub package_name: Option<String>,
     pub cdylib_name: Option<String>,
     pub node_engine: String,

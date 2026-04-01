@@ -1,10 +1,13 @@
 mod support;
 
+use std::fs;
+
 use self::support::{
     FixturePackageOptions, build_fixture_cdylib, fixtures::fixture_spec, generate_fixture_package,
     generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
     temp_dir_path,
 };
+use serde_json::Value;
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 #[test]
@@ -66,6 +69,39 @@ fn infers_the_only_component_when_crate_name_is_omitted() {
         package_dir.join("package.json").is_file(),
         "expected generated package manifest at {}",
         package_dir.join("package.json")
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn defaults_package_name_to_the_selected_component_namespace() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("default-package-name");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("package generation should default the npm package name from the namespace");
+
+    let package_json: Value = serde_json::from_str(
+        &fs::read_to_string(package_dir.join("package.json").as_std_path())
+            .expect("package.json should be readable"),
+    )
+    .expect("package.json should parse");
+
+    assert_eq!(
+        package_json.get("name").and_then(Value::as_str),
+        Some(built_fixture.namespace.as_str()),
+        "unexpected package.json contents: {package_json:#}"
     );
 
     remove_dir_all(&built_fixture.workspace_dir);

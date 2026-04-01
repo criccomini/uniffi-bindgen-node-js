@@ -193,13 +193,22 @@ pub(crate) fn finalize_node_binding_config(
     cli_overrides: &NodeBindingCliOverrides,
 ) -> Result<()> {
     if config.package_name.is_none() {
-        config.package_name = Some(ci.namespace().to_string());
+        config.package_name = Some(default_package_name(ci)?);
     }
     if config.cdylib_name.is_none() {
         config.cdylib_name = cdylib_name.map(str::to_string);
     }
     cli_overrides.apply_to(config);
     config.validate()
+}
+
+fn default_package_name(ci: &ComponentInterface) -> Result<String> {
+    let namespace = ci.namespace().trim();
+    if namespace.is_empty() {
+        bail!("selected UniFFI component namespace cannot be empty");
+    }
+
+    Ok(namespace.to_string())
 }
 
 pub(crate) fn apply_component_renames(components: &mut [Component<NodeBindingGeneratorConfig>]) {
@@ -295,6 +304,29 @@ mod tests {
         )?;
 
         assert_eq!(config.cdylib_name.as_deref(), Some("fixture_from_loader"));
+        Ok(())
+    }
+
+    #[test]
+    fn finalize_config_defaults_package_name_from_component_namespace() -> Result<()> {
+        let ci = uniffi_bindgen::ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                u32 add(u32 lhs, u32 rhs);
+            };
+            "#,
+            "fixture_crate",
+        )?;
+        let mut config = NodeBindingGeneratorConfig::default();
+
+        finalize_node_binding_config(
+            &ci,
+            &mut config,
+            Some("fixture_from_loader"),
+            &NodeBindingCliOverrides::default(),
+        )?;
+
+        assert_eq!(config.package_name.as_deref(), Some("example"));
         Ok(())
     }
 

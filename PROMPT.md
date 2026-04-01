@@ -273,8 +273,8 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for default root-level staging of the input cdylib.
 - [x] Add coverage for bundled-prebuild staging of the input cdylib.
 - [x] Add coverage for host-target directory naming in bundled mode.
-- [ ] Add coverage for manual-load with bundled-prebuild packages.
-- [ ] Add coverage for manual-load with root-staged packages.
+- [x] Add coverage for manual-load with bundled-prebuild packages.
+- [x] Add coverage for manual-load with root-staged packages.
 - [ ] Add coverage for load/unload idempotence after the ABI updates.
 - [ ] Add coverage for callback interfaces under the new UniFFI ABI.
 - [ ] Add coverage for async callbacks under the new UniFFI ABI.

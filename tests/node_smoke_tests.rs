@@ -1031,6 +1031,156 @@ assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
 }
 
 #[test]
+fn manual_load_without_explicit_path_uses_staged_root_library() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            manual_load: true,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let staged_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("manual-load root-staged package should record the staged package-root library");
+    let expected_relative_path = staged_library_path
+        .strip_prefix(package_dir)
+        .expect("staged root library should live inside the generated package")
+        .as_str()
+        .to_string();
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "manual-load-root-staged-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{ realpathSync }} from "node:fs";
+import {{
+  Config,
+  FixtureErrorInvalidState,
+  FixtureErrorParse,
+  Flavor,
+  ReaderBuilder,
+  ScanResult,
+  Store,
+  echo_byte_map,
+  echo_bytes,
+  echo_duration,
+  echo_record,
+  echo_timestamp,
+  load,
+  unload,
+}} from "./index.js";
+import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
+
+assert.equal(ffiMetadata.bundledPrebuilds, false);
+assert.equal(ffiMetadata.manualLoad, true);
+assert.equal(isLoaded(), false);
+
+const firstBindings = load();
+assert.equal(isLoaded(), true);
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
+assert.equal(getFfiBindings().packageRelativePath, {1});
+
+const secondBindings = load();
+assert.strictEqual(secondBindings, firstBindings);
+
+{2}
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+"#,
+            serde_json::to_string(staged_library_path.as_str())
+                .expect("staged root library path should serialize"),
+            serde_json::to_string(&expected_relative_path)
+                .expect("staged root package-relative path should serialize"),
+            basic_fixture_api_smoke_body()
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
+fn manual_load_without_explicit_path_uses_staged_bundled_prebuild() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            bundled_prebuilds: true,
+            manual_load: true,
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let staged_prebuild_path = generated
+        .bundled_prebuild_path
+        .as_ref()
+        .expect("bundled manual-load package should record the staged prebuild path");
+    let expected_relative_path = staged_prebuild_path
+        .strip_prefix(package_dir)
+        .expect("staged bundled prebuild should live inside the generated package")
+        .as_str()
+        .to_string();
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "manual-load-bundled-prebuild-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{ realpathSync }} from "node:fs";
+import {{
+  Config,
+  FixtureErrorInvalidState,
+  FixtureErrorParse,
+  Flavor,
+  ReaderBuilder,
+  ScanResult,
+  Store,
+  echo_byte_map,
+  echo_bytes,
+  echo_duration,
+  echo_record,
+  echo_timestamp,
+  load,
+  unload,
+}} from "./index.js";
+import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
+
+assert.equal(ffiMetadata.bundledPrebuilds, true);
+assert.equal(ffiMetadata.manualLoad, true);
+assert.equal(isLoaded(), false);
+
+const firstBindings = load();
+assert.equal(isLoaded(), true);
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
+assert.equal(getFfiBindings().packageRelativePath, {1});
+
+const secondBindings = load();
+assert.strictEqual(secondBindings, firstBindings);
+
+{2}
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+"#,
+            serde_json::to_string(staged_prebuild_path.as_str())
+                .expect("staged bundled prebuild path should serialize"),
+            serde_json::to_string(&expected_relative_path)
+                .expect("staged bundled package-relative path should serialize"),
+            basic_fixture_api_smoke_body()
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempotent() {
     let generated = generate_fixture_package_with_options(
         "basic",

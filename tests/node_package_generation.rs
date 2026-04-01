@@ -795,6 +795,45 @@ fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
 }
 
 #[test]
+fn rejects_udl_backed_generation_without_manifest_path_when_loader_cannot_resolve_udl() {
+    let built_fixture = build_fixture_cdylib("callbacks");
+    let package_dir = temp_dir_path("callbacks-missing-manifest-path-package");
+
+    let error = generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: None,
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect_err("UDL-backed generation without --manifest-path should fail clearly");
+    let error_message = format!("{error:#}");
+
+    assert!(
+        error_message.contains(&format!(
+            "failed to load UniFFI component interfaces from '{}'",
+            built_fixture.library_path
+        )),
+        "unexpected error: {error_message}"
+    );
+    assert!(
+        error_message.contains("UDL file \"callbacks_fixture\" not found for crate \"fixture_callbacks\""),
+        "unexpected error: {error_message}"
+    );
+    assert!(
+        !package_dir.join("package.json").exists(),
+        "generation should fail before writing package output to {}",
+        package_dir
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn generated_ffi_integrity_uses_loader_derived_checksums() {
     let built_fixture = build_fixture_cdylib("callbacks");
     let component_interface = load_fixture_component_interface(&built_fixture);

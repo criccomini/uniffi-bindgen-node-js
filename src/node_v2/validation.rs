@@ -3,7 +3,19 @@ use anyhow::{Result, bail};
 use super::GenerateNodePackageOptions;
 
 pub(crate) fn validate_generate_options(options: &GenerateNodePackageOptions) -> Result<()> {
+    validate_output_dir(options)?;
     validate_library_input_path(options)
+}
+
+fn validate_output_dir(options: &GenerateNodePackageOptions) -> Result<()> {
+    if options.out_dir.as_str().trim().is_empty() {
+        bail!("--out-dir cannot be empty");
+    }
+    if options.out_dir.exists() && !options.out_dir.is_dir() {
+        bail!("--out-dir '{}' exists but is not a directory", options.out_dir);
+    }
+
+    Ok(())
 }
 
 fn validate_library_input_path(options: &GenerateNodePackageOptions) -> Result<()> {

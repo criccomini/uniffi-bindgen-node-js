@@ -127,6 +127,37 @@ fn rejects_missing_library_source_from_programmatic_entrypoint() {
 }
 
 #[test]
+fn rejects_file_out_dir_from_programmatic_entrypoint() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("file-out-dir-package");
+    std::fs::write(package_dir.as_std_path(), "not a directory")
+        .expect("test should create a file-backed out-dir path");
+
+    let error = generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect_err("file-backed out-dir should be rejected by the v2 entrypoint");
+
+    assert!(
+        error
+            .to_string()
+            .contains(&format!("--out-dir '{}' exists but is not a directory", package_dir)),
+        "unexpected error: {error:#}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    std::fs::remove_file(package_dir.as_std_path())
+        .expect("test should remove the file-backed out-dir path");
+}
+
+#[test]
 fn installs_fixture_package_npm_dependencies_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;

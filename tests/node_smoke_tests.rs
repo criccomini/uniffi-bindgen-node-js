@@ -3,9 +3,8 @@ mod support;
 use std::fs;
 
 use self::support::{
-    FixturePackageOptions, current_bundled_prebuild_target, generate_fixture_package,
-    generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
-    run_node_script,
+    FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
+    install_fixture_package_dependencies, remove_dir_all, run_node_script,
 };
 
 #[test]
@@ -647,8 +646,6 @@ fn runs_plain_js_smoke_script_against_generated_bundled_basic_fixture_package() 
         "basic",
         FixturePackageOptions {
             bundled_prebuilds: true,
-            stage_root_sibling_library: false,
-            stage_host_prebuild: true,
             ..FixturePackageOptions::default()
         },
     );
@@ -705,15 +702,16 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
         FixturePackageOptions {
             bundled_prebuilds: true,
             manual_load: true,
-            stage_root_sibling_library: true,
-            stage_host_prebuild: false,
         },
     );
     let package_dir = &generated.package_dir;
-    let expected_library_path = generated
-        .sibling_library_path
+    let staged_prebuild_path = generated
+        .bundled_prebuild_path
         .as_ref()
-        .expect("manual-load regression fixture should stage a sibling library");
+        .expect("bundled manual-load fixture should stage a bundled prebuild");
+    fs::remove_file(staged_prebuild_path.as_std_path())
+        .expect("bundled manual-load regression fixture should allow removing the staged prebuild");
+    let expected_library_path = &generated.built_fixture.library_path;
     let expected_library_filename = expected_library_path
         .file_name()
         .expect("manual-load regression fixture library should have a filename");
@@ -753,13 +751,13 @@ assert.equal(isLoaded(), false);
 
 const firstBindings = load({0});
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
 
 const secondBindings = load({0});
 assert.strictEqual(secondBindings, firstBindings);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
-{3}
+{2}
 
 assert.equal(koffi.registeredCallbackCount(), 1);
 assert.equal(unload(), true);
@@ -768,7 +766,7 @@ assert.equal(koffi.registeredCallbackCount(), 0);
 
 const reloadedBindings = load({0});
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
 assert.notStrictEqual(reloadedBindings, firstBindings);
 assert.strictEqual(reloadedBindings.library, firstBindings.library);
 assert.strictEqual(reloadedBindings.ffiFunctions, firstBindings.ffiFunctions);
@@ -785,7 +783,7 @@ const copiedDir = mkdtempSync(join(process.cwd(), "copied-library-"));
 const aliasDir = mkdtempSync(join(tmpdir(), "uniffi-manual-load-alias-"));
 try {{
   const copiedPath = join(copiedDir, {2});
-  copyFileSync({1}, copiedPath);
+  copyFileSync({0}, copiedPath);
 
   const copiedBindings = load(copiedPath);
   assert.equal(isLoaded(), true);
@@ -802,16 +800,16 @@ try {{
   assert.equal(koffi.registeredCallbackCount(), 0);
 
   const aliasPath = join(aliasDir, {2});
-  symlinkSync({1}, aliasPath);
+  symlinkSync({0}, aliasPath);
 
   const aliasBindings = load(aliasPath);
   assert.equal(isLoaded(), true);
-  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({1}));
+  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
   assert.notStrictEqual(aliasBindings, reloadedBindings);
   assert.notStrictEqual(aliasBindings.library, copiedBindings.library);
   assert.notStrictEqual(aliasBindings.ffiFunctions, copiedBindings.ffiFunctions);
 
-  const canonicalBindings = load({1});
+  const canonicalBindings = load({0});
   assert.strictEqual(canonicalBindings, aliasBindings);
   const aliasStore = new Store(seed);
   await aliasStore.fetch_async(true);
@@ -825,10 +823,8 @@ try {{
   rmSync(aliasDir, {{ recursive: true, force: true }});
 }}
 "#,
-            serde_json::to_string(&format!("./{expected_library_filename}"))
-                .expect("relative library path should serialize"),
             serde_json::to_string(expected_library_path.as_str())
-                .expect("sibling library path should serialize"),
+                .expect("fixture library path should serialize"),
             serde_json::to_string(expected_library_filename)
                 .expect("sibling library filename should serialize"),
             basic_fixture_api_smoke_body()
@@ -845,20 +841,26 @@ fn bundled_mode_import_reports_missing_host_prebuild() {
         "basic",
         FixturePackageOptions {
             bundled_prebuilds: true,
-            stage_root_sibling_library: false,
-            stage_host_prebuild: false,
             ..FixturePackageOptions::default()
         },
     );
     let package_dir = &generated.package_dir;
-    let expected_library_filename = format!(
-        "{}{}.{}",
-        std::env::consts::DLL_PREFIX,
-        generated.built_fixture.crate_name,
-        std::env::consts::DLL_EXTENSION
-    );
-    let expected_target = current_bundled_prebuild_target();
-    let expected_relative_path = format!("prebuilds/{expected_target}/{expected_library_filename}");
+    let expected_target = generated
+        .bundled_prebuild_target
+        .clone()
+        .expect("bundled fixture should report the generated host target");
+    let expected_relative_path = generated
+        .bundled_prebuild_path
+        .as_ref()
+        .and_then(|path| path.strip_prefix(package_dir).ok())
+        .map(|path| path.as_str().to_string())
+        .expect("bundled fixture should report the generated package-relative prebuild path");
+    let staged_prebuild_path = generated
+        .bundled_prebuild_path
+        .as_ref()
+        .expect("bundled fixture should report the staged prebuild path");
+    fs::remove_file(staged_prebuild_path.as_std_path())
+        .expect("negative bundled fixture should allow removing the staged prebuild");
 
     assert!(
         generated.sibling_library_path.is_none(),

@@ -211,7 +211,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Make the package writer stage the native library in default mode.
 - [x] Make the package writer stage the native library in bundled-prebuild mode.
 - [x] Compute the host prebuild target directory string in production code rather than only in tests.
-- [ ] Reuse one authoritative implementation for target naming between production and tests.
+- [x] Reuse one authoritative implementation for target naming between production and tests.
 - [ ] Ensure staged library filenames come from the actual input library filename, not a separate config field.
 - [ ] Ensure Windows/non-lib filename handling remains correct.
 - [ ] Ensure root-level staging and bundled-prebuild staging are mutually exclusive in one run.

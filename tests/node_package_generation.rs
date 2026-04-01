@@ -443,8 +443,6 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
         "basic",
         FixturePackageOptions {
             bundled_prebuilds: true,
-            stage_root_sibling_library: false,
-            stage_host_prebuild: true,
             ..FixturePackageOptions::default()
         },
     );
@@ -502,7 +500,7 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
     assert_eq!(
         bundled_library_path,
         &package_dir.join(&bundled_library_relative_path),
-        "helper should stage the host library at the expected bundled-prebuild path"
+        "generator should stage the host library at the expected bundled-prebuild path"
     );
 
     install_fixture_package_dependencies(package_dir);

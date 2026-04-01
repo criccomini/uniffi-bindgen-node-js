@@ -138,14 +138,14 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update any supporting dependency versions needed to compile cleanly with UniFFI 0.31.x.
 - [x] Regenerate Cargo.lock.
 - [ ] Remove reliance on deprecated BindingGenerator.
-- [ ] Remove reliance on library_mode::generate_bindings.
-- [ ] Remove reliance on CrateConfigSupplier as the primary architecture.
+- [x] Remove reliance on library_mode::generate_bindings.
+- [x] Remove reliance on CrateConfigSupplier as the primary architecture.
 - [ ] Remove or demote public exposure of NodeBindingGenerator.
 - [ ] Remove or demote public exposure of NodeBindingGeneratorConfig.
 - [ ] Remove or demote public exposure of NodeBindingCliOverrides.
 - [ ] Design and add a single v2 programmatic entrypoint for Node package generation.
 - [ ] Define a new request/options struct for the v2 programmatic entrypoint.
-- [ ] Define the internal result/data flow for generation so orchestration is explicit and testable.
+- [x] Define the internal result/data flow for generation so orchestration is explicit and testable.
 - [x] Introduce a new Node-v2 orchestration module separate from rendering code.
 - [ ] Introduce a new Node-v2 config parsing/normalization module.
 - [ ] Introduce a new package-layout/staging module.
@@ -156,23 +156,23 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [ ] Keep template rendering reusable but isolate it from loader/config orchestration.
 - [ ] Keep runtime asset emission separate from component-specific rendering.
 - [ ] Define the final v2 module layout and move code accordingly.
-- [ ] Build BindgenPaths in the new orchestration path.
+- [x] Build BindgenPaths in the new orchestration path.
 - [ ] Support --manifest-path for path/config/UDL resolution.
 - [ ] Decide and implement the exact BindgenPaths layering order used by v2.
 - [ ] Ensure config lookup is deterministic when both workspace discovery and --manifest-path are available.
-- [ ] Create BindgenLoader in the new flow.
-- [ ] Load metadata from the input library path with BindgenLoader.
-- [ ] Convert metadata to ComponentInterface values with BindgenLoader.
-- [ ] Load per-component TOML configuration with BindgenLoader.
-- [ ] Parse the Node-specific section of uniffi.toml in the new flow.
-- [ ] Apply Node defaults after raw config parse.
-- [ ] Apply explicit CLI overrides after config defaults.
+- [x] Create BindgenLoader in the new flow.
+- [x] Load metadata from the input library path with BindgenLoader.
+- [x] Convert metadata to ComponentInterface values with BindgenLoader.
+- [x] Load per-component TOML configuration with BindgenLoader.
+- [x] Parse the Node-specific section of uniffi.toml in the new flow.
+- [x] Apply Node defaults after raw config parse.
+- [x] Apply explicit CLI overrides after config defaults.
 - [ ] Apply rename config before deriving FFI functions.
-- [ ] Call derive_ffi_funcs() in the new flow.
+- [x] Call derive_ffi_funcs() in the new flow.
 - [ ] Select exactly one component for package generation.
 - [ ] Implement the single-component inference path.
 - [ ] Implement multi-component error reporting with discovered crate names.
-- [ ] Keep explicit crate filtering behavior when --crate-name is provided.
+- [x] Keep explicit crate filtering behavior when --crate-name is provided.
 - [ ] Validate the library input path in the new flow.
 - [ ] Validate --out-dir in the new flow.
 - [ ] Validate --manifest-path if provided.

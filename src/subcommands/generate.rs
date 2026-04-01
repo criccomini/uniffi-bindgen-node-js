@@ -1,9 +1,7 @@
-use anyhow::{Context, bail};
+use crate::node_v2::{GenerateNodePackageOptions, generate_node_package};
+use anyhow::bail;
 use camino::Utf8PathBuf;
 use clap::Args;
-use uniffi_bindgen::cargo_metadata::CrateConfigSupplier;
-
-use crate::bindings::{NodeBindingCliOverrides, NodeBindingGenerator};
 
 #[derive(Debug, Clone, Args)]
 pub struct GenerateArgs {
@@ -39,44 +37,18 @@ pub struct GenerateArgs {
 
 pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     validate_args(&args)?;
-    let crate_name = normalize_crate_name_for_library_mode(&args.crate_name);
-
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .exec()
-        .context("failed to run cargo metadata for UniFFI config discovery")?;
-    let config_supplier = CrateConfigSupplier::from(metadata);
-    let cli_overrides = NodeBindingCliOverrides::from_parts(
-        args.package_name.clone(),
-        args.cdylib_name.clone(),
-        args.node_engine.clone(),
-        args.lib_path_literal.clone(),
-        args.bundled_prebuilds,
-        args.manual_load,
-        args.config_override.clone(),
-    )?;
-    let generator = NodeBindingGenerator::new(cli_overrides);
-
-    uniffi_bindgen::library_mode::generate_bindings(
-        &args.lib_source,
-        Some(crate_name),
-        &generator,
-        &config_supplier,
-        None::<&camino::Utf8Path>,
-        &args.out_dir,
-        false,
-    )
-    .with_context(|| {
-        format!(
-            "failed to generate Node bindings for crate '{}' from '{}'",
-            args.crate_name, args.lib_source
-        )
-    })?;
-
-    Ok(())
-}
-
-fn normalize_crate_name_for_library_mode(crate_name: &str) -> String {
-    crate_name.replace('-', "_")
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: args.lib_source,
+        crate_name: args.crate_name,
+        out_dir: args.out_dir,
+        package_name: args.package_name,
+        cdylib_name: args.cdylib_name,
+        node_engine: args.node_engine,
+        lib_path_literal: args.lib_path_literal,
+        bundled_prebuilds: args.bundled_prebuilds,
+        manual_load: args.manual_load,
+        config_override: args.config_override,
+    })
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
@@ -106,22 +78,4 @@ fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-// GENERATED CODE
-#[cfg(test)]
-mod tests {
-    use super::normalize_crate_name_for_library_mode;
-
-    #[test]
-    fn normalize_crate_name_for_library_mode_accepts_cargo_package_names() {
-        assert_eq!(
-            normalize_crate_name_for_library_mode("slatedb-uniffi"),
-            "slatedb_uniffi"
-        );
-        assert_eq!(
-            normalize_crate_name_for_library_mode("slatedb_uniffi"),
-            "slatedb_uniffi"
-        );
-    }
 }

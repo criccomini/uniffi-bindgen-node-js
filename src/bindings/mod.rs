@@ -3,7 +3,7 @@ use std::fs;
 use anyhow::{Result, anyhow, bail};
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
-use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
+use uniffi_bindgen::{Component, GenerationSettings};
 
 pub use crate::node_v2::config::{NodeBindingCliOverrides, NodeBindingGeneratorConfig};
 use crate::node_v2::config::{finalize_node_binding_config, parse_node_binding_config};
@@ -26,19 +26,15 @@ impl NodeBindingGenerator {
     pub fn new(cli_overrides: NodeBindingCliOverrides) -> Self {
         Self { cli_overrides }
     }
-}
 
-impl BindingGenerator for NodeBindingGenerator {
-    type Config = NodeBindingGeneratorConfig;
-
-    fn new_config(&self, root_toml: &toml::value::Value) -> Result<Self::Config> {
+    pub fn new_config(&self, root_toml: &toml::value::Value) -> Result<NodeBindingGeneratorConfig> {
         parse_node_binding_config(root_toml)
     }
 
-    fn update_component_configs(
+    pub fn update_component_configs(
         &self,
         settings: &GenerationSettings,
-        components: &mut Vec<Component<Self::Config>>,
+        components: &mut Vec<Component<NodeBindingGeneratorConfig>>,
     ) -> Result<()> {
         for component in components {
             finalize_node_binding_config(
@@ -51,10 +47,10 @@ impl BindingGenerator for NodeBindingGenerator {
         Ok(())
     }
 
-    fn write_bindings(
+    pub fn write_bindings(
         &self,
         settings: &GenerationSettings,
-        components: &[Component<Self::Config>],
+        components: &[Component<NodeBindingGeneratorConfig>],
     ) -> Result<()> {
         let component = match components {
             [component] => component,

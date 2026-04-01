@@ -1,7 +1,6 @@
 mod support;
 
 use insta::assert_snapshot;
-use uniffi_bindgen::BindingGenerator;
 
 use self::support::{
     component_from_webidl, component_with_namespace, generation_settings, generator,

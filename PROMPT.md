@@ -137,7 +137,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Bump fixture crate dependencies to UniFFI 0.31.x.
 - [x] Update any supporting dependency versions needed to compile cleanly with UniFFI 0.31.x.
 - [x] Regenerate Cargo.lock.
-- [ ] Remove reliance on deprecated BindingGenerator.
+- [x] Remove reliance on deprecated BindingGenerator.
 - [x] Remove reliance on library_mode::generate_bindings.
 - [x] Remove reliance on CrateConfigSupplier as the primary architecture.
 - [ ] Remove or demote public exposure of NodeBindingGenerator.

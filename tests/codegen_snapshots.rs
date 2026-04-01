@@ -6,9 +6,7 @@ use std::{
 mod support;
 
 use camino::Utf8PathBuf;
-use uniffi_bindgen::{
-    BindingGenerator, Component, GenerationSettings, interface::ComponentInterface,
-};
+use uniffi_bindgen::{Component, GenerationSettings, interface::ComponentInterface};
 use uniffi_bindgen_node_js::bindings::{
     NodeBindingCliOverrides, NodeBindingGenerator, NodeBindingGeneratorConfig,
 };

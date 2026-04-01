@@ -7,7 +7,6 @@ use self::support::{
     generate_fixture_package, generate_fixture_package_with_options, generation_settings,
     generator, install_fixture_package_dependencies, remove_dir_all, run_node_script,
 };
-use uniffi_bindgen::BindingGenerator;
 
 #[test]
 fn runtime_object_factory_keeps_generic_pointer_handles_until_clone() {

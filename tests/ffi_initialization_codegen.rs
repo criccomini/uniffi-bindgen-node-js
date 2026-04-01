@@ -1,7 +1,6 @@
 mod support;
 
 use insta::assert_snapshot;
-use uniffi_bindgen::BindingGenerator;
 use uniffi_bindgen_node_js::bindings::NodeBindingGeneratorConfig;
 
 use self::support::{

@@ -78,8 +78,23 @@ mod tests {
         output_dir: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<()> {
-        let lib_source = Utf8PathBuf::from("/tmp/uniffi-bindgen-node-js-tests/libfixture.dylib");
+        let lib_source = output_dir.join("input").join(test_library_filename());
+        fs::create_dir_all(
+            lib_source
+                .parent()
+                .expect("test library source should have a parent")
+                .as_std_path(),
+        )?;
+        fs::write(lib_source.as_std_path(), b"fixture-native-library")?;
         write_generated_package(output_dir, &lib_source, component)
+    }
+
+    fn test_library_filename() -> String {
+        format!(
+            "{}fixture.{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_EXTENSION
+        )
     }
 
     fn extract_section(contents: &str, start_marker: &str, end_marker: &str) -> String {
@@ -318,6 +333,26 @@ mod tests {
         assert!(
             objects_js.contains("UNIFFI_OBJECT_HANDLE_SIZE"),
             "unexpected runtime objects JS contents: {objects_js}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_stages_native_library_in_package_root_by_default() {
+        let output_dir = temp_dir_path("staged-root-library");
+        write_test_package(&output_dir, &component_with_namespace("example"))
+            .expect("write_bindings should succeed");
+
+        let staged_library_path = output_dir.join(test_library_filename());
+        assert!(
+            staged_library_path.is_file(),
+            "expected staged native library at {staged_library_path}"
+        );
+        assert_eq!(
+            fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
+            b"fixture-native-library",
+            "unexpected staged library contents"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

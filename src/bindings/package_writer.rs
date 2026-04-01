@@ -1,4 +1,6 @@
-use anyhow::{Result, anyhow};
+use std::fs;
+
+use anyhow::{Context, Result, anyhow};
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
 use uniffi_bindgen::Component;
@@ -74,6 +76,7 @@ impl GeneratedPackage {
         files.extend(self.component_ffi_files()?);
         write_files(files)?;
         self.write_runtime_files()?;
+        self.stage_native_library()?;
 
         Ok(())
     }
@@ -175,6 +178,25 @@ impl GeneratedPackage {
 
     fn write_runtime_files(&self) -> Result<()> {
         emit_runtime_files(&self.layout)
+    }
+
+    fn stage_native_library(&self) -> Result<()> {
+        if self.bundled_prebuilds {
+            return Ok(());
+        }
+
+        fs::copy(
+            self.layout.native_library.source_path.as_std_path(),
+            self.layout.native_library.output_path.as_std_path(),
+        )
+        .with_context(|| {
+            format!(
+                "failed to stage native library '{}' into '{}'",
+                self.layout.native_library.source_path, self.layout.native_library.output_path
+            )
+        })?;
+
+        Ok(())
     }
 }
 

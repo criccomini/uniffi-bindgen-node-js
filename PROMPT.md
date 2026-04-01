@@ -209,7 +209,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Make the package writer emit FFI JS/TS files.
 - [x] Make the package writer emit runtime helper files.
 - [x] Make the package writer stage the native library in default mode.
-- [ ] Make the package writer stage the native library in bundled-prebuild mode.
+- [x] Make the package writer stage the native library in bundled-prebuild mode.
 - [ ] Compute the host prebuild target directory string in production code rather than only in tests.
 - [ ] Reuse one authoritative implementation for target naming between production and tests.
 - [ ] Ensure staged library filenames come from the actual input library filename, not a separate config field.

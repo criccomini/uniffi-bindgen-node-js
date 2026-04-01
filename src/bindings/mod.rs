@@ -359,6 +359,46 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_stages_native_library_in_host_prebuild_directory() {
+        let output_dir = temp_dir_path("staged-bundled-library");
+        let mut component = component_with_namespace("example");
+        component.config.bundled_prebuilds = true;
+
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+
+        let root_library_path = output_dir.join(test_library_filename());
+        assert!(
+            !root_library_path.exists(),
+            "bundled-prebuild staging should not emit a root-level native library at {root_library_path}"
+        );
+
+        let prebuilds_dir = output_dir.join("prebuilds");
+        assert!(
+            prebuilds_dir.is_dir(),
+            "expected bundled-prebuild output directory at {prebuilds_dir}"
+        );
+
+        let bundled_target_path = fs::read_dir(prebuilds_dir.as_std_path())
+            .expect("prebuilds directory should be readable")
+            .map(|entry| entry.expect("prebuild target entry should be readable"))
+            .map(|entry| Utf8PathBuf::from_path_buf(entry.path()).expect("path should be utf-8"))
+            .next()
+            .expect("expected one bundled prebuild target directory");
+        let staged_library_path = bundled_target_path.join(test_library_filename());
+        assert!(
+            staged_library_path.is_file(),
+            "expected bundled native library at {staged_library_path}"
+        );
+        assert_eq!(
+            fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
+            b"fixture-native-library",
+            "unexpected staged library contents"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_emits_koffi_callback_and_function_declarations() {
         let output_dir = temp_dir_path("ffi-bindings");
         let component = component_from_webidl(

@@ -181,10 +181,6 @@ impl GeneratedPackage {
     }
 
     fn stage_native_library(&self) -> Result<()> {
-        if self.bundled_prebuilds {
-            return Ok(());
-        }
-
         fs::copy(
             self.layout.native_library.source_path.as_std_path(),
             self.layout.native_library.output_path.as_std_path(),

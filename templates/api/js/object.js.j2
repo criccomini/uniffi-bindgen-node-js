@@ -21,6 +21,7 @@
 const {{ object.factory_name }} = createObjectFactory({
   typeName: {{ object.type_name_literal }},
   createInstance: () => Object.create({{ object.name }}.prototype),
+  cloneFreeUsesUniffiHandle: true,
   cloneHandleGeneric(handle) {
     return uniffiRustCaller.rustCall(
       (status) => ffiFunctions.{{ object.ffi_object_clone_identifier }}_generic_abi(handle, status),

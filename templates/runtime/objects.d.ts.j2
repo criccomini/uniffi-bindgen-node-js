@@ -9,6 +9,7 @@ export declare const UNIFFI_OBJECT_HANDLE_SIZE: 8;
 export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase> {
   typeName?: string;
   createInstance?: () => T;
+  cloneFreeUsesUniffiHandle?: boolean | null;
   cloneHandle?: ((handle: unknown, value: T) => unknown) | null;
   cloneHandleGeneric?: ((handle: unknown, value: T) => unknown) | null;
   cloneHandleRawExternal?: ((handle: unknown, value: T) => unknown) | null;

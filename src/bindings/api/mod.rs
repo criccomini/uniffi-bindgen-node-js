@@ -1302,6 +1302,11 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered.js.contains("cloneFreeUsesUniffiHandle: true,"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered.js.contains("cloneHandleRawExternal(handle) {"),
             "unexpected JS output: {}",
             rendered.js

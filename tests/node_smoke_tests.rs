@@ -414,6 +414,97 @@ assert.equal(resourceFactory.cloneHandle(resource), 43n);
 }
 
 #[test]
+fn runtime_object_factory_clone_and_free_can_use_raw_uniffi_handles() {
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"const koffi = {
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  decode(value, type) {
+    return {
+      __decoded: true,
+      __type: type,
+      __value: value,
+    };
+  },
+  as(value, type) {
+    return {
+      __coerced: true,
+      __type: type,
+      __value: value,
+    };
+  },
+  address(pointer) {
+    return pointer?.__addr ?? BigInt(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-uniffi-handle-clone-free-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import { createObjectFactory } from "./runtime/objects.js";
+
+class Resource {}
+
+const clonedHandles = [];
+const freedHandles = [];
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  cloneFreeUsesUniffiHandle: true,
+  handleType: () => "ResourceHandle",
+  cloneHandle(handle) {
+    clonedHandles.push(handle);
+    return handle + 1n;
+  },
+  freeHandle(handle) {
+    freedHandles.push(handle);
+  },
+});
+
+const resource = resourceFactory.create(42n);
+assert.equal(resourceFactory.handle(resource).__decoded, true);
+assert.equal(resourceFactory.cloneHandle(resource), 43n);
+assert.deepEqual(clonedHandles, [42n]);
+assert.equal(resourceFactory.destroy(resource), true);
+assert.deepEqual(freedHandles, [42n]);
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+}
+
+#[test]
 fn runtime_object_factory_keeps_raw_external_handles_for_follow_up_calls() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();

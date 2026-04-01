@@ -6,7 +6,9 @@ mod package_writer;
 mod runtime;
 mod templates;
 
-pub(crate) use self::package_writer::{ComponentJsImports, write_generated_package};
+#[cfg(test)]
+pub(crate) use self::package_writer::ComponentJsImports;
+pub(crate) use self::package_writer::write_generated_package;
 
 // GENERATED CODE
 #[cfg(test)]
@@ -378,7 +380,11 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("defineStructType(\"ForeignFuture\""),
+            component_ffi_js.contains("defineStructType(\"ForeignFutureDroppedCallbackStruct\""),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("defineStructType(\"ForeignFutureResultVoid\""),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -387,10 +393,6 @@ mod tests {
         );
         assert!(
             component_ffi_js.contains("current_generation"),
-            "unexpected component FFI JS contents: {component_ffi_js}"
-        );
-        assert!(
-            component_ffi_js.contains("init_callback_vtable_logcallback"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

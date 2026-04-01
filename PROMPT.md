@@ -205,9 +205,9 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Design the new internal package layout abstraction around actual staged artifacts.
 - [x] Make the package writer create the output directory structure.
 - [x] Make the package writer emit metadata files.
-- [ ] Make the package writer emit namespace API JS/TS files.
-- [ ] Make the package writer emit FFI JS/TS files.
-- [ ] Make the package writer emit runtime helper files.
+- [x] Make the package writer emit namespace API JS/TS files.
+- [x] Make the package writer emit FFI JS/TS files.
+- [x] Make the package writer emit runtime helper files.
 - [ ] Make the package writer stage the native library in default mode.
 - [ ] Make the package writer stage the native library in bundled-prebuild mode.
 - [ ] Compute the host prebuild target directory string in production code rather than only in tests.

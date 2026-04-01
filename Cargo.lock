@@ -742,6 +742,7 @@ dependencies = [
  "toml",
  "uniffi",
  "uniffi_bindgen",
+ "uniffi_meta",
 ]
 
 [[package]]

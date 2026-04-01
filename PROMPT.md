@@ -152,7 +152,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Introduce a new component-selection module.
 - [x] Introduce a new public-API IR builder module or boundary.
 - [x] Introduce a new FFI-IR builder module or boundary.
-- [ ] Move package-writing logic out of the legacy monolithic src/bindings/mod.rs shape.
+- [x] Move package-writing logic out of the legacy monolithic src/bindings/mod.rs shape.
 - [ ] Keep template rendering reusable but isolate it from loader/config orchestration.
 - [ ] Keep runtime asset emission separate from component-specific rendering.
 - [ ] Define the final v2 module layout and move code accordingly.

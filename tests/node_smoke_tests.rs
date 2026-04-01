@@ -749,11 +749,14 @@ assert.equal(ffiMetadata.bundledPrebuilds, true);
 assert.equal(ffiMetadata.manualLoad, true);
 assert.equal(isLoaded(), false);
 
-const firstBindings = load({0});
-assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
+const stagedOverridePath = join(process.cwd(), {1});
+copyFileSync({0}, stagedOverridePath);
 
-const secondBindings = load({0});
+const firstBindings = load(stagedOverridePath);
+assert.equal(isLoaded(), true);
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(stagedOverridePath));
+
+const secondBindings = load(stagedOverridePath);
 assert.strictEqual(secondBindings, firstBindings);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
@@ -764,9 +767,9 @@ assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
 assert.equal(koffi.registeredCallbackCount(), 0);
 
-const reloadedBindings = load({0});
+const reloadedBindings = load(stagedOverridePath);
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(stagedOverridePath));
 assert.notStrictEqual(reloadedBindings, firstBindings);
 assert.strictEqual(reloadedBindings.library, firstBindings.library);
 assert.strictEqual(reloadedBindings.ffiFunctions, firstBindings.ffiFunctions);
@@ -782,8 +785,8 @@ assert.equal(koffi.registeredCallbackCount(), 0);
 const copiedDir = mkdtempSync(join(process.cwd(), "copied-library-"));
 const aliasDir = mkdtempSync(join(tmpdir(), "uniffi-manual-load-alias-"));
 try {{
-  const copiedPath = join(copiedDir, {2});
-  copyFileSync({0}, copiedPath);
+  const copiedPath = join(copiedDir, {1});
+  copyFileSync(stagedOverridePath, copiedPath);
 
   const copiedBindings = load(copiedPath);
   assert.equal(isLoaded(), true);
@@ -799,17 +802,17 @@ try {{
   assert.equal(isLoaded(), false);
   assert.equal(koffi.registeredCallbackCount(), 0);
 
-  const aliasPath = join(aliasDir, {2});
-  symlinkSync({0}, aliasPath);
+  const aliasPath = join(aliasDir, {1});
+  symlinkSync(stagedOverridePath, aliasPath);
 
   const aliasBindings = load(aliasPath);
   assert.equal(isLoaded(), true);
-  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
+  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(stagedOverridePath));
   assert.notStrictEqual(aliasBindings, reloadedBindings);
   assert.notStrictEqual(aliasBindings.library, copiedBindings.library);
   assert.notStrictEqual(aliasBindings.ffiFunctions, copiedBindings.ffiFunctions);
 
-  const canonicalBindings = load({0});
+  const canonicalBindings = load(stagedOverridePath);
   assert.strictEqual(canonicalBindings, aliasBindings);
   const aliasStore = new Store(seed);
   await aliasStore.fetch_async(true);

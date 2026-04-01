@@ -6,7 +6,8 @@ use self::support::{
     FixturePackageOptions, build_fixture_cdylib, build_off_workspace_udl_fixture_cdylib,
     build_proc_macro_multi_component_cdylib, fixtures::fixture_spec, generate_fixture_package,
     generate_fixture_package_with_options, install_fixture_package_dependencies,
-    load_fixture_component_interface, read_package_file_tree, remove_dir_all, temp_dir_path,
+    load_fixture_component_interface, read_package_file_tree, remove_dir_all, run_node_script,
+    temp_dir_path,
 };
 use serde_json::Value;
 use uniffi_bindgen::interface::{Callable, ComponentInterface};
@@ -708,6 +709,75 @@ fn generated_bundled_package_stages_the_input_cdylib_under_prebuilds() {
         fs::read(input_library_path.as_std_path()).expect("fixture library should be readable"),
         fs::read(bundled_prebuild_path.as_std_path()).expect("staged prebuild should be readable"),
         "bundled generation should stage the exact input cdylib contents"
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
+fn bundled_package_resolves_the_staged_host_target_directory_at_runtime() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            bundled_prebuilds: true,
+            manual_load: false,
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let bundled_target = generated
+        .bundled_prebuild_target
+        .as_ref()
+        .expect("bundled generation should record the staged host target");
+    let staged_prebuild_path = generated
+        .bundled_prebuild_path
+        .as_ref()
+        .expect("bundled generation should stage a host-target prebuild");
+    let expected_relative_path = staged_prebuild_path
+        .strip_prefix(package_dir)
+        .expect("staged prebuild should live inside the generated package")
+        .as_str()
+        .to_string();
+    let expected_library_filename = generated
+        .built_fixture
+        .library_path
+        .file_name()
+        .expect("fixture library path should have a filename")
+        .to_string();
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "bundled-target-resolution.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import "./index.js";
+import {{ getFfiBindings }} from "./fixture-ffi.js";
+
+const expectedTarget = {expected_target_json};
+const expectedFilename = {expected_filename_json};
+const expectedPackageRelativePath = {expected_relative_path_json};
+const bindings = getFfiBindings();
+
+assert.equal(
+  bindings.packageRelativePath,
+  expectedPackageRelativePath,
+  "bundled bindings should resolve the staged host-target path inside the package",
+);
+assert.equal(
+  bindings.packageRelativePath,
+  `prebuilds/${{expectedTarget}}/${{expectedFilename}}`,
+  "bundled bindings should use the discovered host target directory name",
+);
+"#,
+            expected_target_json =
+                serde_json::to_string(bundled_target).expect("target id should serialize"),
+            expected_filename_json = serde_json::to_string(&expected_library_filename)
+                .expect("library filename should serialize"),
+            expected_relative_path_json = serde_json::to_string(&expected_relative_path)
+                .expect("package-relative path should serialize"),
+        ),
     );
 
     remove_dir_all(&generated.built_fixture.workspace_dir);

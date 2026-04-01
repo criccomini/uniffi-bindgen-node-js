@@ -1,4 +1,5 @@
-use crate::node_v2::{GenerateNodePackageOptions, generate_node_package};
+use crate::GenerateNodePackageOptions;
+use crate::node_v2::{GenerateNodePackageCliOverrides, generate_node_package_with_cli_overrides};
 use anyhow::bail;
 use camino::Utf8PathBuf;
 use clap::Args;
@@ -37,18 +38,22 @@ pub struct GenerateArgs {
 
 pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     validate_args(&args)?;
-    generate_node_package(GenerateNodePackageOptions {
-        lib_source: args.lib_source,
-        crate_name: args.crate_name,
-        out_dir: args.out_dir,
-        package_name: args.package_name,
-        cdylib_name: args.cdylib_name,
-        node_engine: args.node_engine,
-        lib_path_literal: args.lib_path_literal,
-        bundled_prebuilds: args.bundled_prebuilds,
-        manual_load: args.manual_load,
-        config_override: args.config_override,
-    })
+    generate_node_package_with_cli_overrides(
+        GenerateNodePackageOptions {
+            lib_source: args.lib_source,
+            crate_name: args.crate_name,
+            out_dir: args.out_dir,
+            package_name: args.package_name,
+            node_engine: args.node_engine,
+            bundled_prebuilds: args.bundled_prebuilds,
+            manual_load: args.manual_load,
+        },
+        GenerateNodePackageCliOverrides {
+            cdylib_name: args.cdylib_name,
+            lib_path_literal: args.lib_path_literal,
+            config_override: args.config_override,
+        },
+    )
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {

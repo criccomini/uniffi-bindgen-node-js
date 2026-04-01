@@ -15,6 +15,7 @@ use uniffi_bindgen::{Component, GenerationSettings, interface::ComponentInterfac
 use uniffi_bindgen_node_js::bindings::{
     NodeBindingCliOverrides, NodeBindingGenerator, NodeBindingGeneratorConfig,
 };
+use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 use self::fixtures::fixture_spec;
 
@@ -165,20 +166,15 @@ pub fn generate_fixture_package_with_options(
     let built_fixture = build_fixture_cdylib(name);
     let package_dir = temp_dir_path(&format!("fixture-{name}-package"));
 
-    uniffi_bindgen_node_js::subcommands::generate::run(
-        uniffi_bindgen_node_js::subcommands::generate::GenerateArgs {
-            lib_source: built_fixture.library_path.clone(),
-            crate_name: built_fixture.crate_name.clone(),
-            out_dir: package_dir.clone(),
-            package_name: Some(format!("{}-package", built_fixture.namespace)),
-            cdylib_name: Some(built_fixture.crate_name.clone()),
-            node_engine: None,
-            lib_path_literal: None,
-            bundled_prebuilds: options.bundled_prebuilds,
-            manual_load: options.manual_load,
-            config_override: Vec::new(),
-        },
-    )
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        crate_name: built_fixture.crate_name.clone(),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: options.bundled_prebuilds,
+        manual_load: options.manual_load,
+    })
     .unwrap_or_else(|error| panic!("failed to generate fixture package {name}: {error:#}"));
 
     let library_filename = built_fixture.library_path.file_name().unwrap_or_else(|| {

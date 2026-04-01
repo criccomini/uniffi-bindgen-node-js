@@ -143,8 +143,8 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [ ] Remove or demote public exposure of NodeBindingGenerator.
 - [ ] Remove or demote public exposure of NodeBindingGeneratorConfig.
 - [ ] Remove or demote public exposure of NodeBindingCliOverrides.
-- [ ] Design and add a single v2 programmatic entrypoint for Node package generation.
-- [ ] Define a new request/options struct for the v2 programmatic entrypoint.
+- [x] Design and add a single v2 programmatic entrypoint for Node package generation.
+- [x] Define a new request/options struct for the v2 programmatic entrypoint.
 - [x] Define the internal result/data flow for generation so orchestration is explicit and testable.
 - [x] Introduce a new Node-v2 orchestration module separate from rendering code.
 - [ ] Introduce a new Node-v2 config parsing/normalization module.

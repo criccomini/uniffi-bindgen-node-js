@@ -8,28 +8,39 @@ use crate::bindings::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct GenerateNodePackageOptions {
+pub struct GenerateNodePackageOptions {
     pub lib_source: Utf8PathBuf,
     pub crate_name: String,
     pub out_dir: Utf8PathBuf,
     pub package_name: Option<String>,
-    pub cdylib_name: Option<String>,
     pub node_engine: Option<String>,
-    pub lib_path_literal: Option<String>,
     pub bundled_prebuilds: bool,
     pub manual_load: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct GenerateNodePackageCliOverrides {
+    pub cdylib_name: Option<String>,
+    pub lib_path_literal: Option<String>,
     pub config_override: Vec<String>,
 }
 
-pub(crate) fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
+pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
+    generate_node_package_with_cli_overrides(options, GenerateNodePackageCliOverrides::default())
+}
+
+pub(crate) fn generate_node_package_with_cli_overrides(
+    options: GenerateNodePackageOptions,
+    cli_compat_overrides: GenerateNodePackageCliOverrides,
+) -> Result<()> {
     let cli_overrides = NodeBindingCliOverrides::from_parts(
         options.package_name.clone(),
-        options.cdylib_name.clone(),
+        cli_compat_overrides.cdylib_name,
         options.node_engine.clone(),
-        options.lib_path_literal.clone(),
+        cli_compat_overrides.lib_path_literal,
         options.bundled_prebuilds,
         options.manual_load,
-        options.config_override.clone(),
+        cli_compat_overrides.config_override,
     )?;
     let mut paths = BindgenPaths::default();
     paths

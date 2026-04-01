@@ -176,7 +176,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Validate the library input path in the new flow.
 - [x] Validate --out-dir in the new flow.
 - [x] Validate --manifest-path if provided.
-- [ ] Validate mutually incompatible Node options in the new v2 surface.
+- [x] Validate mutually incompatible Node options in the new v2 surface.
 - [x] Remove --config-override from CLI parsing.
 - [x] Remove --cdylib-name from CLI parsing.
 - [ ] Remove --lib-path-literal from CLI parsing.

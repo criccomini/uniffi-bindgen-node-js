@@ -302,4 +302,39 @@ mod tests {
         assert_eq!(config.cdylib_name.as_deref(), Some("fixture_from_loader"));
         Ok(())
     }
+
+    #[test]
+    fn finalize_config_rejects_bundled_prebuilds_with_legacy_lib_path_literal() -> Result<()> {
+        let ci = uniffi_bindgen::ComponentInterface::from_webidl(
+            r#"
+            namespace example {
+                u32 add(u32 lhs, u32 rhs);
+            };
+            "#,
+            "fixture_crate",
+        )?;
+        let mut config = parse_node_config(
+            r#"
+            [bindings.node]
+            bundled_prebuilds = true
+            lib_path_literal = "./native/libfixture.node"
+            "#,
+        );
+
+        let error = finalize_node_binding_config(
+            &ci,
+            &mut config,
+            Some("fixture_from_loader"),
+            &NodeBindingCliOverrides::default(),
+        )
+        .expect_err("bundled_prebuilds with lib_path_literal should be rejected in v2");
+
+        assert!(
+            error
+                .to_string()
+                .contains("bundled_prebuilds cannot be enabled together with lib_path_literal"),
+            "unexpected error: {error}"
+        );
+        Ok(())
+    }
 }

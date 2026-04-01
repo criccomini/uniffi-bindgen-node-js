@@ -8,85 +8,135 @@ use uniffi_bindgen::interface::{ComponentInterface, Type, UniffiTraitMethods};
 use super::{ArgumentModel, FieldModel, RecordModel};
 
 pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()> {
-    let mut unsupported = Vec::new();
+    let mut groups = Vec::new();
 
-    push_unsupported_feature(
-        &mut unsupported,
-        "external types are not supported in generated Node bindings",
-        ci.iter_external_types().map(describe_type).collect(),
+    push_unsupported_group(
+        &mut groups,
+        "custom and external types",
+        "replace them with builtins, records, enums, objects, or callback interfaces.",
+        vec![
+            unsupported_feature(
+                "external types are not supported in generated Node bindings",
+                ci.iter_external_types().map(describe_type).collect(),
+            ),
+            unsupported_feature(
+                "custom types are not supported in generated Node bindings",
+                ci.iter_local_types()
+                    .chain(ci.iter_external_types())
+                    .filter_map(custom_type_name)
+                    .collect(),
+            ),
+        ],
     );
-    push_unsupported_feature(
-        &mut unsupported,
-        "custom types are not supported in generated Node bindings",
-        ci.iter_local_types()
-            .chain(ci.iter_external_types())
-            .filter_map(custom_type_name)
-            .collect(),
+    push_unsupported_group(
+        &mut groups,
+        "record APIs",
+        "keep records field-only in Node v2.",
+        vec![
+            unsupported_feature(
+                "record constructors are not supported in generated Node bindings",
+                collect_record_constructor_names(ci),
+            ),
+            unsupported_feature(
+                "record methods are not supported in generated Node bindings",
+                collect_record_method_names(ci),
+            ),
+            unsupported_feature(
+                "record UniFFI trait methods are not supported in generated Node bindings",
+                collect_record_trait_method_names(ci),
+            ),
+        ],
     );
-    push_unsupported_feature(
-        &mut unsupported,
-        "record constructors are not supported in generated Node bindings",
-        collect_record_constructor_names(ci),
+    push_unsupported_group(
+        &mut groups,
+        "enum APIs",
+        "keep enums variant-only and exhaustive in Node v2.",
+        vec![
+            unsupported_feature(
+                "enum constructors are not supported in generated Node bindings",
+                collect_enum_constructor_names(ci),
+            ),
+            unsupported_feature(
+                "enum methods are not supported in generated Node bindings",
+                collect_enum_method_names(ci),
+            ),
+            unsupported_feature(
+                "enum UniFFI trait methods are not supported in generated Node bindings",
+                collect_enum_trait_method_names(ci),
+            ),
+            unsupported_feature(
+                "non-exhaustive enums are not supported in generated Node bindings",
+                collect_non_exhaustive_enum_names(ci),
+            ),
+        ],
     );
-    push_unsupported_feature(
-        &mut unsupported,
-        "record methods are not supported in generated Node bindings",
-        collect_record_method_names(ci),
-    );
-    push_unsupported_feature(
-        &mut unsupported,
-        "enum constructors are not supported in generated Node bindings",
-        collect_enum_constructor_names(ci),
-    );
-    push_unsupported_feature(
-        &mut unsupported,
-        "enum methods are not supported in generated Node bindings",
-        collect_enum_method_names(ci),
-    );
-    push_unsupported_feature(
-        &mut unsupported,
-        "record UniFFI trait methods are not supported in generated Node bindings",
-        collect_record_trait_method_names(ci),
-    );
-    push_unsupported_feature(
-        &mut unsupported,
-        "enum UniFFI trait methods are not supported in generated Node bindings",
-        collect_enum_trait_method_names(ci),
-    );
-    push_unsupported_feature(
-        &mut unsupported,
-        "non-exhaustive enums are not supported in generated Node bindings",
-        collect_non_exhaustive_enum_names(ci),
-    );
-    push_unsupported_feature(
-        &mut unsupported,
-        "object UniFFI trait methods are not supported in generated Node bindings",
-        collect_object_trait_method_names(ci),
+    push_unsupported_group(
+        &mut groups,
+        "object helper APIs",
+        "object constructors and methods are supported, but UniFFI trait helpers are not surfaced in Node v2.",
+        vec![unsupported_feature(
+            "object UniFFI trait methods are not supported in generated Node bindings",
+            collect_object_trait_method_names(ci),
+        )],
     );
 
-    if unsupported.is_empty() {
+    if groups.is_empty() {
         return Ok(());
     }
 
-    bail!(
-        "unsupported UniFFI features for generated Node bindings:\n- {}",
-        unsupported.join("\n- ")
-    );
+    let rendered_groups = groups
+        .iter()
+        .map(UnsupportedFeatureGroup::render)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    bail!("unsupported UniFFI features for generated Node bindings:\n{rendered_groups}");
 }
 
-fn push_unsupported_feature(
-    unsupported: &mut Vec<String>,
-    message_prefix: &str,
-    names: BTreeSet<String>,
+struct UnsupportedFeatureGroup {
+    label: &'static str,
+    guidance: &'static str,
+    issues: Vec<String>,
+}
+
+impl UnsupportedFeatureGroup {
+    fn render(&self) -> String {
+        let mut lines = vec![format!("- {}: {}", self.label, self.guidance)];
+        lines.extend(self.issues.iter().map(|issue| format!("  - {issue}")));
+        lines.join("\n")
+    }
+}
+
+fn push_unsupported_group(
+    groups: &mut Vec<UnsupportedFeatureGroup>,
+    label: &'static str,
+    guidance: &'static str,
+    issues: Vec<Option<String>>,
 ) {
-    if names.is_empty() {
+    let issues = issues.into_iter().flatten().collect::<Vec<_>>();
+    if issues.is_empty() {
         return;
     }
 
-    unsupported.push(format!(
+    groups.push(UnsupportedFeatureGroup {
+        label,
+        guidance,
+        issues,
+    });
+}
+
+fn unsupported_feature(
+    message_prefix: &str,
+    names: BTreeSet<String>,
+) -> Option<String> {
+    if names.is_empty() {
+        return None;
+    }
+
+    Some(format!(
         "{message_prefix}: {}",
         names.into_iter().collect::<Vec<_>>().join(", ")
-    ));
+    ))
 }
 
 fn custom_type_name(type_: &Type) -> Option<String> {
@@ -1162,8 +1212,10 @@ mod tests {
             error.to_string(),
             concat!(
                 "unsupported UniFFI features for generated Node bindings:\n",
-                "- record methods are not supported in generated Node bindings: Profile.display_name\n",
-                "- enum methods are not supported in generated Node bindings: Flavor.label",
+                "- record APIs: keep records field-only in Node v2.\n",
+                "  - record methods are not supported in generated Node bindings: Profile.display_name\n",
+                "- enum APIs: keep enums variant-only and exhaustive in Node v2.\n",
+                "  - enum methods are not supported in generated Node bindings: Flavor.label",
             )
         );
     }
@@ -1185,8 +1237,10 @@ mod tests {
             error.to_string(),
             concat!(
                 "unsupported UniFFI features for generated Node bindings:\n",
-                "- record UniFFI trait methods are not supported in generated Node bindings: Profile (Debug, Hash)\n",
-                "- enum UniFFI trait methods are not supported in generated Node bindings: Flavor (Display)",
+                "- record APIs: keep records field-only in Node v2.\n",
+                "  - record UniFFI trait methods are not supported in generated Node bindings: Profile (Debug, Hash)\n",
+                "- enum APIs: keep enums variant-only and exhaustive in Node v2.\n",
+                "  - enum UniFFI trait methods are not supported in generated Node bindings: Flavor (Display)",
             )
         );
     }
@@ -1206,8 +1260,10 @@ mod tests {
             error.to_string(),
             concat!(
                 "unsupported UniFFI features for generated Node bindings:\n",
-                "- non-exhaustive enums are not supported in generated Node bindings: Flavor\n",
-                "- object UniFFI trait methods are not supported in generated Node bindings: Store (Display)",
+                "- enum APIs: keep enums variant-only and exhaustive in Node v2.\n",
+                "  - non-exhaustive enums are not supported in generated Node bindings: Flavor\n",
+                "- object helper APIs: object constructors and methods are supported, but UniFFI trait helpers are not surfaced in Node v2.\n",
+                "  - object UniFFI trait methods are not supported in generated Node bindings: Store (Display)",
             )
         );
     }

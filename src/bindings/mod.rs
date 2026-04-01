@@ -1693,8 +1693,9 @@ mod tests {
             error.to_string(),
             @r#"
         unsupported UniFFI features for generated Node bindings:
-        - external types are not supported in generated Node bindings: ExternalThing
-        - custom types are not supported in generated Node bindings: Url
+        - custom and external types: replace them with builtins, records, enums, objects, or callback interfaces.
+          - external types are not supported in generated Node bindings: ExternalThing
+          - custom types are not supported in generated Node bindings: Url
         "#
         );
     }

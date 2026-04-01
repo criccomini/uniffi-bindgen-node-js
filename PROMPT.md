@@ -259,7 +259,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] If exported trait methods are not supported, add explicit diagnostics for them.
 - [x] Audit current supported surface against UniFFI 0.31 so v2 diagnostics are complete.
 - [x] Update diagnostics to stop saying “v1” unless the message is intentionally historical.
-- [ ] Keep diagnostics actionable and grouped by unsupported feature family.
+- [x] Keep diagnostics actionable and grouped by unsupported feature family.
 - [ ] Add coverage for rename config behavior.
 - [ ] Add coverage for full module_path names.
 - [ ] Add coverage for multi-component library detection and error messages.

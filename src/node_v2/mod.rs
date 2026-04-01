@@ -10,7 +10,7 @@ use crate::bindings::{
 #[derive(Debug, Clone)]
 pub struct GenerateNodePackageOptions {
     pub lib_source: Utf8PathBuf,
-    pub crate_name: String,
+    pub crate_name: Option<String>,
     pub out_dir: Utf8PathBuf,
     pub package_name: Option<String>,
     pub node_engine: Option<String>,
@@ -75,8 +75,11 @@ pub(crate) fn generate_node_package_with_cli_overrides(
         &cli_overrides,
     )?;
 
-    let normalized_crate_name = normalize_crate_name_selector(&options.crate_name);
-    let mut component = select_component(components, &normalized_crate_name)?;
+    let normalized_crate_name = options
+        .crate_name
+        .as_deref()
+        .map(normalize_crate_name_selector);
+    let mut component = select_component(components, normalized_crate_name.as_deref())?;
     component.ci.derive_ffi_funcs().with_context(|| {
         format!(
             "failed to derive FFI functions for crate '{}'",
@@ -111,29 +114,44 @@ fn finalize_component_configs(
 
 fn select_component(
     components: Vec<Component<NodeBindingGeneratorConfig>>,
-    crate_name: &str,
+    crate_name: Option<&str>,
 ) -> Result<Component<NodeBindingGeneratorConfig>> {
     let available_crate_names = components
         .iter()
         .map(|component| component.ci.crate_name().to_string())
         .collect::<Vec<_>>();
-    let mut matching_components = components
-        .into_iter()
-        .filter(|component| component.ci.crate_name() == crate_name)
-        .collect::<Vec<_>>();
+    match crate_name {
+        Some(crate_name) => {
+            let mut matching_components = components
+                .into_iter()
+                .filter(|component| component.ci.crate_name() == crate_name)
+                .collect::<Vec<_>>();
 
-    match matching_components.len() {
-        1 => Ok(matching_components.remove(0)),
-        0 => bail!(
-            "no UniFFI component for crate '{}' was found in the library; available crate names: {}",
-            crate_name,
-            available_crate_names.join(", ")
-        ),
-        count => bail!(
-            "expected exactly one UniFFI component for crate '{}', found {}",
-            crate_name,
-            count
-        ),
+            match matching_components.len() {
+                1 => Ok(matching_components.remove(0)),
+                0 => bail!(
+                    "no UniFFI component for crate '{}' was found in the library; available crate names: {}",
+                    crate_name,
+                    available_crate_names.join(", ")
+                ),
+                count => bail!(
+                    "expected exactly one UniFFI component for crate '{}', found {}",
+                    crate_name,
+                    count
+                ),
+            }
+        }
+        None => match components.len() {
+            0 => bail!("no UniFFI components were found in the library"),
+            1 => Ok(components
+                .into_iter()
+                .next()
+                .expect("single component should be present")),
+            _ => bail!(
+                "the library contains multiple UniFFI components; re-run with --crate-name to select one. available crate names: {}",
+                available_crate_names.join(", ")
+            ),
+        },
     }
 }
 
@@ -177,7 +195,7 @@ mod tests {
                 test_component("first_crate", "first"),
                 test_component("second_crate", "second"),
             ],
-            "missing_crate",
+            Some("missing_crate"),
         )
         .expect_err("missing component should fail");
 
@@ -185,6 +203,37 @@ mod tests {
             error
                 .to_string()
                 .contains("available crate names: first_crate, second_crate"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn select_component_infers_single_component_without_selector() {
+        let component = select_component(vec![test_component("only_crate", "example")], None)
+            .expect("single component should be inferred");
+
+        assert_eq!(component.ci.crate_name(), "only_crate");
+    }
+
+    #[test]
+    fn select_component_requires_selector_for_multiple_components() {
+        let error = select_component(
+            vec![
+                test_component("first_crate", "first"),
+                test_component("second_crate", "second"),
+            ],
+            None,
+        )
+        .expect_err("multiple components should require a selector");
+
+        assert!(
+            error
+                .to_string()
+                .contains("available crate names: first_crate, second_crate"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.to_string().contains("re-run with --crate-name"),
             "unexpected error: {error}"
         );
     }

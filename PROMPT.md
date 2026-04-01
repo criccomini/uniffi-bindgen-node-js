@@ -169,9 +169,9 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Apply explicit CLI overrides after config defaults.
 - [ ] Apply rename config before deriving FFI functions.
 - [x] Call derive_ffi_funcs() in the new flow.
-- [ ] Select exactly one component for package generation.
-- [ ] Implement the single-component inference path.
-- [ ] Implement multi-component error reporting with discovered crate names.
+- [x] Select exactly one component for package generation.
+- [x] Implement the single-component inference path.
+- [x] Implement multi-component error reporting with discovered crate names.
 - [x] Keep explicit crate filtering behavior when --crate-name is provided.
 - [ ] Validate the library input path in the new flow.
 - [ ] Validate --out-dir in the new flow.

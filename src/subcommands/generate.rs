@@ -9,7 +9,7 @@ pub struct GenerateArgs {
     pub lib_source: Utf8PathBuf,
 
     #[arg(long)]
-    pub crate_name: String,
+    pub crate_name: Option<String>,
 
     #[arg(long)]
     pub out_dir: Utf8PathBuf,
@@ -57,8 +57,10 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
-    if args.crate_name.trim().is_empty() {
-        bail!("--crate-name cannot be empty");
+    if let Some(crate_name) = args.crate_name.as_deref() {
+        if crate_name.trim().is_empty() {
+            bail!("--crate-name cannot be empty");
+        }
     }
     if args.out_dir.as_str().trim().is_empty() {
         bail!("--out-dir cannot be empty");

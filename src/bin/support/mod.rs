@@ -142,7 +142,7 @@ pub fn generate_fixture_package(
 
     generate::run(GenerateArgs {
         lib_source: built_fixture.library_path.clone(),
-        crate_name: built_fixture.crate_name.clone(),
+        crate_name: Some(built_fixture.crate_name.clone()),
         out_dir: out_dir.clone(),
         package_name: Some(spec.package_name()),
         cdylib_name: Some(built_fixture.crate_name.clone()),

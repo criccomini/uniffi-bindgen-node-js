@@ -1,9 +1,11 @@
 mod support;
 
 use self::support::{
-    FixturePackageOptions, fixtures::fixture_spec, generate_fixture_package,
+    FixturePackageOptions, build_fixture_cdylib, fixtures::fixture_spec, generate_fixture_package,
     generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
+    temp_dir_path,
 };
+use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 #[test]
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
@@ -41,6 +43,32 @@ fn generates_basic_fixture_node_package_in_a_temp_directory() {
 
     remove_dir_all(&generated.built_fixture.workspace_dir);
     remove_dir_all(package_dir);
+}
+
+#[test]
+fn infers_the_only_component_when_crate_name_is_omitted() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("infer-basic-package");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        crate_name: None,
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("single-component library should not require --crate-name");
+
+    assert!(
+        package_dir.join("package.json").is_file(),
+        "expected generated package manifest at {}",
+        package_dir.join("package.json")
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
 }
 
 #[test]

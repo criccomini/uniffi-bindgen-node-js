@@ -21,9 +21,7 @@ mod tests {
     use camino::{Utf8Path, Utf8PathBuf};
     use uniffi_bindgen::{Component, interface::ComponentInterface};
 
-    use crate::node_v2::config::{
-        NodeBindingCliOverrides, NodeBindingGeneratorConfig, parse_node_binding_config,
-    };
+    use crate::node_v2::config::{NodeBindingGeneratorConfig, parse_node_binding_config};
 
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {
@@ -1543,33 +1541,6 @@ mod tests {
     }
 
     #[test]
-    fn config_override_validation_rejects_commonjs_output() {
-        let overrides = NodeBindingCliOverrides::from_parts(
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            vec!["commonjs=true".to_string()],
-        )
-        .expect("override should parse");
-        let mut config = NodeBindingGeneratorConfig::default();
-
-        overrides.apply_to(&mut config);
-        let error = config
-            .validate()
-            .expect_err("CommonJS override should be rejected");
-
-        assert!(
-            error
-                .to_string()
-                .contains("CommonJS output is not supported"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
     fn new_config_rejects_removed_legacy_library_path_keys() {
         for key in [
             "lib_path_module",
@@ -1591,34 +1562,6 @@ mod tests {
                 error
                     .to_string()
                     .contains(&format!("unknown field `{key}`")),
-                "unexpected error for {key}: {error}"
-            );
-        }
-    }
-
-    #[test]
-    fn config_override_rejects_removed_legacy_library_path_keys() {
-        for key in [
-            "lib_path_module",
-            "lib_path_modules",
-            "out_lib_path_module",
-            "out_lib_path_modules",
-        ] {
-            let error = NodeBindingCliOverrides::from_parts(
-                None,
-                None,
-                None,
-                None,
-                false,
-                false,
-                vec![format!("{key}=./native/example.node")],
-            )
-            .unwrap_err();
-
-            assert!(
-                error
-                    .to_string()
-                    .contains(&format!("unsupported --config-override key '{key}'")),
                 "unexpected error for {key}: {error}"
             );
         }

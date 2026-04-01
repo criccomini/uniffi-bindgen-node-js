@@ -13,7 +13,10 @@ fn validate_output_dir(options: &GenerateNodePackageOptions) -> Result<()> {
         bail!("--out-dir cannot be empty");
     }
     if options.out_dir.exists() && !options.out_dir.is_dir() {
-        bail!("--out-dir '{}' exists but is not a directory", options.out_dir);
+        bail!(
+            "--out-dir '{}' exists but is not a directory",
+            options.out_dir
+        );
     }
 
     Ok(())

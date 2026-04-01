@@ -74,7 +74,6 @@ fn main() -> Result<()> {
                 lib_path_literal: None,
                 bundled_prebuilds: false,
                 manual_load: false,
-                config_override: Vec::new(),
             })
             .with_context(|| {
                 format!(

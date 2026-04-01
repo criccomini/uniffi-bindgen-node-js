@@ -2,9 +2,7 @@ use std::fs;
 
 mod support;
 
-use self::support::{
-    fixtures::fixture_spec, generate_fixture_package, remove_dir_all,
-};
+use self::support::{fixtures::fixture_spec, generate_fixture_package, remove_dir_all};
 
 fn snapshot_output_for_fixture(name: &str) -> String {
     let spec = fixture_spec(name);

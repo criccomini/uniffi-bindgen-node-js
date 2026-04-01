@@ -117,9 +117,10 @@ fn rejects_missing_library_source_from_programmatic_entrypoint() {
     .expect_err("missing library path should be rejected by the v2 entrypoint");
 
     assert!(
-        error
-            .to_string()
-            .contains(&format!("library source '{}' does not exist", missing_library_path)),
+        error.to_string().contains(&format!(
+            "library source '{}' does not exist",
+            missing_library_path
+        )),
         "unexpected error: {error:#}"
     );
 
@@ -146,9 +147,10 @@ fn rejects_file_out_dir_from_programmatic_entrypoint() {
     .expect_err("file-backed out-dir should be rejected by the v2 entrypoint");
 
     assert!(
-        error
-            .to_string()
-            .contains(&format!("--out-dir '{}' exists but is not a directory", package_dir)),
+        error.to_string().contains(&format!(
+            "--out-dir '{}' exists but is not a directory",
+            package_dir
+        )),
         "unexpected error: {error:#}"
     );
 

@@ -21,3 +21,30 @@ pub fn run(command: Command) -> anyhow::Result<()> {
         Command::Generate(args) => generate::run(args),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use clap::{Parser, error::ErrorKind};
+
+    use super::Cli;
+
+    #[test]
+    fn generate_cli_rejects_removed_config_override_flag() {
+        let error = Cli::try_parse_from([
+            "uniffi-bindgen-node-js",
+            "generate",
+            "/tmp/libfixture.dylib",
+            "--out-dir",
+            "/tmp/out",
+            "--config-override",
+            "commonjs=true",
+        ])
+        .expect_err("removed --config-override flag should not parse");
+
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert!(
+            error.to_string().contains("--config-override"),
+            "unexpected clap error: {error}"
+        );
+    }
+}

@@ -34,9 +34,6 @@ pub struct GenerateArgs {
 
     #[arg(long)]
     pub manual_load: bool,
-
-    #[arg(long)]
-    pub config_override: Vec<String>,
 }
 
 pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
@@ -55,7 +52,6 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
         GenerateNodePackageCliOverrides {
             cdylib_name: args.cdylib_name,
             lib_path_literal: args.lib_path_literal,
-            config_override: args.config_override,
         },
     )
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 use serde::Deserialize;
 use uniffi_bindgen::{Component, ComponentInterface, interface::rename as apply_ci_rename};
 
@@ -12,7 +12,6 @@ pub(crate) struct NodeBindingCliOverrides {
     lib_path_literal: Option<String>,
     bundled_prebuilds: bool,
     manual_load: bool,
-    config_overrides: Vec<NodeBindingConfigOverride>,
 }
 
 impl NodeBindingCliOverrides {
@@ -23,7 +22,6 @@ impl NodeBindingCliOverrides {
         lib_path_literal: Option<String>,
         bundled_prebuilds: bool,
         manual_load: bool,
-        config_overrides: Vec<String>,
     ) -> Result<Self> {
         Ok(Self {
             package_name: normalize_optional_value("--package-name", package_name)?,
@@ -32,18 +30,10 @@ impl NodeBindingCliOverrides {
             lib_path_literal: normalize_optional_value("--lib-path-literal", lib_path_literal)?,
             bundled_prebuilds,
             manual_load,
-            config_overrides: config_overrides
-                .into_iter()
-                .map(NodeBindingConfigOverride::parse)
-                .collect::<Result<_>>()?,
         })
     }
 
     pub(crate) fn apply_to(&self, config: &mut NodeBindingGeneratorConfig) {
-        for override_entry in &self.config_overrides {
-            override_entry.apply_to(config);
-        }
-
         apply_optional_string_override(&mut config.package_name, self.package_name.as_ref());
         apply_optional_string_override(&mut config.cdylib_name, self.cdylib_name.as_ref());
         apply_optional_value_override(&mut config.node_engine, self.node_engine.as_ref());
@@ -53,81 +43,6 @@ impl NodeBindingCliOverrides {
         );
         enable_override(&mut config.bundled_prebuilds, self.bundled_prebuilds);
         enable_override(&mut config.manual_load, self.manual_load);
-    }
-}
-
-#[derive(Debug, Clone)]
-enum NodeBindingConfigOverride {
-    PackageName(String),
-    CdylibName(String),
-    NodeEngine(String),
-    LibPathLiteral(String),
-    BundledPrebuilds(bool),
-    ManualLoad(bool),
-    ModuleFormat(String),
-    Commonjs(bool),
-}
-
-impl NodeBindingConfigOverride {
-    fn parse(raw: String) -> Result<Self> {
-        let (key, value) = parse_override_parts(&raw)?;
-        let normalized_key = normalize_override_key(key);
-
-        if let Some(override_entry) = Self::parse_string_override(&normalized_key, &value) {
-            return Ok(override_entry);
-        }
-        if let Some(override_entry) = Self::parse_boolean_override(&normalized_key, &raw, &value)? {
-            return Ok(override_entry);
-        }
-
-        bail!("unsupported --config-override key '{key}'");
-    }
-
-    fn apply_to(&self, config: &mut NodeBindingGeneratorConfig) {
-        match self {
-            Self::PackageName(value) => config.package_name = Some(value.clone()),
-            Self::CdylibName(value) => config.cdylib_name = Some(value.clone()),
-            Self::NodeEngine(value) => config.node_engine = value.clone(),
-            Self::LibPathLiteral(value) => config.lib_path_literal = Some(value.clone()),
-            Self::BundledPrebuilds(value) => config.bundled_prebuilds = *value,
-            Self::ManualLoad(value) => config.manual_load = *value,
-            Self::ModuleFormat(value) => config.module_format = Some(value.clone()),
-            Self::Commonjs(value) => config.commonjs = Some(*value),
-        }
-    }
-
-    fn parse_string_override(normalized_key: &str, value: &str) -> Option<Self> {
-        match normalized_key {
-            "package_name" => Some(Self::PackageName(value.to_string())),
-            "cdylib_name" => Some(Self::CdylibName(value.to_string())),
-            "node_engine" => Some(Self::NodeEngine(value.to_string())),
-            "lib_path_literal" => Some(Self::LibPathLiteral(value.to_string())),
-            "module_format" => Some(Self::ModuleFormat(value.to_string())),
-            _ => None,
-        }
-    }
-
-    fn parse_boolean_override(
-        normalized_key: &str,
-        raw: &str,
-        value: &str,
-    ) -> Result<Option<Self>> {
-        let parsed = match normalized_key {
-            "bundled_prebuilds" => Some(Self::BundledPrebuilds(parse_bool_override(raw, value)?)),
-            "manual_load" => Some(Self::ManualLoad(parse_bool_override(raw, value)?)),
-            "commonjs" => Some(Self::Commonjs(parse_bool_override(raw, value)?)),
-            _ => None,
-        };
-
-        Ok(parsed)
-    }
-}
-
-fn parse_bool_override(raw: &str, value: &str) -> Result<bool> {
-    match value {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => bail!("invalid boolean override '{raw}': expected true or false"),
     }
 }
 
@@ -143,27 +58,6 @@ fn normalize_required_value(flag: &str, value: &str) -> Result<String> {
         bail!("{flag} cannot be empty");
     }
     Ok(trimmed.to_string())
-}
-
-fn parse_override_parts(raw: &str) -> Result<(&str, String)> {
-    let (raw_key, raw_value) = raw
-        .split_once('=')
-        .ok_or_else(|| anyhow!("invalid --config-override '{raw}': expected KEY=VALUE"))?;
-    let key = raw_key.trim();
-    if key.is_empty() {
-        bail!("invalid --config-override '{raw}': missing key before '='");
-    }
-
-    Ok((
-        key,
-        normalize_required_value("--config-override", raw_value.trim())?,
-    ))
-}
-
-fn normalize_override_key(key: &str) -> String {
-    key.strip_prefix("bindings.node.")
-        .unwrap_or(key)
-        .replace('-', "_")
 }
 
 fn apply_optional_string_override(target: &mut Option<String>, value: Option<&String>) {
@@ -317,9 +211,7 @@ pub(crate) fn finalize_node_binding_config(
     config.validate()
 }
 
-pub(crate) fn apply_component_renames(
-    components: &mut [Component<NodeBindingGeneratorConfig>],
-) {
+pub(crate) fn apply_component_renames(components: &mut [Component<NodeBindingGeneratorConfig>]) {
     let mut module_renames = HashMap::new();
     for component in components.iter() {
         if !component.config.rename.is_empty() {
@@ -344,9 +236,7 @@ mod tests {
     use anyhow::Result;
     use uniffi_bindgen::Component;
 
-    use super::{
-        NodeBindingGeneratorConfig, apply_component_renames, parse_node_binding_config,
-    };
+    use super::{NodeBindingGeneratorConfig, apply_component_renames, parse_node_binding_config};
 
     fn parse_node_config(source: &str) -> NodeBindingGeneratorConfig {
         let root = toml::from_str::<toml::Value>(source).expect("test TOML should deserialize");

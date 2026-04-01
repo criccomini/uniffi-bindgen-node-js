@@ -32,7 +32,6 @@ pub struct GenerateNodePackageOptions {
 pub(crate) struct GenerateNodePackageCliOverrides {
     pub cdylib_name: Option<String>,
     pub lib_path_literal: Option<String>,
-    pub config_override: Vec<String>,
 }
 
 pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
@@ -52,7 +51,6 @@ pub(crate) fn generate_node_package_with_cli_overrides(
         cli_compat_overrides.lib_path_literal,
         options.bundled_prebuilds,
         options.manual_load,
-        cli_compat_overrides.config_override,
     )?;
     let paths = build_bindgen_paths(options.manifest_path.as_deref())
         .context("failed to build BindgenPaths for node package generation")?;

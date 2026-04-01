@@ -37,7 +37,10 @@ impl CargoMetadataPathsLayer {
             command.no_deps();
         }
         let metadata = command.exec().with_context(|| {
-            format!("error running cargo metadata for manifest '{}'", manifest_path)
+            format!(
+                "error running cargo metadata for manifest '{}'",
+                manifest_path
+            )
         })?;
         Ok(Self::from(metadata))
     }

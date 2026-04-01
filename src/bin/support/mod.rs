@@ -153,7 +153,6 @@ pub fn generate_fixture_package(
         lib_path_literal: None,
         bundled_prebuilds: false,
         manual_load,
-        config_override: Vec::new(),
     })
     .with_context(|| format!("failed to generate fixture package for {}", spec.dir_name))?;
 

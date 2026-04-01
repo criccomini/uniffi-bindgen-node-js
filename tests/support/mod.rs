@@ -134,7 +134,9 @@ pub fn generate_fixture_package_with_options(
         )
     });
     let sibling_library_path = package_dir.join(library_filename);
-    let sibling_library_path = sibling_library_path.is_file().then_some(sibling_library_path);
+    let sibling_library_path = sibling_library_path
+        .is_file()
+        .then_some(sibling_library_path);
     let (bundled_prebuild_target, bundled_prebuild_path) =
         discover_bundled_prebuild(&package_dir, library_filename);
 
@@ -530,7 +532,9 @@ fn discover_bundled_prebuild(
     }
 
     let mut matches = fs::read_dir(prebuilds_dir.as_std_path())
-        .unwrap_or_else(|error| panic!("failed to read bundled prebuild dir {prebuilds_dir}: {error}"))
+        .unwrap_or_else(|error| {
+            panic!("failed to read bundled prebuild dir {prebuilds_dir}: {error}")
+        })
         .filter_map(|entry| entry.ok())
         .map(|entry| {
             let target = entry.file_name().to_string_lossy().into_owned();

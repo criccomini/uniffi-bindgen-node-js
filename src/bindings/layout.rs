@@ -183,7 +183,9 @@ impl StagedNativeLibraryLayout {
             .ok_or_else(|| anyhow!("built UniFFI cdylib '{}' has no filename", lib_source))?
             .to_string();
 
-        let bundled_prebuild_target = bundled_prebuilds.then(current_host_prebuild_target).transpose()?;
+        let bundled_prebuild_target = bundled_prebuilds
+            .then(current_host_prebuild_target)
+            .transpose()?;
         let package_relative_path = match bundled_prebuild_target.as_deref() {
             Some(target) => Utf8PathBuf::from("prebuilds").join(target).join(&file_name),
             None => Utf8PathBuf::from(&file_name),

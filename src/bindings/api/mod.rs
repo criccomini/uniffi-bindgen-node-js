@@ -863,6 +863,18 @@ mod tests {
     }
 
     #[test]
+    fn callback_interface_clone_free_symbols_use_the_crate_name_from_full_module_paths() {
+        assert_eq!(
+            ffi_clone_symbol_name("fixture_crate::logging", "Logger"),
+            "uniffi_fixture_crate_fn_clone_logger"
+        );
+        assert_eq!(
+            ffi_free_symbol_name("fixture_crate::logging", "Logger"),
+            "uniffi_fixture_crate_fn_free_logger"
+        );
+    }
+
+    #[test]
     fn component_model_uses_uniffi_callback_symbols_for_callback_trait_objects() {
         let mut ci = ComponentInterface::from_webidl(
             r#"

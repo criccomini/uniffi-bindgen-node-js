@@ -233,7 +233,8 @@ impl CallbackInterfaceModel {
                 callback_interface.ffi_init_callback().name(),
             ),
             // UniFFI 0.31 still exposes only the init symbol directly for callback
-            // interfaces; clone/free names remain derived from the module path.
+            // interfaces; clone/free names still have to be derived through the
+            // crate-aware symbol helpers in `uniffi_meta`.
             ffi_object_clone_identifier: ffi_symbol_identifier(&ffi_clone_symbol_name(
                 callback_interface.module_path(),
                 callback_interface.name(),

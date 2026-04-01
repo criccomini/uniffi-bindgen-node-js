@@ -249,7 +249,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revalidate bundled-prebuild resolution logic and target naming in generated JS.
 - [x] Keep root-level default resolution behavior for non-bundled packages.
 - [x] Keep explicit load(path) override behavior in manual-load mode.
-- [ ] Ensure generated loader error messages mention staged package paths accurately.
+- [x] Ensure generated loader error messages mention staged package paths accurately.
 - [ ] Revisit unsupported-feature validation for v2.
 - [ ] Keep explicit rejection for custom types unless intentionally added.
 - [ ] Keep explicit rejection for external types unless intentionally added.

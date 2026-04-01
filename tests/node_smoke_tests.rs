@@ -1152,6 +1152,54 @@ try {{
 }
 
 #[test]
+fn default_mode_import_reports_missing_staged_root_library() {
+    let generated = generate_fixture_package("basic");
+    let package_dir = &generated.package_dir;
+    let staged_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("default-mode fixture should report the staged root library");
+    let expected_relative_path = staged_library_path
+        .strip_prefix(package_dir)
+        .expect("staged root library should live inside the package")
+        .as_str()
+        .to_string();
+    fs::remove_file(staged_library_path.as_std_path())
+        .expect("negative root-staged fixture should allow removing the staged library");
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "missing-root-library.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+
+try {{
+  await import("./index.js");
+  assert.fail("expected import to fail without the staged root library");
+}} catch (error) {{
+  const message = String(error);
+  assert.ok(
+    message.includes("No staged UniFFI library was found at"),
+    `unexpected error message: ${{message}}`,
+  );
+  assert.ok(message.includes({}), `missing package path in error: ${{message}}`);
+  assert.ok(message.includes({}), `missing absolute path in error: ${{message}}`);
+}}
+"#,
+            serde_json::to_string(&expected_relative_path)
+                .expect("expected package-relative path should serialize"),
+            serde_json::to_string(staged_library_path.as_str())
+                .expect("staged library path should serialize"),
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn callback_manual_load_unload_clears_pending_foreign_futures_and_callback_registrations() {
     let generated = generate_fixture_package_with_options(
         "callbacks",
@@ -1364,11 +1412,14 @@ try {{
   );
   assert.ok(message.includes({}), `missing target id in error: ${{message}}`);
   assert.ok(message.includes({}), `missing package path in error: ${{message}}`);
+  assert.ok(message.includes({}), `missing absolute path in error: ${{message}}`);
 }}
 "#,
             serde_json::to_string(&expected_target).expect("target id should serialize"),
             serde_json::to_string(&expected_relative_path)
                 .expect("expected package-relative path should serialize"),
+            serde_json::to_string(staged_prebuild_path.as_str())
+                .expect("staged prebuild path should serialize"),
         ),
     );
 

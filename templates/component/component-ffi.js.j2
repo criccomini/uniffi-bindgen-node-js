@@ -125,6 +125,7 @@ function resolveLibraryPath(libraryPath = undefined) {
       libraryPath: isAbsolute(libraryPath)
         ? libraryPath
         : join(moduleDirectory, libraryPath),
+      packageRelativePath: null,
       bundledPrebuild: null,
     });
   }
@@ -135,6 +136,7 @@ function resolveLibraryPath(libraryPath = undefined) {
       libraryPath: isAbsolute(rawLibraryPath)
         ? rawLibraryPath
         : join(moduleDirectory, rawLibraryPath),
+      packageRelativePath: null,
       bundledPrebuild: null,
     });
   }
@@ -143,12 +145,14 @@ function resolveLibraryPath(libraryPath = undefined) {
     const bundledPrebuild = defaultBundledLibrary();
     return Object.freeze({
       libraryPath: bundledPrebuild.libraryPath,
+      packageRelativePath: bundledPrebuild.packageRelativePath,
       bundledPrebuild,
     });
   }
 
   return Object.freeze({
     libraryPath: defaultSiblingLibraryPath(),
+    packageRelativePath: ffiMetadata.stagedLibraryPackageRelativePath,
     bundledPrebuild: null,
   });
 }
@@ -251,6 +255,7 @@ function clearBindingCoreCache() {
 export function load(libraryPath = undefined) {
   const resolution = resolveLibraryPath(libraryPath);
   const resolvedLibraryPath = resolution.libraryPath;
+  const packageRelativePath = resolution.packageRelativePath;
   const bundledPrebuild = resolution.bundledPrebuild;
   const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
 
@@ -264,9 +269,15 @@ export function load(libraryPath = undefined) {
     );
   }
 
-  if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {
+  if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {
+    if (bundledPrebuild !== null) {
+      throw new Error(
+        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.`,
+      );
+    }
+
     throw new Error(
-      `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.`,
+      `No staged UniFFI library was found at ${JSON.stringify(packageRelativePath)} inside the generated package. Expected ${JSON.stringify(resolvedLibraryPath)}.`,
     );
   }
 

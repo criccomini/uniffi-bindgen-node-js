@@ -2,7 +2,7 @@
     (uniffiFutureHandle) => {
       freePendingForeignFuture(uniffiFutureHandle);
     },
-    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+    koffi.pointer(bindings.ffiCallbacks.{{ registration.dropped_callback_identifier }}),
   );
   registrations.push({{ registration.future_free_name }});
   const {{ registration.callback_name }} = koffi.register(

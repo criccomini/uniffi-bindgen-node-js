@@ -1,14 +1,15 @@
 use std::collections::BTreeSet;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use uniffi_bindgen::interface::{
     AsType, Callable, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function,
-    Method, Object, Type, Variant, ffi::FfiType,
+    Method, Object, Type, Variant,
+    ffi::{FfiCallbackFunction, FfiDefinition, FfiStruct, FfiType},
 };
 
 use super::{
-    ffi_symbol_identifier, foreign_future_complete_ffi_name,
-    render_js_default_async_callback_return_value_expression, validate_supported_features,
+    ffi_symbol_identifier, render_js_default_async_callback_return_value_expression,
+    validate_supported_features,
 };
 
 pub(crate) fn build_public_api_ir(ci: &ComponentInterface) -> Result<ComponentModel> {
@@ -68,7 +69,7 @@ impl ComponentModel {
                     .filter(|object| object.has_callback_interface())
                     .map(|object| CallbackInterfaceModel::from_object(object, ci)),
             )
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let callback_interface_names = callback_interfaces
             .iter()
             .map(|callback_interface| callback_interface.name.clone())
@@ -215,19 +216,15 @@ impl CallbackInterfaceModel {
     fn from_callback_interface(
         callback_interface: &CallbackInterface,
         ci: &ComponentInterface,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             name: callback_interface.name().to_string(),
             docstring: callback_interface.docstring().map(str::to_owned),
             methods: callback_method_models(
                 callback_interface.methods(),
-                callback_interface
-                    .ffi_callbacks()
-                    .into_iter()
-                    .map(|callback| callback.name().to_string())
-                    .collect(),
+                callback_interface.ffi_callbacks(),
                 ci,
-            ),
+            )?,
             ffi_init_callback_identifier: ffi_symbol_identifier(
                 callback_interface.ffi_init_callback().name(),
             ),
@@ -239,26 +236,18 @@ impl CallbackInterfaceModel {
                 callback_interface.module_path(),
                 callback_interface.name(),
             )),
-        }
+        })
     }
 
-    fn from_object(object: &Object, ci: &ComponentInterface) -> Self {
-        Self {
+    fn from_object(object: &Object, ci: &ComponentInterface) -> Result<Self> {
+        Ok(Self {
             name: object.name().to_string(),
             docstring: object.docstring().map(str::to_owned),
-            methods: callback_method_models(
-                object.methods(),
-                object
-                    .ffi_callbacks()
-                    .into_iter()
-                    .map(|callback| callback.name().to_string())
-                    .collect(),
-                ci,
-            ),
+            methods: callback_method_models(object.methods(), object.ffi_callbacks(), ci)?,
             ffi_init_callback_identifier: ffi_symbol_identifier(object.ffi_init_callback().name()),
             ffi_object_clone_identifier: ffi_symbol_identifier(object.ffi_object_clone().name()),
             ffi_object_free_identifier: ffi_symbol_identifier(object.ffi_object_free().name()),
-        }
+        })
     }
 }
 
@@ -367,32 +356,30 @@ impl MethodModel {
     fn from_callback_method(
         method: &Method,
         ci: &ComponentInterface,
-        ffi_callback_name: &str,
-    ) -> Self {
+        ffi_callback: &FfiCallbackFunction,
+    ) -> Result<Self> {
         let mut model = Self::from_method(method, ci);
-        model.ffi_callback_identifier = Some(ffi_symbol_identifier(ffi_callback_name));
-        model.async_callback_ffi = AsyncCallbackMethodModel::from_method(method);
-        model
+        model.ffi_callback_identifier = Some(ffi_symbol_identifier(ffi_callback.name()));
+        model.async_callback_ffi = AsyncCallbackMethodModel::from_method(method, ffi_callback, ci)?;
+        Ok(model)
     }
 }
 
 fn callback_method_models(
     methods: Vec<&Method>,
-    ffi_callback_names: Vec<String>,
+    ffi_callbacks: Vec<FfiCallbackFunction>,
     ci: &ComponentInterface,
-) -> Vec<MethodModel> {
+) -> Result<Vec<MethodModel>> {
     assert_eq!(
         methods.len(),
-        ffi_callback_names.len(),
+        ffi_callbacks.len(),
         "UniFFI callback method metadata and callback symbol lists diverged"
     );
 
     methods
         .into_iter()
-        .zip(ffi_callback_names)
-        .map(|(method, ffi_callback_name)| {
-            MethodModel::from_callback_method(method, ci, &ffi_callback_name)
-        })
+        .zip(ffi_callbacks)
+        .map(|(method, ffi_callback)| MethodModel::from_callback_method(method, ci, &ffi_callback))
         .collect()
 }
 
@@ -401,29 +388,184 @@ pub(crate) struct AsyncCallbackMethodModel {
     pub complete_identifier: String,
     pub result_struct_identifier: String,
     pub result_struct_has_return_value: bool,
+    pub dropped_callback_struct_identifier: String,
+    pub dropped_callback_identifier: String,
     pub default_error_return_value_expression: Option<String>,
 }
 
 impl AsyncCallbackMethodModel {
-    fn from_method(method: &Method) -> Option<Self> {
-        method.is_async().then(|| {
-            let return_ffi_type = method.return_type().map(FfiType::from);
-            let result_struct = method.foreign_future_ffi_result_struct();
-            Self {
-                complete_identifier: ffi_symbol_identifier(&foreign_future_complete_ffi_name(
-                    return_ffi_type.as_ref(),
-                )),
-                result_struct_identifier: ffi_symbol_identifier(result_struct.name()),
-                result_struct_has_return_value: result_struct
-                    .fields()
-                    .iter()
-                    .any(|field| field.name() == "return_value"),
-                default_error_return_value_expression: method
-                    .return_type()
-                    .map(render_js_default_async_callback_return_value_expression),
-            }
-        })
+    fn from_method(
+        method: &Method,
+        ffi_callback: &FfiCallbackFunction,
+        ci: &ComponentInterface,
+    ) -> Result<Option<Self>> {
+        if !method.is_async() {
+            return Ok(None);
+        }
+
+        let abi = resolve_async_callback_abi(method, ffi_callback, ci)?;
+        Ok(Some(Self {
+            complete_identifier: ffi_symbol_identifier(&abi.complete_callback_name),
+            result_struct_identifier: ffi_symbol_identifier(&abi.result_struct_name),
+            result_struct_has_return_value: abi.result_struct_has_return_value,
+            dropped_callback_struct_identifier: ffi_symbol_identifier(
+                &abi.dropped_callback_struct_name,
+            ),
+            dropped_callback_identifier: ffi_symbol_identifier(&abi.dropped_callback_name),
+            default_error_return_value_expression: method
+                .return_type()
+                .map(render_js_default_async_callback_return_value_expression),
+        }))
     }
+}
+
+struct AsyncCallbackAbi {
+    complete_callback_name: String,
+    result_struct_name: String,
+    result_struct_has_return_value: bool,
+    dropped_callback_struct_name: String,
+    dropped_callback_name: String,
+}
+
+fn resolve_async_callback_abi(
+    method: &Method,
+    ffi_callback: &FfiCallbackFunction,
+    ci: &ComponentInterface,
+) -> Result<AsyncCallbackAbi> {
+    let arguments = ffi_callback.arguments();
+    let trailing = arguments
+        .get(arguments.len().saturating_sub(3)..)
+        .filter(|trailing| trailing.len() == 3)
+        .with_context(|| {
+            format!(
+                "async callback interface method {} is missing the expected ForeignFuture ABI arguments",
+                method.name()
+            )
+        })?;
+
+    let complete_callback_name = match trailing[0].type_() {
+        FfiType::Callback(name) => name,
+        other => bail!(
+            "async callback interface method {} uses an unexpected completion callback type: {other:?}",
+            method.name()
+        ),
+    };
+
+    match trailing[1].type_() {
+        FfiType::UInt64 => {}
+        other => bail!(
+            "async callback interface method {} uses an unexpected callback data type: {other:?}",
+            method.name()
+        ),
+    }
+
+    let dropped_callback_struct_name = match trailing[2].type_() {
+        FfiType::MutReference(inner) => match inner.as_ref() {
+            FfiType::Struct(name) => name.clone(),
+            other => bail!(
+                "async callback interface method {} uses an unexpected dropped-callback struct type: {other:?}",
+                method.name()
+            ),
+        },
+        other => bail!(
+            "async callback interface method {} uses an unexpected dropped-callback pointer type: {other:?}",
+            method.name()
+        ),
+    };
+
+    let result_struct_name =
+        lookup_completion_result_struct(ci, &complete_callback_name, method.name())?;
+    let result_struct = lookup_ffi_struct(ci, &result_struct_name, method.name())?;
+    let dropped_callback_struct =
+        lookup_ffi_struct(ci, &dropped_callback_struct_name, method.name())?;
+    let dropped_callback_name =
+        lookup_dropped_callback_name(&dropped_callback_struct, method.name())?;
+
+    Ok(AsyncCallbackAbi {
+        complete_callback_name,
+        result_struct_name,
+        result_struct_has_return_value: result_struct
+            .fields()
+            .iter()
+            .any(|field| field.name() == "return_value"),
+        dropped_callback_struct_name,
+        dropped_callback_name,
+    })
+}
+
+fn lookup_completion_result_struct(
+    ci: &ComponentInterface,
+    complete_callback_name: &str,
+    method_name: &str,
+) -> Result<String> {
+    let callback = ci
+        .ffi_definitions()
+        .find_map(|definition| match definition {
+            FfiDefinition::CallbackFunction(callback) if callback.name() == complete_callback_name => {
+                Some(callback)
+            }
+            _ => None,
+        })
+        .with_context(|| {
+            format!(
+                "async callback interface method {method_name} could not resolve completion callback {complete_callback_name}"
+            )
+        })?;
+
+    let callback_arguments = callback.arguments();
+    let result_argument = callback_arguments
+        .get(1)
+        .with_context(|| {
+            format!(
+                "async callback interface method {method_name} completion callback {complete_callback_name} is missing its result argument"
+            )
+        })?;
+
+    match result_argument.type_() {
+        FfiType::Struct(name) => Ok(name),
+        other => bail!(
+            "async callback interface method {method_name} completion callback {complete_callback_name} uses an unexpected result argument type: {other:?}"
+        ),
+    }
+}
+
+fn lookup_ffi_struct(
+    ci: &ComponentInterface,
+    struct_name: &str,
+    method_name: &str,
+) -> Result<FfiStruct> {
+    ci.ffi_definitions()
+        .find_map(|definition| match definition {
+            FfiDefinition::Struct(struct_) if struct_.name() == struct_name => Some(struct_),
+            _ => None,
+        })
+        .with_context(|| {
+            format!(
+                "async callback interface method {method_name} could not resolve FFI struct {struct_name}"
+            )
+        })
+}
+
+fn lookup_dropped_callback_name(struct_: &FfiStruct, method_name: &str) -> Result<String> {
+    struct_
+        .fields()
+        .iter()
+        .find_map(|field| match field.type_() {
+            FfiType::Callback(name) if field.name() == "free" => Some(name),
+            _ => None,
+        })
+        .or_else(|| {
+            struct_.fields().iter().find_map(|field| match field.type_() {
+                FfiType::Callback(name) => Some(name),
+                _ => None,
+            })
+        })
+        .with_context(|| {
+            format!(
+                "async callback interface method {method_name} could not resolve a dropped-callback function from FFI struct {}",
+                struct_.name()
+            )
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

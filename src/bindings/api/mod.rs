@@ -970,6 +970,14 @@ mod tests {
         );
         assert!(async_callback_ffi.result_struct_has_return_value);
         assert_eq!(
+            async_callback_ffi.dropped_callback_struct_identifier,
+            "ForeignFutureDroppedCallbackStruct"
+        );
+        assert_eq!(
+            async_callback_ffi.dropped_callback_identifier,
+            "ForeignFutureDroppedCallback"
+        );
+        assert_eq!(
             async_callback_ffi
                 .default_error_return_value_expression
                 .as_deref(),
@@ -1007,6 +1015,14 @@ mod tests {
             "ForeignFutureResultVoid"
         );
         assert!(!async_callback_ffi.result_struct_has_return_value);
+        assert_eq!(
+            async_callback_ffi.dropped_callback_struct_identifier,
+            "ForeignFutureDroppedCallbackStruct"
+        );
+        assert_eq!(
+            async_callback_ffi.dropped_callback_identifier,
+            "ForeignFutureDroppedCallback"
+        );
         assert!(
             async_callback_ffi
                 .default_error_return_value_expression
@@ -2102,6 +2118,13 @@ mod tests {
             rendered
                 .js
                 .contains("const logFutureFree = koffi.register("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered
+                .js
+                .contains("koffi.pointer(bindings.ffiCallbacks.ForeignFutureDroppedCallback)"),
             "unexpected JS output: {}",
             rendered.js
         );

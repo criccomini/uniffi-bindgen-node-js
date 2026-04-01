@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result, bail};
 use heck::ToUpperCamelCase;
 use textwrap::dedent;
-use uniffi_bindgen::interface::{ComponentInterface, Type, ffi::FfiType};
+use uniffi_bindgen::interface::{ComponentInterface, Type};
 
 use super::{ArgumentModel, FieldModel, RecordModel};
 
@@ -717,13 +717,6 @@ pub(crate) fn ffi_symbol_identifier(name: &str) -> String {
     } else {
         identifier
     }
-}
-
-pub(crate) fn foreign_future_complete_ffi_name(return_ffi_type: Option<&FfiType>) -> String {
-    format!(
-        "ForeignFutureComplete{}",
-        FfiType::return_type_name(return_ffi_type).to_upper_camel_case()
-    )
 }
 
 fn sanitize_identifier(name: &str, allow_reserved: bool) -> String {

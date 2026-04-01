@@ -261,7 +261,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update diagnostics to stop saying “v1” unless the message is intentionally historical.
 - [x] Keep diagnostics actionable and grouped by unsupported feature family.
 - [x] Add coverage for rename config behavior.
-- [ ] Add coverage for full module_path names.
+- [x] Add coverage for full module_path names.
 - [ ] Add coverage for multi-component library detection and error messages.
 - [ ] Add coverage for component selection when --crate-name is present.
 - [ ] Add coverage for default component inference when only one component exists.

@@ -10,6 +10,7 @@ use self::support::{
 use serde_json::Value;
 use uniffi_bindgen::interface::{Callable, ComponentInterface};
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
+use uniffi_meta::{clone_fn_symbol_name, free_fn_symbol_name};
 
 fn read_generated_component_ffi_js(package_dir: &camino::Utf8PathBuf, namespace: &str) -> String {
     fs::read_to_string(
@@ -291,6 +292,44 @@ fn generated_async_helpers_use_loader_derived_uniffi_symbol_names() {
         !async_runtime_js.contains("MAYBE_READY"),
         "generated async runtime should not reference the pre-0.30 MaybeReady poll name: {async_runtime_js}"
     );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(&generated.package_dir);
+}
+
+#[test]
+fn generated_callback_clone_free_symbols_follow_full_module_paths() {
+    let generated = generate_fixture_package("callbacks");
+    let component_js = fs::read_to_string(
+        generated
+            .package_dir
+            .join(format!("{}.js", generated.built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component js should be readable");
+    let ci = load_fixture_component_interface(&generated.built_fixture);
+
+    let expected_symbols = ci
+        .callback_interface_definitions()
+        .iter()
+        .flat_map(|callback_interface| {
+            [
+                clone_fn_symbol_name(callback_interface.module_path(), callback_interface.name()),
+                free_fn_symbol_name(callback_interface.module_path(), callback_interface.name()),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        !expected_symbols.is_empty(),
+        "callback fixture should expose callback interfaces for module_path symbol verification"
+    );
+    for symbol in expected_symbols {
+        assert!(
+            component_js.contains(&symbol),
+            "generated component JS should include the UniFFI-provided callback handle symbol {symbol}"
+        );
+    }
 
     remove_dir_all(&generated.built_fixture.workspace_dir);
     remove_dir_all(&generated.package_dir);

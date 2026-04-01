@@ -109,6 +109,40 @@ fn defaults_package_name_to_the_selected_component_namespace() {
 }
 
 #[test]
+fn package_name_override_wins_over_the_namespace_default() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("override-package-name");
+    let package_name = "custom-generated-package";
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(package_name.to_string()),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("package generation should keep the explicit package-name override");
+
+    let package_json: Value = serde_json::from_str(
+        &fs::read_to_string(package_dir.join("package.json").as_std_path())
+            .expect("package.json should be readable"),
+    )
+    .expect("package.json should parse");
+
+    assert_eq!(
+        package_json.get("name").and_then(Value::as_str),
+        Some(package_name),
+        "unexpected package.json contents: {package_json:#}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
     let built_fixture = build_fixture_cdylib("callbacks");
     let package_dir = temp_dir_path("callbacks-manifest-path-package");

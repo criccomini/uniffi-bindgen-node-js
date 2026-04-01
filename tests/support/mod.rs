@@ -270,6 +270,121 @@ pub extern "C" fn megazord_fixture_ping() -> u32 {
     }
 }
 
+pub fn build_off_workspace_udl_fixture_cdylib() -> BuiltFixtureCdylib {
+    let fixture_name = "off-workspace-udl-fixture";
+    let workspace_dir = temp_dir_path(fixture_name);
+    let fixture_dir = workspace_dir.join("fixture");
+    let manifest_path = fixture_dir.join("Cargo.toml");
+    let target_dir = workspace_dir.join("target");
+    let namespace = "temp_udl_missing_context";
+    let crate_name = "temp_udl_missing_context_fixture";
+
+    fs::create_dir_all(fixture_dir.join("src").as_std_path())
+        .unwrap_or_else(|error| panic!("failed to create temp fixture dir {fixture_dir}: {error}"));
+
+    write_temp_fixture_file(
+        &manifest_path,
+        &format!(
+            r#"
+[package]
+name = "temp-udl-missing-context-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "{crate_name}"
+crate-type = ["cdylib"]
+
+[dependencies]
+uniffi = {{ version = "=0.31.0" }}
+
+[build-dependencies]
+uniffi = {{ version = "=0.31.0", features = ["build"] }}
+"#
+        ),
+    );
+    write_temp_fixture_file(
+        &fixture_dir.join("build.rs"),
+        &format!(
+            r#"
+fn main() {{
+    uniffi::generate_scaffolding("src/{namespace}.udl").expect("UDL scaffolding should generate");
+}}
+"#
+        ),
+    );
+    write_temp_fixture_file(
+        &fixture_dir.join("src").join("lib.rs"),
+        &format!(
+            r#"
+pub fn meaning_of_life() -> u32 {{
+    42
+}}
+
+uniffi::include_scaffolding!("{namespace}");
+"#
+        ),
+    );
+    write_temp_fixture_file(
+        &fixture_dir.join("src").join(format!("{namespace}.udl")),
+        &format!(
+            r#"
+namespace {namespace} {{
+    u32 meaning_of_life();
+}};
+"#
+        ),
+    );
+
+    run_cargo_command(
+        fixture_name,
+        "generate-lockfile",
+        &manifest_path,
+        &target_dir,
+        &["generate-lockfile", "--offline"],
+    );
+
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            manifest_path.as_str(),
+            "--message-format=json-render-diagnostics",
+        ])
+        .env("CARGO_TARGET_DIR", target_dir.as_str())
+        .output()
+        .unwrap_or_else(|error| {
+            panic!("failed to run cargo build for fixture {fixture_name}: {error}")
+        });
+
+    if !output.status.success() {
+        panic!(
+            "failed to build fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let library_path = find_cdylib_artifact(&output.stdout, crate_name).unwrap_or_else(|| {
+        panic!(
+            "failed to locate cdylib artifact for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+
+    BuiltFixtureCdylib {
+        workspace_dir,
+        manifest_path,
+        namespace: namespace.to_string(),
+        crate_name: crate_name.to_string(),
+        library_path,
+    }
+}
+
 pub fn generate_fixture_package(name: &str) -> GeneratedFixturePackage {
     generate_fixture_package_with_options(name, FixturePackageOptions::default())
 }

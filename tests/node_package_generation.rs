@@ -3,10 +3,10 @@ mod support;
 use std::{collections::BTreeMap, fs};
 
 use self::support::{
-    FixturePackageOptions, build_fixture_cdylib, build_proc_macro_multi_component_cdylib,
-    fixtures::fixture_spec, generate_fixture_package, generate_fixture_package_with_options,
-    install_fixture_package_dependencies, load_fixture_component_interface,
-    read_package_file_tree, remove_dir_all, temp_dir_path,
+    FixturePackageOptions, build_fixture_cdylib, build_off_workspace_udl_fixture_cdylib,
+    build_proc_macro_multi_component_cdylib, fixtures::fixture_spec, generate_fixture_package,
+    generate_fixture_package_with_options, install_fixture_package_dependencies,
+    load_fixture_component_interface, read_package_file_tree, remove_dir_all, temp_dir_path,
 };
 use serde_json::Value;
 use uniffi_bindgen::interface::{Callable, ComponentInterface};
@@ -795,9 +795,36 @@ fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
 }
 
 #[test]
+fn generates_off_workspace_udl_fixture_when_manifest_path_is_provided() {
+    let built_fixture = build_off_workspace_udl_fixture_cdylib();
+    let package_dir = temp_dir_path("off-workspace-udl-manifest-path-package");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("off-workspace UDL fixture should load with --manifest-path");
+
+    assert!(
+        package_dir.join("package.json").is_file(),
+        "expected generated package manifest at {}",
+        package_dir.join("package.json")
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn rejects_udl_backed_generation_without_manifest_path_when_loader_cannot_resolve_udl() {
-    let built_fixture = build_fixture_cdylib("callbacks");
-    let package_dir = temp_dir_path("callbacks-missing-manifest-path-package");
+    let built_fixture = build_off_workspace_udl_fixture_cdylib();
+    let package_dir = temp_dir_path("off-workspace-udl-missing-manifest-path-package");
 
     let error = generate_node_package(GenerateNodePackageOptions {
         lib_source: built_fixture.library_path.clone(),
@@ -814,13 +841,16 @@ fn rejects_udl_backed_generation_without_manifest_path_when_loader_cannot_resolv
 
     assert!(
         error_message.contains(&format!(
-            "failed to load UniFFI component interfaces from '{}'",
+            "failed to load UniFFI metadata from '{}'",
             built_fixture.library_path
         )),
         "unexpected error: {error_message}"
     );
     assert!(
-        error_message.contains("UDL file \"callbacks_fixture\" not found for crate \"fixture_callbacks\""),
+        error_message.contains(&format!(
+            "UDL file {:?} not found for crate {:?}",
+            built_fixture.namespace, built_fixture.crate_name
+        )),
         "unexpected error: {error_message}"
     );
     assert!(

@@ -116,31 +116,43 @@ impl BindgenPathsLayer for CargoMetadataPathsLayer {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use anyhow::Result;
 
     use super::*;
 
     #[derive(Clone, Default)]
     struct StaticConfigLayer {
-        crate_name: &'static str,
-        config: toml::value::Table,
+        configs: HashMap<&'static str, toml::value::Table>,
     }
 
     impl StaticConfigLayer {
         fn new(crate_name: &'static str, package_name: &'static str) -> Self {
+            Self::from_configs([(crate_name, package_name)])
+        }
+
+        fn from_configs(configs: impl IntoIterator<Item = (&'static str, &'static str)>) -> Self {
             Self {
-                crate_name,
-                config: toml::from_str(&format!(
-                    "[bindings.node]\npackage_name = \"{package_name}\"\n"
-                ))
-                .expect("static TOML should parse"),
+                configs: configs
+                    .into_iter()
+                    .map(|(crate_name, package_name)| {
+                        (
+                            crate_name,
+                            toml::from_str(&format!(
+                                "[bindings.node]\npackage_name = \"{package_name}\"\n"
+                            ))
+                            .expect("static TOML should parse"),
+                        )
+                    })
+                    .collect(),
             }
         }
     }
 
     impl BindgenPathsLayer for StaticConfigLayer {
         fn get_config(&self, crate_name: &str) -> Result<Option<toml::value::Table>> {
-            Ok((crate_name == self.crate_name).then(|| self.config.clone()))
+            Ok(self.configs.get(crate_name).cloned())
         }
     }
 
@@ -164,5 +176,45 @@ mod tests {
             .and_then(|value| value.as_str());
 
         assert_eq!(package_name, Some("manifest-layer-package"));
+    }
+
+    #[test]
+    fn config_lookup_is_deterministic_with_manifest_and_workspace_layers() {
+        let paths = layer_v2_bindgen_paths(
+            Some(StaticConfigLayer::from_configs([(
+                "fixture_callbacks",
+                "manifest-layer-package",
+            )])),
+            StaticConfigLayer::from_configs([
+                ("fixture_callbacks", "workspace-layer-package"),
+                ("fixture_basic", "workspace-fallback-package"),
+            ]),
+        );
+
+        let overlapping_config = paths
+            .get_config("fixture_callbacks")
+            .expect("overlapping config lookup should succeed");
+        let fallback_config = paths
+            .get_config("fixture_basic")
+            .expect("workspace fallback config lookup should succeed");
+        let repeated_config = paths
+            .get_config("fixture_callbacks")
+            .expect("repeated config lookup should succeed");
+
+        let overlapping_crate = extract_package_name(&overlapping_config);
+        let fallback_crate = extract_package_name(&fallback_config);
+        let repeated_lookup = extract_package_name(&repeated_config);
+
+        assert_eq!(overlapping_crate, Some("manifest-layer-package"));
+        assert_eq!(fallback_crate, Some("workspace-fallback-package"));
+        assert_eq!(repeated_lookup, Some("manifest-layer-package"));
+    }
+
+    fn extract_package_name(config: &toml::value::Table) -> Option<&str> {
+        config
+            .get("bindings")
+            .and_then(|bindings| bindings.get("node"))
+            .and_then(|node| node.get("package_name"))
+            .and_then(|value| value.as_str())
     }
 }

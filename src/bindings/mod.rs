@@ -4,6 +4,7 @@ mod ffi_ir;
 mod layout;
 mod package_writer;
 mod runtime;
+mod target;
 mod templates;
 
 #[cfg(test)]

@@ -6,6 +6,8 @@ use uniffi_bindgen::Component;
 
 use crate::node_v2::config::NodeBindingGeneratorConfig;
 
+use super::target::current_host_prebuild_target;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GeneratedPackageLayout {
     pub(crate) root_dir: Utf8PathBuf,
@@ -181,9 +183,7 @@ impl StagedNativeLibraryLayout {
             .ok_or_else(|| anyhow!("built UniFFI cdylib '{}' has no filename", lib_source))?
             .to_string();
 
-        let bundled_prebuild_target = bundled_prebuilds
-            .then(current_host_prebuild_target)
-            .transpose()?;
+        let bundled_prebuild_target = bundled_prebuilds.then(current_host_prebuild_target).transpose()?;
         let package_relative_path = match bundled_prebuild_target.as_deref() {
             Some(target) => Utf8PathBuf::from("prebuilds").join(target).join(&file_name),
             None => Utf8PathBuf::from(&file_name),
@@ -196,54 +196,6 @@ impl StagedNativeLibraryLayout {
             package_relative_path,
             bundled_prebuild_target,
         })
-    }
-}
-
-fn current_host_prebuild_target() -> Result<String> {
-    let platform = current_node_platform()?;
-    let arch = current_node_arch()?;
-
-    if platform != "linux" {
-        return Ok(format!("{platform}-{arch}"));
-    }
-
-    Ok(format!("{platform}-{arch}-{}", current_linux_libc()?))
-}
-
-fn current_node_platform() -> Result<&'static str> {
-    match std::env::consts::OS {
-        "macos" => Ok("darwin"),
-        "windows" => Ok("win32"),
-        "linux" => Ok("linux"),
-        "android" => Ok("android"),
-        "aix" => Ok("aix"),
-        "freebsd" => Ok("freebsd"),
-        "openbsd" => Ok("openbsd"),
-        other => bail!("unsupported host OS for Node bundled-prebuild staging: {other}"),
-    }
-}
-
-fn current_node_arch() -> Result<&'static str> {
-    match std::env::consts::ARCH {
-        "x86_64" => Ok("x64"),
-        "x86" => Ok("ia32"),
-        "aarch64" => Ok("arm64"),
-        "arm" => Ok("arm"),
-        "loongarch64" => Ok("loong64"),
-        "powerpc64" => Ok("ppc64"),
-        "riscv64" => Ok("riscv64"),
-        "s390x" => Ok("s390x"),
-        other => bail!("unsupported host architecture for Node bundled-prebuild staging: {other}"),
-    }
-}
-
-fn current_linux_libc() -> Result<&'static str> {
-    if cfg!(target_env = "gnu") {
-        Ok("gnu")
-    } else if cfg!(target_env = "musl") {
-        Ok("musl")
-    } else {
-        bail!("unsupported Linux target environment for Node bundled-prebuild staging")
     }
 }
 

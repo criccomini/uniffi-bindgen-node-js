@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use anyhow::{Result, anyhow, bail};
 use serde::Deserialize;
-use uniffi_bindgen::ComponentInterface;
+use uniffi_bindgen::{Component, ComponentInterface, interface::rename as apply_ci_rename};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NodeBindingCliOverrides {
@@ -192,6 +194,8 @@ pub(crate) struct NodeBindingGeneratorConfig {
     #[serde(alias = "module-format")]
     pub module_format: Option<String>,
     pub commonjs: Option<bool>,
+    #[serde(default)]
+    pub rename: toml::Table,
 }
 
 impl Default for NodeBindingGeneratorConfig {
@@ -205,6 +209,7 @@ impl Default for NodeBindingGeneratorConfig {
             manual_load: false,
             module_format: None,
             commonjs: None,
+            rename: toml::Table::new(),
         }
     }
 }
@@ -310,4 +315,79 @@ pub(crate) fn finalize_node_binding_config(
     }
     cli_overrides.apply_to(config);
     config.validate()
+}
+
+pub(crate) fn apply_component_renames(
+    components: &mut [Component<NodeBindingGeneratorConfig>],
+) {
+    let mut module_renames = HashMap::new();
+    for component in components.iter() {
+        if !component.config.rename.is_empty() {
+            module_renames.insert(
+                component.ci.crate_name().to_string(),
+                component.config.rename.clone(),
+            );
+        }
+    }
+
+    if module_renames.is_empty() {
+        return;
+    }
+
+    for component in components.iter_mut() {
+        apply_ci_rename(&mut component.ci, &module_renames);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use uniffi_bindgen::Component;
+
+    use super::{
+        NodeBindingGeneratorConfig, apply_component_renames, parse_node_binding_config,
+    };
+
+    fn parse_node_config(source: &str) -> NodeBindingGeneratorConfig {
+        let root = toml::from_str::<toml::Value>(source).expect("test TOML should deserialize");
+        parse_node_binding_config(&root).expect("node config should deserialize")
+    }
+
+    #[test]
+    fn rename_config_is_applied_before_deriving_ffi_functions() -> Result<()> {
+        let mut components = vec![Component {
+            ci: uniffi_bindgen::ComponentInterface::from_webidl(
+                r#"
+                namespace example {
+                    u32 add(u32 first_value, u32 second_value);
+                };
+                "#,
+                "fixture_crate",
+            )?,
+            config: parse_node_config(
+                r#"
+                [bindings.node.rename]
+                "add.first_value" = "lhs"
+                "add.second_value" = "rhs"
+                "#,
+            ),
+        }];
+
+        apply_component_renames(&mut components);
+        components[0].ci.derive_ffi_funcs()?;
+
+        let ffi_function = components[0]
+            .ci
+            .iter_user_ffi_function_definitions()
+            .next()
+            .expect("expected derived FFI function");
+        let argument_names = ffi_function
+            .arguments()
+            .into_iter()
+            .map(|argument| argument.name().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(argument_names, vec!["lhs", "rhs"]);
+        Ok(())
+    }
 }

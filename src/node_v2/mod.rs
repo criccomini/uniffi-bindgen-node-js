@@ -8,8 +8,8 @@ use uniffi_bindgen::{BindgenLoader, Component};
 
 use self::component_selection::{normalize_crate_name_selector, select_component};
 use self::config::{
-    NodeBindingCliOverrides, NodeBindingGeneratorConfig, finalize_node_binding_config,
-    parse_node_binding_config,
+    NodeBindingCliOverrides, NodeBindingGeneratorConfig, apply_component_renames,
+    finalize_node_binding_config, parse_node_binding_config,
 };
 use self::paths::build_bindgen_paths;
 use crate::bindings::write_generated_package;
@@ -80,6 +80,7 @@ pub(crate) fn generate_node_package_with_cli_overrides(
         loader.library_name(&options.lib_source),
         &cli_overrides,
     )?;
+    apply_component_renames(&mut components);
 
     let normalized_crate_name = options
         .crate_name

@@ -167,7 +167,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Parse the Node-specific section of uniffi.toml in the new flow.
 - [x] Apply Node defaults after raw config parse.
 - [x] Apply explicit CLI overrides after config defaults.
-- [ ] Apply rename config before deriving FFI functions.
+- [x] Apply rename config before deriving FFI functions.
 - [x] Call derive_ffi_funcs() in the new flow.
 - [x] Select exactly one component for package generation.
 - [x] Implement the single-component inference path.

@@ -17,6 +17,7 @@ pub(crate) struct RenderedComponentFfi {
 pub(crate) fn render_component_ffi(
     ci: &ComponentInterface,
     cdylib_name: &str,
+    staged_library_file_name: &str,
     lib_path_literal: Option<&str>,
     bundled_prebuilds: bool,
     manual_load: bool,
@@ -25,6 +26,7 @@ pub(crate) fn render_component_ffi(
     let template_context = ComponentFfiTemplateContext {
         namespace_json: json_string(ci.namespace())?,
         cdylib_name_json: json_string(cdylib_name)?,
+        staged_library_file_name_json: json_string(staged_library_file_name)?,
         lib_path_literal_json: json_optional_string(lib_path_literal)?,
         bundled_prebuilds,
         manual_load,
@@ -68,6 +70,7 @@ fn component_requires_runtime_hooks(ci: &ComponentInterface) -> bool {
 struct ComponentFfiTemplateContext {
     namespace_json: String,
     cdylib_name_json: String,
+    staged_library_file_name_json: String,
     lib_path_literal_json: String,
     bundled_prebuilds: bool,
     manual_load: bool,

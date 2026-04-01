@@ -421,6 +421,20 @@ fn bundled_prebuilds_option_emits_bundled_loader_metadata() {
         "unexpected component FFI JS contents: {ffi_js}"
     );
     assert!(
+        ffi_js.contains(&format!(
+            "stagedLibraryFileName: {:?},",
+            built_fixture
+                .library_path
+                .file_name()
+                .expect("fixture library path should have a filename")
+        )),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+    assert!(
+        ffi_js.contains("const filename = ffiMetadata.stagedLibraryFileName;"),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+    assert!(
         ffi_js.contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
         "unexpected component FFI JS contents: {ffi_js}"
     );

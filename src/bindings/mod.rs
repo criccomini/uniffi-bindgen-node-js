@@ -1081,9 +1081,7 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains(
-                "throw new ContractVersionMismatchError(expected, actual, {"
-            ),
+            component_ffi_js.contains("throw new ContractVersionMismatchError(expected, actual, {"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1189,6 +1187,7 @@ mod tests {
         export const ffiMetadata = Object.freeze({
           namespace: "example",
           cdylibName: "fixture",
+          stagedLibraryFileName: "libfixture.dylib",
           libPathLiteral: null,
           bundledPrebuilds: false,
           manualLoad: false,
@@ -1240,20 +1239,57 @@ mod tests {
             : `${libraryBaseName}${extension}`;
         }
 
+        function bundledPrebuildPlatform() {
+          switch (process.platform) {
+            case "aix":
+            case "android":
+            case "darwin":
+            case "freebsd":
+            case "linux":
+            case "openbsd":
+            case "win32":
+              return process.platform;
+            default:
+              throw new Error(
+                `Unsupported Node platform ${JSON.stringify(process.platform)} for UniFFI bundled prebuild resolution.`,
+              );
+          }
+        }
+
+        function bundledPrebuildArch() {
+          switch (process.arch) {
+            case "arm":
+            case "arm64":
+            case "ia32":
+            case "loong64":
+            case "ppc64":
+            case "riscv64":
+            case "s390x":
+            case "x64":
+              return process.arch;
+            default:
+              throw new Error(
+                `Unsupported Node architecture ${JSON.stringify(process.arch)} for UniFFI bundled prebuild resolution.`,
+              );
+          }
+        }
+
         function defaultBundledTarget() {
-          if (process.platform !== "linux") {
-            return `${process.platform}-${process.arch}`;
+          const platform = bundledPrebuildPlatform();
+          const arch = bundledPrebuildArch();
+          if (platform !== "linux") {
+            return `${platform}-${arch}`;
           }
 
           const glibcVersionRuntime =
             process.report?.getReport?.().header?.glibcVersionRuntime;
           const linuxLibc = glibcVersionRuntime == null ? "musl" : "gnu";
-          return `${process.platform}-${process.arch}-${linuxLibc}`;
+          return `${platform}-${arch}-${linuxLibc}`;
         }
 
         function defaultBundledLibrary() {
           const target = defaultBundledTarget();
-          const filename = defaultSiblingLibraryFilename();
+          const filename = ffiMetadata.stagedLibraryFileName;
           return Object.freeze({
             target,
             packageRelativePath: `prebuilds/${target}/${filename}`,
@@ -1467,6 +1503,7 @@ mod tests {
         export interface FfiMetadata {
           namespace: string;
           cdylibName: string;
+          stagedLibraryFileName: string;
           libPathLiteral: string | null;
           bundledPrebuilds: boolean;
           manualLoad: boolean;
@@ -1557,8 +1594,20 @@ mod tests {
             "ffi metadata should expose bundledPrebuilds:\n{metadata_and_resolution}"
         );
         assert!(
+            metadata_and_resolution.contains("stagedLibraryFileName: \"libfixture.dylib\""),
+            "ffi metadata should expose the staged library filename:\n{metadata_and_resolution}"
+        );
+        assert!(
             metadata_and_resolution.contains("function defaultBundledTarget()"),
             "bundled target helper should be emitted:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution.contains("function bundledPrebuildPlatform()"),
+            "bundled platform helper should be emitted:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution.contains("function bundledPrebuildArch()"),
+            "bundled architecture helper should be emitted:\n{metadata_and_resolution}"
         );
         assert!(
             metadata_and_resolution.contains(
@@ -1575,6 +1624,10 @@ mod tests {
             metadata_and_resolution
                 .contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
             "bundled libraries should resolve under prebuilds/<target>/<filename>:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution.contains("const filename = ffiMetadata.stagedLibraryFileName;"),
+            "bundled libraries should use the staged input filename:\n{metadata_and_resolution}"
         );
         assert_contains_in_order(
             &metadata_and_resolution,

@@ -49,6 +49,7 @@ impl GeneratedPackage {
         let ffi_api = render_component_ffi(
             &component.ci,
             cdylib_name,
+            &layout.native_library.file_name,
             component.config.lib_path_literal.as_deref(),
             component.config.bundled_prebuilds,
             component.config.manual_load,
@@ -211,11 +212,7 @@ impl GeneratedPackage {
             })?;
         }
 
-        fs::copy(
-            source_path,
-            output_path,
-        )
-        .with_context(|| {
+        fs::copy(source_path, output_path).with_context(|| {
             format!(
                 "failed to stage native library '{}' into '{}'",
                 self.layout.native_library.source_path, self.layout.native_library.output_path

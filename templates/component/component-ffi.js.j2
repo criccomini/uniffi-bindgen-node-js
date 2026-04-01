@@ -223,10 +223,12 @@ function createBindingCore(libraryPath) {
   });
 }
 
-function createBindings(libraryPath, bindingCore = undefined) {
+function createBindings(libraryPath, bindingCore = undefined, resolution = undefined) {
   const core = bindingCore ?? createBindingCore(libraryPath);
+  const packageRelativePath = resolution?.packageRelativePath ?? null;
   return Object.freeze({
     libraryPath,
+    packageRelativePath,
     library: core.library,
     ffiTypes: core.ffiTypes,
     ffiCallbacks: core.ffiCallbacks,
@@ -290,7 +292,7 @@ export function load(libraryPath = undefined) {
     clearBindingCoreCache();
   }
 
-  const bindings = createBindings(canonicalLibraryPath, bindingCore);
+  const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);
   try {
     runtimeHooks.onLoad?.(bindings);
     if (bindingCore == null) {
@@ -387,6 +389,7 @@ export function validateContractVersion(bindings = getFfiBindings()) {
     throw new ContractVersionMismatchError(expected, actual, {
       details: {
         libraryPath: bindings.libraryPath,
+        packageRelativePath: bindings.packageRelativePath,
         symbolName: ffiIntegrity.contractVersionFunction,
       },
     });
@@ -412,6 +415,7 @@ export function validateChecksums(bindings = getFfiBindings()) {
       throw new ChecksumMismatchError({{ checksum.name_json }}, expected, actual, {
         details: {
           libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
         },
       });
     }

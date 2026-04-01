@@ -3,8 +3,8 @@ mod support;
 use std::fs;
 
 use self::support::{
-    FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
-    install_fixture_package_dependencies, remove_dir_all, run_node_script,
+    generate_fixture_package, generate_fixture_package_with_options,
+    install_fixture_package_dependencies, remove_dir_all, run_node_script, FixturePackageOptions,
 };
 
 #[test]
@@ -136,6 +136,11 @@ fn generated_checksum_mismatch_diagnostic_mentions_the_staged_library_path() {
         .sibling_library_path
         .clone()
         .expect("manual-load packages should still stage the native library");
+    let package_relative_path = staged_library_path
+        .strip_prefix(&output_dir)
+        .expect("staged library should live inside the generated package")
+        .as_str()
+        .to_string();
 
     install_fixture_package_dependencies(&output_dir);
     run_node_script(
@@ -150,8 +155,10 @@ import {{ ChecksumMismatchError }} from "./runtime/errors.js";
 const symbolName = Object.keys(ffiIntegrity.checksums)[0];
 const expected = ffiIntegrity.checksums[symbolName];
 const libraryPath = {library_path_json};
+const packageRelativePath = {package_relative_path_json};
 const fakeBindings = {{
   libraryPath,
+  packageRelativePath,
   ffiFunctions: new Proxy({{}}, {{
     get(_target, property) {{
       if (typeof property !== "string") {{
@@ -174,11 +181,13 @@ assert.throws(
     assert(error instanceof ChecksumMismatchError);
     assert(error.message.includes(`UniFFI checksum mismatch for ${{symbolName}}`));
     assert(error.message.includes(JSON.stringify(libraryPath)));
+    assert(error.message.includes(JSON.stringify(packageRelativePath)));
     assert(error.message.includes("generated package expects"));
     assert(error.message.includes("loaded library reported"));
     assert(error.message.includes("load the intended staged binary"));
     assert.deepStrictEqual(error.details, {{
       libraryPath,
+      packageRelativePath,
       kind: symbolName,
       expected,
       actual: expected + 1,
@@ -190,6 +199,8 @@ assert.throws(
             namespace = namespace,
             library_path_json =
                 serde_json::to_string(staged_library_path.as_str()).expect("path should serialize"),
+            package_relative_path_json = serde_json::to_string(&package_relative_path)
+                .expect("package path should serialize"),
         ),
     );
 
@@ -212,6 +223,11 @@ fn generated_contract_mismatch_diagnostic_mentions_the_staged_library_path() {
         .sibling_library_path
         .clone()
         .expect("manual-load packages should still stage the native library");
+    let package_relative_path = staged_library_path
+        .strip_prefix(&output_dir)
+        .expect("staged library should live inside the generated package")
+        .as_str()
+        .to_string();
 
     install_fixture_package_dependencies(&output_dir);
     run_node_script(
@@ -226,8 +242,10 @@ import {{ ContractVersionMismatchError }} from "./runtime/errors.js";
 const expected = ffiIntegrity.expectedContractVersion;
 const symbolName = ffiIntegrity.contractVersionFunction;
 const libraryPath = {library_path_json};
+const packageRelativePath = {package_relative_path_json};
 const fakeBindings = {{
   libraryPath,
+  packageRelativePath,
   ffiFunctions: {{
     [symbolName]: () => expected + 1,
   }},
@@ -239,11 +257,13 @@ assert.throws(
     assert(error instanceof ContractVersionMismatchError);
     assert(error.message.includes(`UniFFI contract version mismatch for ${{symbolName}}`));
     assert(error.message.includes(JSON.stringify(libraryPath)));
+    assert(error.message.includes(JSON.stringify(packageRelativePath)));
     assert(error.message.includes("generated package expects"));
     assert(error.message.includes("loaded library reported"));
     assert(error.message.includes("load the intended staged binary"));
     assert.deepStrictEqual(error.details, {{
       libraryPath,
+      packageRelativePath,
       symbolName,
       expected,
       actual: expected + 1,
@@ -255,6 +275,8 @@ assert.throws(
             namespace = namespace,
             library_path_json =
                 serde_json::to_string(staged_library_path.as_str()).expect("path should serialize"),
+            package_relative_path_json = serde_json::to_string(&package_relative_path)
+                .expect("package path should serialize"),
         ),
     );
 
@@ -1210,10 +1232,9 @@ fn callback_manual_load_unload_clears_pending_foreign_futures_and_callback_regis
     );
     let package_dir = &generated.package_dir;
     let namespace = &generated.built_fixture.namespace;
-    let staged_library_path = generated
-        .sibling_library_path
-        .as_ref()
-        .expect("manual-load callbacks package should stage the native library at the package root");
+    let staged_library_path = generated.sibling_library_path.as_ref().expect(
+        "manual-load callbacks package should stage the native library at the package root",
+    );
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(

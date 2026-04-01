@@ -11,6 +11,17 @@ function assignErrorMetadata(error, options = {}) {
   return error;
 }
 
+function stagedBinaryGuidance(details = {}) {
+  const packageRelativePath =
+    details != null && typeof details === "object"
+      ? details.packageRelativePath
+      : undefined;
+  if (packageRelativePath == null) {
+    return "Regenerate the package from this library or load the intended staged binary.";
+  }
+  return `Regenerate the package from this library or load the intended staged binary at ${JSON.stringify(packageRelativePath)} inside the generated package.`;
+}
+
 export class UniffiError extends Error {
   constructor(message = "UniFFI error", options = {}) {
     const captureStack = options.captureStack !== false;
@@ -65,7 +76,7 @@ export class ContractVersionMismatchError extends UniffiRuntimeError {
         symbolName == null ? "" : ` for ${String(symbolName)}`
       }${
         libraryPath == null ? "" : ` in ${JSON.stringify(libraryPath)}`
-      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. Regenerate the package from this library or load the intended staged binary.`,
+      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. ${stagedBinaryGuidance(details)}`,
       {
         ...options,
         details: {
@@ -87,7 +98,9 @@ export class ChecksumMismatchError extends UniffiRuntimeError {
     super(
       `UniFFI checksum mismatch for ${String(kind)}${
         libraryPath == null ? "" : ` in ${JSON.stringify(libraryPath)}`
-      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. Regenerate the package from this library or load the intended staged binary.`,
+      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. ${stagedBinaryGuidance(
+        options.details,
+      )}`,
       {
         ...options,
         details: {

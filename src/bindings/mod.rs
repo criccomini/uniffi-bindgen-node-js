@@ -7,9 +7,9 @@ mod runtime;
 mod target;
 mod templates;
 
+pub(crate) use self::package_writer::write_generated_package;
 #[cfg(test)]
 pub(crate) use self::package_writer::ComponentJsImports;
-pub(crate) use self::package_writer::write_generated_package;
 
 // GENERATED CODE
 #[cfg(test)]
@@ -22,9 +22,9 @@ mod tests {
 
     use anyhow::Result;
     use camino::{Utf8Path, Utf8PathBuf};
-    use uniffi_bindgen::{Component, interface::ComponentInterface};
+    use uniffi_bindgen::{interface::ComponentInterface, Component};
 
-    use crate::node_v2::config::{NodeBindingGeneratorConfig, parse_node_binding_config};
+    use crate::node_v2::config::{parse_node_binding_config, NodeBindingGeneratorConfig};
 
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {
@@ -1367,7 +1367,7 @@ mod tests {
             clearBindingCoreCache();
           }
 
-          const bindings = createBindings(canonicalLibraryPath, bindingCore);
+          const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);
           try {
             runtimeHooks.onLoad?.(bindings);
             if (bindingCore == null) {
@@ -1425,12 +1425,6 @@ mod tests {
           runtimeHooks = Object.freeze(hooks ?? {});
         }
 
-
-        if (!ffiMetadata.manualLoad) {
-          load();
-        }
-
-
         function throwLibraryNotLoaded() {
           throw new LibraryNotLoadedError(libraryNotLoadedMessage);
         }
@@ -1467,7 +1461,13 @@ mod tests {
           const actual = getContractVersion(bindings);
           const expected = ffiIntegrity.expectedContractVersion;
           if (actual !== expected) {
-            throw new ContractVersionMismatchError(expected, actual);
+            throw new ContractVersionMismatchError(expected, actual, {
+              details: {
+                libraryPath: bindings.libraryPath,
+                packageRelativePath: bindings.packageRelativePath,
+                symbolName: ffiIntegrity.contractVersionFunction,
+              },
+            });
           }
           return actual;
         }
@@ -1487,7 +1487,12 @@ mod tests {
             const expected = ffiIntegrity.checksums["uniffi_fixture_crate_checksum_func_current_generation"];
             const actual = actualChecksums["uniffi_fixture_crate_checksum_func_current_generation"];
             if (actual !== expected) {
-              throw new ChecksumMismatchError("uniffi_fixture_crate_checksum_func_current_generation", expected, actual);
+              throw new ChecksumMismatchError("uniffi_fixture_crate_checksum_func_current_generation", expected, actual, {
+                details: {
+                  libraryPath: bindings.libraryPath,
+                  packageRelativePath: bindings.packageRelativePath,
+                },
+              });
             }
           }
 
@@ -1511,6 +1516,7 @@ mod tests {
 
         export interface FfiBindings {
           libraryPath: string;
+          packageRelativePath: string | null;
           library: unknown;
           ffiTypes: Readonly<Record<string, unknown>>;
           ffiCallbacks: Readonly<Record<string, unknown>>;
@@ -1651,7 +1657,7 @@ mod tests {
                 "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
                 "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.",
                 "let bindingCore =",
-                "const bindings = createBindings(canonicalLibraryPath, bindingCore);",
+                "const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);",
             ],
         );
 

@@ -10,6 +10,7 @@ export interface FfiMetadata {
 
 export interface FfiBindings {
   libraryPath: string;
+  packageRelativePath: string | null;
   library: unknown;
   ffiTypes: Readonly<Record<string, unknown>>;
   ffiCallbacks: Readonly<Record<string, unknown>>;

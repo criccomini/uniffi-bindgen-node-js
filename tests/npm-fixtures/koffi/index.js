@@ -1105,6 +1105,48 @@ function createBasicFixtureRuntime(libraryPath) {
       },
     ],
     [
+      "ffi_fixture_basic_rust_future_poll_u64",
+      (futureHandle, continuationCallback, continuationHandle) => {
+        if (!futures.has(normalizeBigInt(futureHandle))) {
+          throw new Error(`unknown Rust future handle ${futureHandle}`);
+        }
+        const registeredContinuation = requireRegisteredCallback(
+          continuationCallback,
+          "ffi_fixture_basic_rust_future_poll_u64",
+        );
+        queueMicrotask(() => {
+          registeredContinuation(continuationHandle, RUST_FUTURE_POLL_READY);
+        });
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_complete_u64",
+      (futureHandle, status) => {
+        const future = futures.get(normalizeBigInt(futureHandle));
+        if (future == null) {
+          throw new Error(`unknown Rust future handle ${futureHandle}`);
+        }
+        if (future.kind === "pointer_error") {
+          setPointerCallError(status, future.payload);
+          return null;
+        }
+        setCallSuccess(status);
+        return future.payload;
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_free_u64",
+      (futureHandle) => {
+        futures.delete(normalizeBigInt(futureHandle));
+      },
+    ],
+    [
+      "ffi_fixture_basic_rust_future_cancel_u64",
+      (futureHandle) => {
+        futures.delete(normalizeBigInt(futureHandle));
+      },
+    ],
+    [
       "ffi_fixture_basic_rust_future_poll_rust_buffer",
       (futureHandle, continuationCallback, continuationHandle) => {
         if (!futures.has(normalizeBigInt(futureHandle))) {

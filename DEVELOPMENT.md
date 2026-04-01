@@ -92,7 +92,9 @@ cargo run --bin runtime_leak_prep -- callbacks --out-dir /tmp/uniffi-callback-le
 cargo run --bin runtime_leak_prep -- basic --manual-load --out-dir /tmp/uniffi-basic-manual-leaks
 ```
 
-That helper binary builds the fixture cdylib in a temporary workspace, generates a package into `--out-dir`, stages the native library next to the generated JavaScript files, and runs `npm install --no-package-lock` unless you pass `--skip-npm-install`.
+That helper binary builds the fixture cdylib in a temporary workspace, generates a package into `--out-dir`, ensures the generated package contains the native library at the package path the runtime will load, and runs `npm install --no-package-lock` unless you pass `--skip-npm-install`.
+
+It prints both `package_dir` and `library_path`. Point `UNIFFI_LEAK_PACKAGE_DIR` at `package_dir`; `library_path` is the staged sibling library inside that generated package.
 
 Run the runtime probes with Node 22 and `--expose-gc`:
 
@@ -181,7 +183,7 @@ cargo run --bin generator_leak_probe -- both --pause-after-warmup --pause-at-end
 
 That helper binary builds the fixture cdylibs once, loops generation inside one long-lived Rust process, prints the process ID for `leaks <pid>`, and removes the per-iteration output directories after each cycle.
 
-To inspect the normal CLI path at exit:
+To inspect the normal CLI path at exit, target the generated package directory itself so the loader resolves the same staged package paths it would use in production:
 
 ```sh
 leaks --atExit -- cargo run -- generate \

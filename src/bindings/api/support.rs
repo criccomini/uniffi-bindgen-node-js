@@ -25,8 +25,18 @@ pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()>
     );
     push_unsupported_feature(
         &mut unsupported,
+        "record constructors are not supported in generated Node bindings",
+        collect_record_constructor_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
         "record methods are not supported in generated Node bindings",
         collect_record_method_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "enum constructors are not supported in generated Node bindings",
+        collect_enum_constructor_names(ci),
     );
     push_unsupported_feature(
         &mut unsupported,
@@ -42,6 +52,16 @@ pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()>
         &mut unsupported,
         "enum UniFFI trait methods are not supported in generated Node bindings",
         collect_enum_trait_method_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "non-exhaustive enums are not supported in generated Node bindings",
+        collect_non_exhaustive_enum_names(ci),
+    );
+    push_unsupported_feature(
+        &mut unsupported,
+        "object UniFFI trait methods are not supported in generated Node bindings",
+        collect_object_trait_method_names(ci),
     );
 
     if unsupported.is_empty() {
@@ -88,6 +108,18 @@ fn collect_record_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
         .collect()
 }
 
+fn collect_record_constructor_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.record_definitions()
+        .iter()
+        .flat_map(|record| {
+            record
+                .constructors()
+                .iter()
+                .map(move |constructor| describe_member(record.name(), constructor.name()))
+        })
+        .collect()
+}
+
 fn collect_enum_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
     ci.enum_definitions()
         .iter()
@@ -96,6 +128,18 @@ fn collect_enum_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
                 .methods()
                 .iter()
                 .map(move |method| describe_member(enum_def.name(), method.name()))
+        })
+        .collect()
+}
+
+fn collect_enum_constructor_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.enum_definitions()
+        .iter()
+        .flat_map(|enum_def| {
+            enum_def
+                .constructors()
+                .iter()
+                .map(move |constructor| describe_member(enum_def.name(), constructor.name()))
         })
         .collect()
 }
@@ -114,6 +158,23 @@ fn collect_enum_trait_method_names(ci: &ComponentInterface) -> BTreeSet<String> 
         .iter()
         .filter_map(|enum_def| {
             describe_uniffi_trait_methods(enum_def.name(), enum_def.uniffi_trait_methods())
+        })
+        .collect()
+}
+
+fn collect_non_exhaustive_enum_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.enum_definitions()
+        .iter()
+        .filter(|enum_def| enum_def.is_non_exhaustive())
+        .map(|enum_def| enum_def.name().to_string())
+        .collect()
+}
+
+fn collect_object_trait_method_names(ci: &ComponentInterface) -> BTreeSet<String> {
+    ci.object_definitions()
+        .iter()
+        .filter_map(|object| {
+            describe_uniffi_trait_methods(object.name(), object.uniffi_trait_methods())
         })
         .collect()
 }
@@ -926,7 +987,8 @@ mod tests {
     use uniffi_bindgen::interface::ComponentInterface;
     use uniffi_meta::{
         EnumMetadata, EnumShape, Metadata, MetadataGroup, MethodMetadata, NamespaceMetadata,
-        RecordMetadata, UniffiTraitMetadata, VariantMetadata,
+        ObjectImpl, ObjectMetadata, RecordMetadata, UniffiTraitMetadata,
+        VariantMetadata,
     };
 
     use super::{render_doc_comment, validate_supported_features};
@@ -960,6 +1022,10 @@ mod tests {
     }
 
     fn enum_metadata(name: &str) -> Metadata {
+        enum_metadata_with_non_exhaustive(name, false)
+    }
+
+    fn enum_metadata_with_non_exhaustive(name: &str, non_exhaustive: bool) -> Metadata {
         EnumMetadata {
             module_path: "fixture_crate".to_string(),
             name: name.to_string(),
@@ -972,7 +1038,18 @@ mod tests {
                 fields: vec![],
                 docstring: None,
             }],
-            non_exhaustive: false,
+            non_exhaustive,
+            docstring: None,
+        }
+        .into()
+    }
+
+    fn object_metadata(name: &str) -> Metadata {
+        ObjectMetadata {
+            module_path: "fixture_crate".to_string(),
+            name: name.to_string(),
+            remote: false,
+            imp: ObjectImpl::Struct,
             docstring: None,
         }
         .into()
@@ -1110,6 +1187,27 @@ mod tests {
                 "unsupported UniFFI features for generated Node bindings:\n",
                 "- record UniFFI trait methods are not supported in generated Node bindings: Profile (Debug, Hash)\n",
                 "- enum UniFFI trait methods are not supported in generated Node bindings: Flavor (Display)",
+            )
+        );
+    }
+
+    #[test]
+    fn validate_supported_features_rejects_non_exhaustive_enums_and_object_trait_methods() {
+        let ci = component_interface_from_metadata([
+            enum_metadata_with_non_exhaustive("Flavor", true),
+            object_metadata("Store"),
+            display_trait_metadata("Store"),
+        ]);
+
+        let error = validate_supported_features(&ci)
+            .expect_err("ignored UniFFI 0.31 surfaces should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            concat!(
+                "unsupported UniFFI features for generated Node bindings:\n",
+                "- non-exhaustive enums are not supported in generated Node bindings: Flavor\n",
+                "- object UniFFI trait methods are not supported in generated Node bindings: Store (Display)",
             )
         );
     }

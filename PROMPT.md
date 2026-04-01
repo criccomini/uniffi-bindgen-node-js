@@ -184,7 +184,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update CLI error messages to mention v2 behavior rather than v1 terminology.
 - [x] Decide and implement how package naming defaults are derived in v2.
 - [x] Keep --package-name override support.
-- [ ] Keep --node-engine override support.
+- [x] Keep --node-engine override support.
 - [ ] Keep --bundled-prebuilds flag support.
 - [ ] Keep --manual-load flag support.
 - [ ] Preserve ESM-only output policy in validation and docs.

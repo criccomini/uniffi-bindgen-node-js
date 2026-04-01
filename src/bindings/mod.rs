@@ -1,12 +1,11 @@
 use std::fs;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
-use uniffi_bindgen::{Component, GenerationSettings};
+use uniffi_bindgen::Component;
 
 pub use crate::node_v2::config::{NodeBindingCliOverrides, NodeBindingGeneratorConfig};
-use crate::node_v2::config::{finalize_node_binding_config, parse_node_binding_config};
 use crate::node_v2::package_layout::GeneratedPackageLayout;
 
 mod api;
@@ -16,53 +15,6 @@ use self::{
     api::{ComponentModel, RenderedComponentApi},
     ffi::{RenderedComponentFfi, render_component_ffi},
 };
-
-#[derive(Debug, Clone)]
-pub struct NodeBindingGenerator {
-    cli_overrides: NodeBindingCliOverrides,
-}
-
-impl NodeBindingGenerator {
-    pub fn new(cli_overrides: NodeBindingCliOverrides) -> Self {
-        Self { cli_overrides }
-    }
-
-    pub fn new_config(&self, root_toml: &toml::value::Value) -> Result<NodeBindingGeneratorConfig> {
-        parse_node_binding_config(root_toml)
-    }
-
-    pub fn update_component_configs(
-        &self,
-        settings: &GenerationSettings,
-        components: &mut Vec<Component<NodeBindingGeneratorConfig>>,
-    ) -> Result<()> {
-        for component in components {
-            finalize_node_binding_config(
-                &component.ci,
-                &mut component.config,
-                settings.cdylib.as_deref(),
-                &self.cli_overrides,
-            )?;
-        }
-        Ok(())
-    }
-
-    pub fn write_bindings(
-        &self,
-        settings: &GenerationSettings,
-        components: &[Component<NodeBindingGeneratorConfig>],
-    ) -> Result<()> {
-        let component = match components {
-            [component] => component,
-            [] => bail!("node bindings generation did not receive a UniFFI component"),
-            _ => bail!(
-                "node bindings generation emits one npm package per invocation; re-run with --crate-name to select a single crate"
-            ),
-        };
-
-        write_generated_package(&settings.out_dir, component)
-    }
-}
 
 #[derive(Debug, Clone)]
 struct GeneratedPackage {
@@ -647,6 +599,7 @@ mod tests {
     };
 
     use uniffi_bindgen::interface::ComponentInterface;
+    use crate::node_v2::config::parse_node_binding_config;
 
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {
@@ -697,18 +650,57 @@ mod tests {
         parse_node_binding_config(&root).expect("node config should deserialize")
     }
 
+    fn write_test_package(
+        output_dir: &Utf8Path,
+        component: &Component<NodeBindingGeneratorConfig>,
+    ) -> Result<()> {
+        write_generated_package(output_dir, component)
+    }
+
+    fn extract_section(contents: &str, start_marker: &str, end_marker: &str) -> String {
+        let start = contents
+            .find(start_marker)
+            .unwrap_or_else(|| panic!("missing start marker {start_marker:?}"));
+        let end = contents[start..]
+            .find(end_marker)
+            .map(|offset| start + offset)
+            .unwrap_or_else(|| panic!("missing end marker {end_marker:?}"));
+        contents[start..end].trim().to_string()
+    }
+
+    fn normalize_checksum_value(contents: &str) -> String {
+        contents
+            .lines()
+            .map(|line| {
+                if line
+                    .trim_start()
+                    .starts_with("\"uniffi_fixture_crate_checksum_func_current_generation\": ")
+                {
+                    "    \"uniffi_fixture_crate_checksum_func_current_generation\": <CHECKSUM>,"
+                        .to_string()
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn assert_contains_in_order(contents: &str, snippets: &[&str]) {
+        let mut search_start = 0;
+
+        for snippet in snippets {
+            let relative_offset = contents[search_start..]
+                .find(snippet)
+                .unwrap_or_else(|| panic!("missing ordered snippet {snippet:?}"));
+            search_start += relative_offset + snippet.len();
+        }
+    }
+
     #[test]
     fn write_bindings_creates_output_package_directory() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("package-root");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        generator
-            .write_bindings(&settings, &[component_with_namespace("example")])
+        write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
         assert!(output_dir.is_dir(), "expected {output_dir} to be created");
@@ -717,42 +709,9 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_rejects_multiple_components() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
-        let settings = GenerationSettings {
-            out_dir: temp_dir_path("multiple-components"),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        let error = generator
-            .write_bindings(
-                &settings,
-                &[
-                    component_with_namespace("first"),
-                    component_with_namespace("second"),
-                ],
-            )
-            .expect_err("multiple components should be rejected");
-
-        assert!(
-            error.to_string().contains("one npm package per invocation"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
     fn write_bindings_emits_package_and_component_files() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("package-files");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        generator
-            .write_bindings(&settings, &[component_with_namespace("example")])
+        write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
         for expected in [
@@ -941,13 +900,7 @@ mod tests {
 
     #[test]
     fn write_bindings_emits_koffi_callback_and_function_declarations() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-bindings");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
         let component = component_from_webidl(
             r#"
             namespace example {
@@ -961,9 +914,7 @@ mod tests {
             "#,
         );
 
-        generator
-            .write_bindings(&settings, &[component])
-            .expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1037,13 +988,7 @@ mod tests {
 
     #[test]
     fn write_bindings_emits_typed_object_handle_round_trip_support() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("object-handle-round-trip");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
         let component = component_from_webidl(
             r#"
             namespace example {};
@@ -1055,9 +1000,7 @@ mod tests {
             "#,
         );
 
-        generator
-            .write_bindings(&settings, &[component])
-            .expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1103,13 +1046,7 @@ mod tests {
 
     #[test]
     fn write_bindings_emits_slatedb_callback_interface_paths() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("slatedb-callbacks");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
         let component = component_from_webidl(
             r#"
             namespace example {
@@ -1148,9 +1085,7 @@ mod tests {
             "#,
         );
 
-        generator
-            .write_bindings(&settings, &[component])
-            .expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1213,13 +1148,7 @@ mod tests {
 
     #[test]
     fn write_bindings_emits_slatedb_async_api_paths() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("slatedb-async-apis");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
         let component = component_from_webidl(
             r#"
             namespace example {};
@@ -1324,9 +1253,7 @@ mod tests {
             "#,
         );
 
-        generator
-            .write_bindings(&settings, &[component])
-            .expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1492,16 +1419,8 @@ mod tests {
 
     #[test]
     fn write_bindings_makes_ffi_load_idempotent() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-idempotent-load");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        generator
-            .write_bindings(&settings, &[component_with_namespace("example")])
+        write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
@@ -1524,16 +1443,8 @@ mod tests {
 
     #[test]
     fn write_bindings_validates_contract_version_during_load() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-contract-version");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        generator
-            .write_bindings(&settings, &[component_with_namespace("example")])
+        write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
@@ -1568,13 +1479,7 @@ mod tests {
 
     #[test]
     fn write_bindings_validates_checksums_during_load() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-checksums");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
         let component = component_from_webidl(
             r#"
             namespace example {
@@ -1583,9 +1488,7 @@ mod tests {
             "#,
         );
 
-        generator
-            .write_bindings(&settings, &[component])
-            .expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1620,17 +1523,496 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_resolves_sibling_and_literal_library_paths() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
-        let output_dir = temp_dir_path("ffi-library-paths");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
+    fn write_bindings_snapshot_ffi_initialization_contract() {
+        let output_dir = temp_dir_path("ffi-initialization");
+        let component = component_from_webidl(
+            r#"
+            namespace example {
+                u64 current_generation();
+            };
+            "#,
+        );
 
-        generator
-            .write_bindings(&settings, &[component_with_namespace("example")])
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+
+        let ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
+        let ffi_dts = fs::read_to_string(output_dir.join("example-ffi.d.ts").as_std_path())
+            .expect("component FFI DTS should be readable");
+        let metadata_section = normalize_checksum_value(&extract_section(
+            &ffi_js,
+            "export const ffiMetadata = Object.freeze({",
+            "function createBindingCore(",
+        ));
+        let lifecycle_section = extract_section(
+            &ffi_js,
+            "export function load(libraryPath = undefined) {",
+            "export const ffiFunctions = Object.freeze({",
+        );
+        let initialization_contract = extract_section(
+            &ffi_dts,
+            "export interface FfiMetadata {",
+            "export declare const ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;",
+        );
+
+        insta::assert_snapshot!(
+            format!(
+                "=== metadata ===\n{metadata_section}\n\n=== lifecycle ===\n{lifecycle_section}"
+            ),
+            @r#"
+        === metadata ===
+        export const ffiMetadata = Object.freeze({
+          namespace: "example",
+          cdylibName: "fixture",
+          libPathLiteral: null,
+          bundledPrebuilds: false,
+          manualLoad: false,
+        });
+
+        export const ffiIntegrity = Object.freeze({
+          contractVersionFunction: "ffi_fixture_crate_uniffi_contract_version",
+          expectedContractVersion: 30,
+          checksums: Object.freeze({
+
+            "uniffi_fixture_crate_checksum_func_current_generation": <CHECKSUM>,
+
+          }),
+        });
+
+        let loadedBindings = null;
+        let loadedFfiTypes = null;
+        let loadedFfiFunctions = null;
+        // Koffi retains native state for repeated lib.func() declarations, so keep a
+        // single binding core alive across unload/load cycles and evict stale cores
+        // when switching to a different canonical library path.
+        let cachedBindingCore = null;
+        let cachedLibraryPath = null;
+        let runtimeHooks = Object.freeze({});
+        const moduleFilename = fileURLToPath(import.meta.url);
+        const moduleDirectory = dirname(moduleFilename);
+        const libraryNotLoadedMessage =
+          "The native library is not loaded. Call load(libraryPath) first.";
+
+        function defaultSiblingLibraryFilename() {
+          const extensionByPlatform = {
+            darwin: ".dylib",
+            linux: ".so",
+            win32: ".dll",
+          };
+          const extension = extensionByPlatform[process.platform] ?? ".so";
+
+          if (process.platform === "win32") {
+            return ffiMetadata.cdylibName.endsWith(extension)
+              ? ffiMetadata.cdylibName
+              : `${ffiMetadata.cdylibName}${extension}`;
+          }
+
+          const libraryBaseName = ffiMetadata.cdylibName.startsWith("lib")
+            ? ffiMetadata.cdylibName
+            : `lib${ffiMetadata.cdylibName}`;
+          return libraryBaseName.endsWith(extension)
+            ? libraryBaseName
+            : `${libraryBaseName}${extension}`;
+        }
+
+        function defaultBundledTarget() {
+          if (process.platform !== "linux") {
+            return `${process.platform}-${process.arch}`;
+          }
+
+          const glibcVersionRuntime =
+            process.report?.getReport?.().header?.glibcVersionRuntime;
+          const linuxLibc = glibcVersionRuntime == null ? "musl" : "gnu";
+          return `${process.platform}-${process.arch}-${linuxLibc}`;
+        }
+
+        function defaultBundledLibrary() {
+          const target = defaultBundledTarget();
+          const filename = defaultSiblingLibraryFilename();
+          return Object.freeze({
+            target,
+            packageRelativePath: `prebuilds/${target}/${filename}`,
+            libraryPath: join(moduleDirectory, "prebuilds", target, filename),
+          });
+        }
+
+        function defaultSiblingLibraryPath() {
+          return join(moduleDirectory, defaultSiblingLibraryFilename());
+        }
+
+        function resolveLibraryPath(libraryPath = undefined) {
+          const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+          if (rawLibraryPath != null) {
+            return Object.freeze({
+              libraryPath: isAbsolute(rawLibraryPath)
+                ? rawLibraryPath
+                : join(moduleDirectory, rawLibraryPath),
+              bundledPrebuild: null,
+            });
+          }
+
+          if (ffiMetadata.bundledPrebuilds) {
+            const bundledPrebuild = defaultBundledLibrary();
+            return Object.freeze({
+              libraryPath: bundledPrebuild.libraryPath,
+              bundledPrebuild,
+            });
+          }
+
+          return Object.freeze({
+            libraryPath: defaultSiblingLibraryPath(),
+            bundledPrebuild: null,
+          });
+        }
+
+        function canonicalizeExistingLibraryPath(libraryPath) {
+          if (!existsSync(libraryPath)) {
+            return libraryPath;
+          }
+
+          return typeof realpathSync.native === "function"
+            ? realpathSync.native(libraryPath)
+            : realpathSync(libraryPath);
+        }
+
+        === lifecycle ===
+        export function load(libraryPath = undefined) {
+          const resolution = resolveLibraryPath(libraryPath);
+          const resolvedLibraryPath = resolution.libraryPath;
+          const bundledPrebuild = resolution.bundledPrebuild;
+          const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
+
+          if (loadedBindings !== null) {
+            if (loadedBindings.libraryPath === canonicalLibraryPath) {
+              return loadedBindings;
+            }
+
+            throw new Error(
+              `The native library is already loaded from ${JSON.stringify(loadedBindings.libraryPath)}. Call unload() before loading a different library path.`,
+            );
+          }
+
+          if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {
+            throw new Error(
+              `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.`,
+            );
+          }
+
+          let bindingCore =
+            cachedLibraryPath === canonicalLibraryPath
+              ? cachedBindingCore
+              : null;
+          if (bindingCore == null && cachedBindingCore != null) {
+            cachedBindingCore.library.unload();
+            clearBindingCoreCache();
+          }
+
+          const bindings = createBindings(canonicalLibraryPath, bindingCore);
+          try {
+            runtimeHooks.onLoad?.(bindings);
+            if (bindingCore == null) {
+              validateContractVersion(bindings);
+              validateChecksums(bindings);
+              bindingCore = cacheBindingCore(canonicalLibraryPath, bindings);
+            }
+          } catch (error) {
+            try {
+              runtimeHooks.onUnload?.(bindings);
+            } catch {
+              // Preserve the original initialization failure.
+            }
+            if (bindingCore == null) {
+              try {
+                bindings.library.unload();
+              } catch {
+                // Preserve the original initialization failure.
+              }
+            }
+            throw error;
+          }
+
+          loadedBindings = bindings;
+          loadedFfiTypes = bindings.ffiTypes;
+          loadedFfiFunctions = bindings.ffiFunctions;
+          return loadedBindings;
+        }
+
+        export function unload() {
+          if (loadedBindings === null) {
+            return false;
+          }
+
+          let hookError = null;
+          try {
+            runtimeHooks.onUnload?.(loadedBindings);
+          } catch (error) {
+            hookError = error;
+          }
+          loadedBindings = null;
+          loadedFfiTypes = null;
+          loadedFfiFunctions = null;
+          if (hookError != null) {
+            throw hookError;
+          }
+          return true;
+        }
+
+        export function isLoaded() {
+          return loadedBindings !== null;
+        }
+
+        export function configureRuntimeHooks(hooks = undefined) {
+          runtimeHooks = Object.freeze(hooks ?? {});
+        }
+
+
+        if (!ffiMetadata.manualLoad) {
+          load();
+        }
+
+
+        function throwLibraryNotLoaded() {
+          throw new LibraryNotLoadedError(libraryNotLoadedMessage);
+        }
+
+        export function getFfiBindings() {
+          if (loadedBindings === null) {
+            throwLibraryNotLoaded();
+          }
+
+          return loadedBindings;
+        }
+
+        export function getFfiTypes() {
+          if (loadedFfiTypes === null) {
+            throwLibraryNotLoaded();
+          }
+
+          return loadedFfiTypes;
+        }
+
+        function getLoadedFfiFunctions() {
+          if (loadedFfiFunctions === null) {
+            throwLibraryNotLoaded();
+          }
+
+          return loadedFfiFunctions;
+        }
+
+        export function getContractVersion(bindings = getFfiBindings()) {
+          return bindings.ffiFunctions.ffi_fixture_crate_uniffi_contract_version();
+        }
+
+        export function validateContractVersion(bindings = getFfiBindings()) {
+          const actual = getContractVersion(bindings);
+          const expected = ffiIntegrity.expectedContractVersion;
+          if (actual !== expected) {
+            throw new ContractVersionMismatchError(expected, actual);
+          }
+          return actual;
+        }
+
+        export function getChecksums(bindings = getFfiBindings()) {
+          return Object.freeze({
+
+            "uniffi_fixture_crate_checksum_func_current_generation": bindings.ffiFunctions.uniffi_fixture_crate_checksum_func_current_generation(),
+
+          });
+        }
+
+        export function validateChecksums(bindings = getFfiBindings()) {
+          const actualChecksums = getChecksums(bindings);
+
+          {
+            const expected = ffiIntegrity.checksums["uniffi_fixture_crate_checksum_func_current_generation"];
+            const actual = actualChecksums["uniffi_fixture_crate_checksum_func_current_generation"];
+            if (actual !== expected) {
+              throw new ChecksumMismatchError("uniffi_fixture_crate_checksum_func_current_generation", expected, actual);
+            }
+          }
+
+          return actualChecksums;
+        }
+        "#
+        );
+
+        insta::assert_snapshot!(
+            initialization_contract,
+            @r#"
+        export interface FfiMetadata {
+          namespace: string;
+          cdylibName: string;
+          libPathLiteral: string | null;
+          bundledPrebuilds: boolean;
+          manualLoad: boolean;
+        }
+
+        export interface FfiBindings {
+          libraryPath: string;
+          library: unknown;
+          ffiTypes: Readonly<Record<string, unknown>>;
+          ffiCallbacks: Readonly<Record<string, unknown>>;
+          ffiStructs: Readonly<Record<string, unknown>>;
+          ffiFunctions: Readonly<Record<string, (...args: any[]) => any>>;
+        }
+
+        export interface FfiIntegrity {
+          contractVersionFunction: string;
+          expectedContractVersion: number;
+          checksums: Readonly<Record<string, number>>;
+        }
+
+        export interface FfiRuntimeHooks {
+          onLoad?(bindings: Readonly<FfiBindings>): void;
+          onUnload?(bindings: Readonly<FfiBindings>): void;
+        }
+
+        export declare const ffiMetadata: Readonly<FfiMetadata>;
+        export declare const ffiIntegrity: Readonly<FfiIntegrity>;
+        export declare function configureRuntimeHooks(hooks?: FfiRuntimeHooks | null): void;
+        export declare function load(libraryPath?: string | null): Readonly<FfiBindings>;
+        export declare function unload(): boolean;
+        export declare function isLoaded(): boolean;
+        export declare function getFfiBindings(): Readonly<FfiBindings>;
+        export declare function getFfiTypes(): Readonly<Record<string, unknown>>;
+        export declare function getContractVersion(bindings?: Readonly<FfiBindings>): number;
+        export declare function validateContractVersion(bindings?: Readonly<FfiBindings>): number;
+        export declare function getChecksums(
+          bindings?: Readonly<FfiBindings>,
+        ): Readonly<Record<string, number>>;
+        export declare function validateChecksums(
+          bindings?: Readonly<FfiBindings>,
+        ): Readonly<Record<string, number>>;
+        "#
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_emits_bundled_resolution_contract() {
+        let output_dir = temp_dir_path("ffi-bundled-initialization");
+        let mut component = component_from_webidl(
+            r#"
+            namespace example {
+                u64 current_generation();
+            };
+            "#,
+        );
+        component.config.bundled_prebuilds = true;
+
+        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+
+        let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
+            .expect("component JS should be readable");
+        let ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
+            .expect("component FFI JS should be readable");
+        let component_metadata = extract_section(
+            &component_js,
+            "export const componentMetadata = Object.freeze({",
+            "export { ffiMetadata } from",
+        );
+        let metadata_and_resolution = extract_section(
+            &ffi_js,
+            "export const ffiMetadata = Object.freeze({",
+            "function createBindingCore(",
+        );
+        let lifecycle_section = extract_section(
+            &ffi_js,
+            "export function load(libraryPath = undefined) {",
+            "export const ffiFunctions = Object.freeze({",
+        );
+
+        assert!(
+            component_metadata.contains("bundledPrebuilds: true"),
+            "component metadata should expose bundledPrebuilds:\n{component_metadata}"
+        );
+        assert!(
+            metadata_and_resolution.contains("bundledPrebuilds: true"),
+            "ffi metadata should expose bundledPrebuilds:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution.contains("function defaultBundledTarget()"),
+            "bundled target helper should be emitted:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution.contains(
+                "const glibcVersionRuntime =\n    process.report?.getReport?.().header?.glibcVersionRuntime;"
+            ),
+            "linux libc detection should use process.report:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution
+                .contains("const linuxLibc = glibcVersionRuntime == null ? \"musl\" : \"gnu\";"),
+            "linux libc suffix should distinguish musl and gnu:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution
+                .contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
+            "bundled libraries should resolve under prebuilds/<target>/<filename>:\n{metadata_and_resolution}"
+        );
+        assert_contains_in_order(
+            &metadata_and_resolution,
+            &[
+                "const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;",
+                "if (rawLibraryPath != null) {",
+                "if (ffiMetadata.bundledPrebuilds) {",
+                "libraryPath: defaultSiblingLibraryPath(),",
+            ],
+        );
+        assert_contains_in_order(
+            &lifecycle_section,
+            &[
+                "if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {",
+                "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
+                "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.",
+                "let bindingCore =",
+                "const bindings = createBindings(canonicalLibraryPath, bindingCore);",
+            ],
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn write_bindings_reports_all_unsupported_uniffi_features() {
+        let output_dir = temp_dir_path("unsupported-uniffi-features");
+        let component = component_from_webidl(
+            r#"
+            [External="other-crate"]
+            typedef enum ExternalThing;
+
+            [Custom]
+            typedef string Url;
+
+            namespace example {
+                ExternalThing read_external();
+                Url parse_url(string value);
+            };
+
+            callback interface Logger {
+                [Async] void write(string message);
+            };
+            "#,
+        );
+
+        let error = write_test_package(&output_dir, &component)
+            .expect_err("unsupported features should be rejected");
+
+        insta::assert_snapshot!(
+            error.to_string(),
+            @r#"
+        unsupported UniFFI features for Node bindings v1:
+        - external types are not supported in v1: ExternalThing
+        - custom types are not supported in v1: Url
+        "#
+        );
+    }
+
+    #[test]
+    fn write_bindings_resolves_sibling_and_literal_library_paths() {
+        let output_dir = temp_dir_path("ffi-library-paths");
+        write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
@@ -1674,16 +2056,8 @@ mod tests {
 
     #[test]
     fn write_bindings_auto_loads_by_default() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("ffi-auto-load");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        generator
-            .write_bindings(&settings, &[component_with_namespace("example")])
+        write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
@@ -1702,16 +2076,8 @@ mod tests {
 
     #[test]
     fn write_bindings_exports_manual_load_helpers() {
-        let generator = NodeBindingGenerator::new(NodeBindingCliOverrides::default());
         let output_dir = temp_dir_path("manual-load-exports");
-        let settings = GenerationSettings {
-            out_dir: output_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
-
-        generator
-            .write_bindings(&settings, &[component_with_manual_load("example")])
+        write_test_package(&output_dir, &component_with_manual_load("example"))
             .expect("write_bindings should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
@@ -1795,9 +2161,7 @@ mod tests {
             );
             let root =
                 toml::from_str::<toml::Value>(&source).expect("test TOML should deserialize");
-            let error = NodeBindingGenerator::new(NodeBindingCliOverrides::default())
-                .new_config(&root)
-                .unwrap_err();
+            let error = parse_node_binding_config(&root).unwrap_err();
 
             assert!(
                 error

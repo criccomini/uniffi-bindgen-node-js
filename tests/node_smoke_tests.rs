@@ -3,19 +3,15 @@ mod support;
 use std::fs;
 
 use self::support::{
-    FixturePackageOptions, component_with_namespace, current_bundled_prebuild_target,
-    generate_fixture_package, generate_fixture_package_with_options, generation_settings,
-    generator, install_fixture_package_dependencies, remove_dir_all, run_node_script,
+    FixturePackageOptions, current_bundled_prebuild_target, generate_fixture_package,
+    generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
+    run_node_script,
 };
 
 #[test]
 fn runtime_object_factory_keeps_generic_pointer_handles_until_clone() {
-    let settings = generation_settings("runtime-object-factory-generic-pointer");
-    let output_dir = settings.out_dir.clone();
-
-    generator()
-        .write_bindings(&settings, &[component_with_namespace("example")])
-        .expect("write_bindings should succeed");
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -123,16 +119,13 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
     );
 
     remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
 }
 
 #[test]
 fn runtime_object_factory_keeps_raw_handles_for_follow_up_calls() {
-    let settings = generation_settings("runtime-object-factory-retyped-handles");
-    let output_dir = settings.out_dir.clone();
-
-    generator()
-        .write_bindings(&settings, &[component_with_namespace("example")])
-        .expect("write_bindings should succeed");
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -248,16 +241,13 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
     );
 
     remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
 }
 
 #[test]
 fn runtime_object_factory_decodes_numeric_handles_before_pointer_cast() {
-    let settings = generation_settings("runtime-object-factory-numeric-handles");
-    let output_dir = settings.out_dir.clone();
-
-    generator()
-        .write_bindings(&settings, &[component_with_namespace("example")])
-        .expect("write_bindings should succeed");
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -345,16 +335,13 @@ assert.equal(typedHandle.__type?.name, "RustArcPtrResource");
     );
 
     remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
 }
 
 #[test]
 fn runtime_object_converter_retypes_deserialized_handles() {
-    let settings = generation_settings("runtime-object-converter-deserialized-handles");
-    let output_dir = settings.out_dir.clone();
-
-    generator()
-        .write_bindings(&settings, &[component_with_namespace("example")])
-        .expect("write_bindings should succeed");
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -424,16 +411,13 @@ assert.equal(resourceFactory.cloneHandle(resource), 43n);
     );
 
     remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
 }
 
 #[test]
 fn runtime_object_factory_keeps_raw_external_handles_for_follow_up_calls() {
-    let settings = generation_settings("runtime-object-factory-raw-external-handles");
-    let output_dir = settings.out_dir.clone();
-
-    generator()
-        .write_bindings(&settings, &[component_with_namespace("example")])
-        .expect("write_bindings should succeed");
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -569,6 +553,7 @@ assert.deepEqual(freedHandles, [42n, 84n]);
     );
 
     remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
 }
 
 #[test]

@@ -140,7 +140,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Remove reliance on deprecated BindingGenerator.
 - [x] Remove reliance on library_mode::generate_bindings.
 - [x] Remove reliance on CrateConfigSupplier as the primary architecture.
-- [ ] Remove or demote public exposure of NodeBindingGenerator.
+- [x] Remove or demote public exposure of NodeBindingGenerator.
 - [ ] Remove or demote public exposure of NodeBindingGeneratorConfig.
 - [ ] Remove or demote public exposure of NodeBindingCliOverrides.
 - [x] Design and add a single v2 programmatic entrypoint for Node package generation.

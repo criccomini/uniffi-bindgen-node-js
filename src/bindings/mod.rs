@@ -175,6 +175,11 @@ mod tests {
             "runtime/errors.d.ts",
             "runtime/ffi-types.js",
             "runtime/ffi-types.d.ts",
+        ] {
+            let path = output_dir.join(expected);
+            assert!(path.is_file(), "expected generated file {path}");
+        }
+        for unexpected in [
             "runtime/ffi-converters.js",
             "runtime/ffi-converters.d.ts",
             "runtime/rust-call.js",
@@ -188,8 +193,8 @@ mod tests {
             "runtime/objects.js",
             "runtime/objects.d.ts",
         ] {
-            let path = output_dir.join(expected);
-            assert!(path.is_file(), "expected generated file {path}");
+            let path = output_dir.join(unexpected);
+            assert!(!path.exists(), "unexpected generated file {path}");
         }
 
         let package_json = fs::read_to_string(output_dir.join("package.json").as_std_path())
@@ -236,6 +241,12 @@ mod tests {
         assert!(
             !component_js.contains("import {\n"),
             "unexpected component JS contents: {component_js}"
+        );
+        let component_dts = fs::read_to_string(output_dir.join("example.d.ts").as_std_path())
+            .expect("component DTS should be readable");
+        assert!(
+            !component_dts.contains("import { UniffiObjectBase }"),
+            "unexpected component DTS contents: {component_dts}"
         );
 
         let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
@@ -301,80 +312,6 @@ mod tests {
             ffi_types_js.contains("export function readRustBufferBytes"),
             "unexpected runtime FFI types JS contents: {ffi_types_js}"
         );
-        let ffi_converters_js =
-            fs::read_to_string(output_dir.join("runtime/ffi-converters.js").as_std_path())
-                .expect("runtime FFI converters JS should be readable");
-        assert!(
-            ffi_converters_js.contains("export class AbstractFfiConverterByteArray"),
-            "unexpected runtime FFI converters JS contents: {ffi_converters_js}"
-        );
-        assert!(
-            ffi_converters_js.contains("export const FfiConverterString"),
-            "unexpected runtime FFI converters JS contents: {ffi_converters_js}"
-        );
-        let rust_call_js =
-            fs::read_to_string(output_dir.join("runtime/rust-call.js").as_std_path())
-                .expect("runtime rust-call JS should be readable");
-        assert!(
-            rust_call_js.contains("export function checkRustCallStatus"),
-            "unexpected runtime rust-call JS contents: {rust_call_js}"
-        );
-        assert!(
-            rust_call_js.contains("export class UniffiRustCaller"),
-            "unexpected runtime rust-call JS contents: {rust_call_js}"
-        );
-        let handle_map_js =
-            fs::read_to_string(output_dir.join("runtime/handle-map.js").as_std_path())
-                .expect("runtime handle-map JS should be readable");
-        assert!(
-            handle_map_js.contains("export class UniffiHandleMap"),
-            "unexpected runtime handle-map JS contents: {handle_map_js}"
-        );
-        assert!(
-            handle_map_js.contains("export const FIRST_FOREIGN_HANDLE"),
-            "unexpected runtime handle-map JS contents: {handle_map_js}"
-        );
-        let async_rust_call_js =
-            fs::read_to_string(output_dir.join("runtime/async-rust-call.js").as_std_path())
-                .expect("runtime async rust-call JS should be readable");
-        let callbacks_js =
-            fs::read_to_string(output_dir.join("runtime/callbacks.js").as_std_path())
-                .expect("runtime callbacks JS should be readable");
-        let objects_js = fs::read_to_string(output_dir.join("runtime/objects.js").as_std_path())
-            .expect("runtime objects JS should be readable");
-        assert!(
-            async_rust_call_js.contains("export async function rustCallAsync"),
-            "unexpected runtime async rust-call JS contents: {async_rust_call_js}"
-        );
-        assert!(
-            async_rust_call_js.contains("export const rustFutureContinuationCallback"),
-            "unexpected runtime async rust-call JS contents: {async_rust_call_js}"
-        );
-        assert!(
-            callbacks_js.contains("export class UniffiCallbackRegistry"),
-            "unexpected runtime callbacks JS contents: {callbacks_js}"
-        );
-        assert!(
-            callbacks_js.contains("export function invokeCallbackMethod"),
-            "unexpected runtime callbacks JS contents: {callbacks_js}"
-        );
-        assert!(
-            callbacks_js.contains("export function writeCallbackError"),
-            "unexpected runtime callbacks JS contents: {callbacks_js}"
-        );
-        assert!(
-            objects_js.contains("export class UniffiObjectFactory"),
-            "unexpected runtime objects JS contents: {objects_js}"
-        );
-        assert!(
-            objects_js.contains("export class FfiConverterObject"),
-            "unexpected runtime objects JS contents: {objects_js}"
-        );
-        assert!(
-            objects_js.contains("UNIFFI_OBJECT_HANDLE_SIZE"),
-            "unexpected runtime objects JS contents: {objects_js}"
-        );
-
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
 
@@ -570,6 +507,17 @@ mod tests {
             .expect("component JS should be readable");
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
+        for runtime_path in [
+            "runtime/errors.js",
+            "runtime/ffi-types.js",
+            "runtime/ffi-converters.js",
+            "runtime/rust-call.js",
+            "runtime/handle-map.js",
+            "runtime/callbacks.js",
+        ] {
+            let path = output_dir.join(runtime_path);
+            assert!(path.is_file(), "expected generated runtime helper at {path}");
+        }
         assert!(
             component_js.contains("createCallbackRegistry"),
             "unexpected component JS contents: {component_js}"

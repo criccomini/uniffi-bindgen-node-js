@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -121,6 +122,7 @@ impl GeneratedPackage {
         template_context: &TemplateContext,
     ) -> Result<Vec<(Utf8PathBuf, String)>> {
         let component_js_imports = ComponentJsImports::from_public_api(&self.public_api.js);
+        let component_dts_imports = ComponentDtsImports::from_public_api(&self.public_api.dts);
         Ok(vec![
             rendered_file(
                 self.layout.component_js_path(),
@@ -153,6 +155,7 @@ impl GeneratedPackage {
                     namespace: self.layout.namespace.clone(),
                     namespace_doc_comment: self.public_api.namespace_doc_comment.clone(),
                     manual_load: self.manual_load,
+                    needs_uniffi_object_base: component_dts_imports.needs_uniffi_object_base,
                     public_api_dts: self.public_api.dts.clone(),
                 }
                 .render(),
@@ -180,7 +183,7 @@ impl GeneratedPackage {
     }
 
     fn write_runtime_files(&self) -> Result<()> {
-        emit_runtime_files(&self.layout)
+        emit_runtime_files(&self.layout, &self.direct_runtime_modules())
     }
 
     fn stage_native_library(&self) -> Result<()> {
@@ -220,6 +223,34 @@ impl GeneratedPackage {
         })?;
 
         Ok(())
+    }
+}
+
+impl GeneratedPackage {
+    fn direct_runtime_modules(&self) -> BTreeSet<&'static str> {
+        let component_js_imports = ComponentJsImports::from_public_api(&self.public_api.js);
+        let component_dts_imports = ComponentDtsImports::from_public_api(&self.public_api.dts);
+        let mut modules = BTreeSet::from(["errors", "ffi-types"]);
+
+        if !component_js_imports.ffi_converter_imports.is_empty() {
+            modules.insert("ffi-converters");
+        }
+        if !component_js_imports.async_rust_call_imports.is_empty() {
+            modules.insert("async-rust-call");
+        }
+        if !component_js_imports.callback_imports.is_empty() {
+            modules.insert("callbacks");
+        }
+        if !component_js_imports.object_imports.is_empty()
+            || component_dts_imports.needs_uniffi_object_base
+        {
+            modules.insert("objects");
+        }
+        if !component_js_imports.rust_call_imports.is_empty() {
+            modules.insert("rust-call");
+        }
+
+        modules
     }
 }
 
@@ -338,6 +369,18 @@ impl ComponentJsImports {
                 public_api_js,
                 &["CALL_SUCCESS", "UniffiRustCaller", "createRustCallStatus"],
             ),
+        }
+    }
+}
+
+struct ComponentDtsImports {
+    needs_uniffi_object_base: bool,
+}
+
+impl ComponentDtsImports {
+    fn from_public_api(public_api_dts: &str) -> Self {
+        Self {
+            needs_uniffi_object_base: public_api_dts.contains("UniffiObjectBase"),
         }
     }
 }

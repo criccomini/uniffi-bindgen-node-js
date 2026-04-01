@@ -1,24 +1,5 @@
 #![allow(dead_code)]
 
-const RUNTIME_FILES: &[&str] = &[
-    "runtime/errors.js",
-    "runtime/errors.d.ts",
-    "runtime/ffi-types.js",
-    "runtime/ffi-types.d.ts",
-    "runtime/ffi-converters.js",
-    "runtime/ffi-converters.d.ts",
-    "runtime/rust-call.js",
-    "runtime/rust-call.d.ts",
-    "runtime/async-rust-call.js",
-    "runtime/async-rust-call.d.ts",
-    "runtime/handle-map.js",
-    "runtime/handle-map.d.ts",
-    "runtime/callbacks.js",
-    "runtime/callbacks.d.ts",
-    "runtime/objects.js",
-    "runtime/objects.d.ts",
-];
-
 #[derive(Clone, Copy, Debug)]
 pub struct FixtureSpec {
     pub dir_name: &'static str,
@@ -28,6 +9,46 @@ pub struct FixtureSpec {
 }
 
 impl FixtureSpec {
+    pub fn runtime_relative_paths(&self) -> Vec<String> {
+        let module_stems = match self.dir_name {
+            "basic-fixture" => vec![
+                "errors",
+                "ffi-types",
+                "ffi-converters",
+                "rust-call",
+                "async-rust-call",
+                "handle-map",
+                "callbacks",
+                "objects",
+            ],
+            "callback-fixture" => vec![
+                "errors",
+                "ffi-types",
+                "ffi-converters",
+                "rust-call",
+                "async-rust-call",
+                "handle-map",
+                "callbacks",
+                "objects",
+            ],
+            "docs-fixture" => vec![
+                "errors",
+                "ffi-types",
+                "ffi-converters",
+                "rust-call",
+                "handle-map",
+                "callbacks",
+                "objects",
+            ],
+            _ => panic!("unknown fixture runtime file set for '{}'", self.dir_name),
+        };
+
+        module_stems
+            .into_iter()
+            .flat_map(|stem| [format!("runtime/{stem}.js"), format!("runtime/{stem}.d.ts")])
+            .collect()
+    }
+
     pub fn package_name(&self) -> String {
         format!("{}-package", self.namespace)
     }
@@ -41,7 +62,7 @@ impl FixtureSpec {
             format!("{}-ffi.js", self.namespace),
             format!("{}-ffi.d.ts", self.namespace),
         ];
-        files.extend(RUNTIME_FILES.iter().map(|path| (*path).to_string()));
+        files.extend(self.runtime_relative_paths());
         files
     }
 

@@ -83,6 +83,7 @@ pub(crate) struct ComponentDtsTemplate {
     pub(crate) namespace: String,
     pub(crate) namespace_doc_comment: String,
     pub(crate) manual_load: bool,
+    pub(crate) needs_uniffi_object_base: bool,
     pub(crate) public_api_dts: String,
 }
 

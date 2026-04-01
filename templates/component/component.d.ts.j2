@@ -1,4 +1,6 @@
-{{ namespace_doc_comment }}import { UniffiObjectBase } from "./runtime/objects.js";
+{{ namespace_doc_comment }}{% if needs_uniffi_object_base %}import { UniffiObjectBase } from "./runtime/objects.js";
+
+{% endif %}
 
 export interface ComponentMetadata {
   namespace: string;

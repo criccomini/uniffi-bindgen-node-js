@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 use askama::Template;
 use camino::Utf8PathBuf;
@@ -10,16 +12,23 @@ type RuntimeTemplateRenderer = fn() -> TemplateRenderResult;
 
 struct RuntimeModuleTemplateSet {
     stem: &'static str,
+    dependencies: &'static [&'static str],
     js: RuntimeTemplateRenderer,
     dts: RuntimeTemplateRenderer,
 }
 
-pub(crate) fn emit_runtime_files(layout: &GeneratedPackageLayout) -> Result<()> {
-    write_files(render_runtime_files(layout)?)
+pub(crate) fn emit_runtime_files(
+    layout: &GeneratedPackageLayout,
+    direct_modules: &BTreeSet<&'static str>,
+) -> Result<()> {
+    write_files(render_runtime_files(layout, direct_modules)?)
 }
 
-fn render_runtime_files(layout: &GeneratedPackageLayout) -> Result<Vec<(Utf8PathBuf, String)>> {
-    runtime_file_contents()?
+fn render_runtime_files(
+    layout: &GeneratedPackageLayout,
+    direct_modules: &BTreeSet<&'static str>,
+) -> Result<Vec<(Utf8PathBuf, String)>> {
+    runtime_file_contents(direct_modules)?
         .into_iter()
         .map(|(file_name, contents)| Ok((layout.runtime_path(&file_name), contents)))
         .collect::<Result<Vec<_>>>()
@@ -32,12 +41,47 @@ fn rendered_runtime_file(
     Ok((file_name, contents?))
 }
 
-fn runtime_file_contents() -> Result<Vec<(String, String)>> {
-    let mut files = Vec::with_capacity(RUNTIME_MODULE_TEMPLATES.len() * 2);
-    for templates in RUNTIME_MODULE_TEMPLATES {
+fn runtime_file_contents(direct_modules: &BTreeSet<&'static str>) -> Result<Vec<(String, String)>> {
+    let selected_modules = selected_runtime_modules(direct_modules);
+    let mut files = Vec::with_capacity(selected_modules.len() * 2);
+    for templates in selected_modules {
         files.extend(render_runtime_module_files(templates)?);
     }
     Ok(files)
+}
+
+fn selected_runtime_modules(
+    direct_modules: &BTreeSet<&'static str>,
+) -> Vec<&'static RuntimeModuleTemplateSet> {
+    let mut selected_stems = BTreeSet::new();
+    for stem in direct_modules {
+        visit_runtime_module(stem, &mut selected_stems);
+    }
+
+    RUNTIME_MODULE_TEMPLATES
+        .iter()
+        .filter(|templates| selected_stems.contains(templates.stem))
+        .collect()
+}
+
+fn visit_runtime_module(stem: &str, selected_stems: &mut BTreeSet<&'static str>) {
+    let Some(templates) = runtime_module_template(stem) else {
+        return;
+    };
+
+    if !selected_stems.insert(templates.stem) {
+        return;
+    }
+
+    for dependency in templates.dependencies {
+        visit_runtime_module(dependency, selected_stems);
+    }
+}
+
+fn runtime_module_template(stem: &str) -> Option<&'static RuntimeModuleTemplateSet> {
+    RUNTIME_MODULE_TEMPLATES
+        .iter()
+        .find(|templates| templates.stem == stem)
 }
 
 fn render_runtime_module_files(
@@ -52,41 +96,49 @@ fn render_runtime_module_files(
 const RUNTIME_MODULE_TEMPLATES: &[RuntimeModuleTemplateSet] = &[
     RuntimeModuleTemplateSet {
         stem: "errors",
+        dependencies: &[],
         js: render_runtime_errors_js,
         dts: render_runtime_errors_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "ffi-types",
+        dependencies: &["errors"],
         js: render_runtime_ffi_types_js,
         dts: render_runtime_ffi_types_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "ffi-converters",
+        dependencies: &["errors", "ffi-types"],
         js: render_runtime_ffi_converters_js,
         dts: render_runtime_ffi_converters_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "rust-call",
+        dependencies: &["errors", "ffi-converters", "ffi-types"],
         js: render_runtime_rust_call_js,
         dts: render_runtime_rust_call_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "async-rust-call",
+        dependencies: &["errors", "ffi-types", "ffi-converters", "handle-map", "rust-call"],
         js: render_runtime_async_rust_call_js,
         dts: render_runtime_async_rust_call_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "handle-map",
+        dependencies: &["errors", "ffi-types"],
         js: render_runtime_handle_map_js,
         dts: render_runtime_handle_map_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "callbacks",
+        dependencies: &["errors", "ffi-types", "handle-map", "rust-call"],
         js: render_runtime_callbacks_js,
         dts: render_runtime_callbacks_dts,
     },
     RuntimeModuleTemplateSet {
         stem: "objects",
+        dependencies: &["errors", "ffi-types", "ffi-converters"],
         js: render_runtime_objects_js,
         dts: render_runtime_objects_dts,
     },

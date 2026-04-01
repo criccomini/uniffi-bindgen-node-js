@@ -4,13 +4,14 @@ use camino::{Utf8Path, Utf8PathBuf};
 use uniffi_bindgen::Component;
 
 use super::{
-    ComponentDtsTemplate, ComponentJsTemplate, PackageIndexDtsTemplate, PackageIndexJsTemplate,
-    PackageJsonTemplate, StringTemplate, json_optional_string, json_string, rendered_file,
-    runtime_files, write_files,
-};
-use super::{
     api::{RenderedComponentApi, build_public_api_ir, render_public_api},
     ffi::{RenderedComponentFfi, render_component_ffi},
+    runtime_files,
+    templates::{
+        ComponentDtsTemplate, ComponentJsTemplate, PackageIndexDtsTemplate, PackageIndexJsTemplate,
+        PackageJsonTemplate, StringTemplate, json_optional_string, json_string, rendered_file,
+        write_files,
+    },
 };
 use crate::node_v2::config::NodeBindingGeneratorConfig;
 use crate::node_v2::package_layout::GeneratedPackageLayout;

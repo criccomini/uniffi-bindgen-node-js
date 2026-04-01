@@ -1,5 +1,3 @@
-use std::fs;
-
 use crate::node_v2::package_layout::GeneratedPackageLayout;
 use anyhow::Result;
 use askama::Template;
@@ -9,29 +7,9 @@ mod api;
 mod ffi;
 mod ffi_ir;
 mod package_writer;
+mod templates;
 
 pub(crate) use self::package_writer::{ComponentJsImports, write_generated_package};
-
-fn write_contents(path: &Utf8PathBuf, contents: String) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent.as_std_path())?;
-    }
-    fs::write(path.as_std_path(), contents)?;
-    Ok(())
-}
-
-fn write_files(files: Vec<(Utf8PathBuf, String)>) -> Result<()> {
-    files
-        .into_iter()
-        .try_for_each(|(path, contents)| write_contents(&path, contents))
-}
-
-fn rendered_file(
-    path: Utf8PathBuf,
-    contents: std::result::Result<String, askama::Error>,
-) -> Result<(Utf8PathBuf, String)> {
-    Ok((path, contents?))
-}
 
 type TemplateRenderResult = std::result::Result<String, askama::Error>;
 type RuntimeTemplateRenderer = fn() -> TemplateRenderResult;
@@ -71,14 +49,6 @@ fn render_runtime_module_files(
         rendered_runtime_file(format!("{}.js", templates.stem), (templates.js)())?,
         rendered_runtime_file(format!("{}.d.ts", templates.stem), (templates.dts)())?,
     ])
-}
-
-fn json_string(value: &str) -> Result<String> {
-    Ok(serde_json::to_string(value)?)
-}
-
-fn json_optional_string(value: Option<&str>) -> Result<String> {
-    Ok(serde_json::to_string(&value)?)
 }
 
 const RUNTIME_MODULE_TEMPLATES: &[RuntimeModuleTemplateSet] = &[
@@ -186,62 +156,6 @@ fn render_runtime_objects_js() -> TemplateRenderResult {
 
 fn render_runtime_objects_dts() -> TemplateRenderResult {
     RuntimeObjectsDtsTemplate {}.render()
-}
-
-#[derive(Template)]
-#[template(path = "package/package.json.j2", escape = "none")]
-struct PackageJsonTemplate {
-    package_name_json: String,
-    node_engine_json: String,
-}
-
-#[derive(Template)]
-#[template(path = "package/index.js.j2", escape = "none")]
-struct PackageIndexJsTemplate {
-    namespace: String,
-}
-
-#[derive(Template)]
-#[template(path = "package/index.d.ts.j2", escape = "none")]
-struct PackageIndexDtsTemplate {
-    namespace: String,
-}
-
-#[derive(Template)]
-#[template(path = "component/component.js.j2", escape = "none")]
-struct ComponentJsTemplate {
-    namespace: String,
-    namespace_doc_comment: String,
-    namespace_json: String,
-    package_name_json: String,
-    cdylib_name_json: String,
-    node_engine_json: String,
-    lib_path_literal_json: String,
-    bundled_prebuilds: bool,
-    manual_load: bool,
-    ffi_types_imports: Vec<String>,
-    ffi_converter_imports: Vec<String>,
-    error_imports: Vec<String>,
-    async_rust_call_imports: Vec<String>,
-    callback_imports: Vec<String>,
-    object_imports: Vec<String>,
-    rust_call_imports: Vec<String>,
-    public_api_js: String,
-}
-
-#[derive(Template)]
-#[template(path = "component/component.d.ts.j2", escape = "none")]
-struct ComponentDtsTemplate {
-    namespace: String,
-    namespace_doc_comment: String,
-    manual_load: bool,
-    public_api_dts: String,
-}
-
-#[derive(Template)]
-#[template(source = "{{ contents }}", ext = "txt", escape = "none")]
-struct StringTemplate {
-    contents: String,
 }
 
 #[derive(Template)]

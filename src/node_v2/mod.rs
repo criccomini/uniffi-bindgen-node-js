@@ -1,6 +1,5 @@
 mod component_selection;
 pub(crate) mod config;
-pub(crate) mod package_layout;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;

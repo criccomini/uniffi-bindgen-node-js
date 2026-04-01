@@ -1,6 +1,7 @@
 mod api;
 mod ffi;
 mod ffi_ir;
+mod layout;
 mod package_writer;
 mod runtime;
 mod templates;

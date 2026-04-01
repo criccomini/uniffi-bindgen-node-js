@@ -2,8 +2,8 @@ use anyhow::Result;
 use askama::Template;
 use camino::Utf8PathBuf;
 
+use super::layout::GeneratedPackageLayout;
 use super::templates::write_files;
-use crate::node_v2::package_layout::GeneratedPackageLayout;
 
 type TemplateRenderResult = std::result::Result<String, askama::Error>;
 type RuntimeTemplateRenderer = fn() -> TemplateRenderResult;

@@ -6,6 +6,7 @@ use uniffi_bindgen::Component;
 use super::{
     api::{RenderedComponentApi, build_public_api_ir, render_public_api},
     ffi::{RenderedComponentFfi, render_component_ffi},
+    layout::GeneratedPackageLayout,
     runtime::emit_runtime_files,
     templates::{
         ComponentDtsTemplate, ComponentJsTemplate, PackageIndexDtsTemplate, PackageIndexJsTemplate,
@@ -14,7 +15,6 @@ use super::{
     },
 };
 use crate::node_v2::config::NodeBindingGeneratorConfig;
-use crate::node_v2::package_layout::GeneratedPackageLayout;
 
 #[derive(Debug, Clone)]
 struct GeneratedPackage {

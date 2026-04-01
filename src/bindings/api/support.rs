@@ -12,12 +12,12 @@ pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()>
 
     push_unsupported_feature(
         &mut unsupported,
-        "external types are not supported in v1",
+        "external types are not supported in generated Node bindings",
         ci.iter_external_types().map(describe_type).collect(),
     );
     push_unsupported_feature(
         &mut unsupported,
-        "custom types are not supported in v1",
+        "custom types are not supported in generated Node bindings",
         ci.iter_local_types()
             .chain(ci.iter_external_types())
             .filter_map(custom_type_name)
@@ -29,7 +29,7 @@ pub(crate) fn validate_supported_features(ci: &ComponentInterface) -> Result<()>
     }
 
     bail!(
-        "unsupported UniFFI features for Node bindings v1:\n- {}",
+        "unsupported UniFFI features for generated Node bindings:\n- {}",
         unsupported.join("\n- ")
     );
 }

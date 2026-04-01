@@ -201,7 +201,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update DEVELOPMENT.md architecture notes to describe loader-based v2.
 - [x] Update DEVELOPMENT.md contributor commands if CLI shape changes.
 - [x] Update DEVELOPMENT.md leak-probe instructions if package staging behavior changes.
-- [ ] Remove outdated references to v1 wording from docs and error strings.
+- [x] Remove outdated references to v1 wording from docs and error strings.
 - [ ] Design the new internal package layout abstraction around actual staged artifacts.
 - [ ] Make the package writer create the output directory structure.
 - [ ] Make the package writer emit metadata files.

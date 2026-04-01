@@ -1424,9 +1424,9 @@ mod tests {
         insta::assert_snapshot!(
             error.to_string(),
             @r#"
-        unsupported UniFFI features for Node bindings v1:
-        - external types are not supported in v1: ExternalThing
-        - custom types are not supported in v1: Url
+        unsupported UniFFI features for generated Node bindings:
+        - external types are not supported in generated Node bindings: ExternalThing
+        - custom types are not supported in generated Node bindings: Url
         "#
         );
     }

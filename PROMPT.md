@@ -266,7 +266,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for component selection when --crate-name is present.
 - [x] Add coverage for default component inference when only one component exists.
 - [x] Add coverage for --manifest-path success cases.
-- [ ] Add coverage for --manifest-path validation errors.
+- [x] Add coverage for --manifest-path validation errors.
 - [ ] Add coverage for UDL-backed library generation with insufficient source/config context.
 - [ ] Add coverage for proc-macro-only library generation.
 - [ ] Add coverage for default root-level staging of the input cdylib.

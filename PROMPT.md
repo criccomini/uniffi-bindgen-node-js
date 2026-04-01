@@ -262,7 +262,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Keep diagnostics actionable and grouped by unsupported feature family.
 - [x] Add coverage for rename config behavior.
 - [x] Add coverage for full module_path names.
-- [ ] Add coverage for multi-component library detection and error messages.
+- [x] Add coverage for multi-component library detection and error messages.
 - [ ] Add coverage for component selection when --crate-name is present.
 - [ ] Add coverage for default component inference when only one component exists.
 - [ ] Add coverage for --manifest-path success cases.

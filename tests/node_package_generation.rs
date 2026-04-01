@@ -3,9 +3,10 @@ mod support;
 use std::{collections::BTreeMap, fs};
 
 use self::support::{
-    FixturePackageOptions, build_fixture_cdylib, fixtures::fixture_spec, generate_fixture_package,
-    generate_fixture_package_with_options, install_fixture_package_dependencies,
-    load_fixture_component_interface, read_package_file_tree, remove_dir_all, temp_dir_path,
+    FixturePackageOptions, build_fixture_cdylib, build_proc_macro_multi_component_cdylib,
+    fixtures::fixture_spec, generate_fixture_package, generate_fixture_package_with_options,
+    install_fixture_package_dependencies, load_fixture_component_interface,
+    read_package_file_tree, remove_dir_all, temp_dir_path,
 };
 use serde_json::Value;
 use uniffi_bindgen::interface::{Callable, ComponentInterface};
@@ -363,6 +364,46 @@ fn defaults_package_name_to_the_selected_component_namespace() {
         Some(built_fixture.namespace.as_str()),
         "unexpected package.json contents: {package_json:#}"
     );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn reports_available_crate_names_when_a_library_contains_multiple_components() {
+    let built_fixture = build_proc_macro_multi_component_cdylib();
+    let package_dir = temp_dir_path("multi-component-package");
+
+    let error = generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: None,
+        crate_name: None,
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect_err("multi-component libraries should require an explicit crate selector");
+
+    assert!(
+        error.to_string().contains("the library contains multiple UniFFI components"),
+        "unexpected error: {error:#}"
+    );
+    assert!(
+        error.to_string().contains("re-run with --crate-name"),
+        "unexpected error: {error:#}"
+    );
+    assert!(
+        error.to_string().contains("available crate names:"),
+        "unexpected error: {error:#}"
+    );
+    for crate_name in &built_fixture.available_crate_names {
+        assert!(
+            error.to_string().contains(crate_name),
+            "unexpected error: {error:#}"
+        );
+    }
 
     remove_dir_all(&built_fixture.workspace_dir);
     remove_dir_all(&package_dir);

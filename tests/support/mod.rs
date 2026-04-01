@@ -25,6 +25,13 @@ pub struct BuiltFixtureCdylib {
     pub library_path: Utf8PathBuf,
 }
 
+pub struct BuiltMultiComponentFixtureCdylib {
+    pub workspace_dir: Utf8PathBuf,
+    pub manifest_path: Utf8PathBuf,
+    pub library_path: Utf8PathBuf,
+    pub available_crate_names: Vec<String>,
+}
+
 pub struct GeneratedFixturePackage {
     pub built_fixture: BuiltFixtureCdylib,
     pub package_dir: Utf8PathBuf,
@@ -103,6 +110,163 @@ pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {
         namespace: spec.namespace.to_string(),
         crate_name: spec.crate_name.to_string(),
         library_path,
+    }
+}
+
+pub fn build_proc_macro_multi_component_cdylib() -> BuiltMultiComponentFixtureCdylib {
+    let fixture_name = "proc-macro-multi-component";
+    let workspace_dir = temp_dir_path(fixture_name);
+    let manifest_path = workspace_dir.join("megazord").join("Cargo.toml");
+    let target_dir = workspace_dir.join("target");
+
+    for relative_dir in [
+        "component-alpha/src",
+        "component-beta/src",
+        "megazord/src",
+    ] {
+        let path = workspace_dir.join(relative_dir);
+        fs::create_dir_all(path.as_std_path())
+            .unwrap_or_else(|error| panic!("failed to create temp fixture dir {path}: {error}"));
+    }
+
+    write_temp_fixture_file(
+        &workspace_dir.join("Cargo.toml"),
+        r#"
+[workspace]
+members = ["component-alpha", "component-beta", "megazord"]
+resolver = "2"
+"#,
+    );
+    write_temp_fixture_file(
+        &workspace_dir.join("component-alpha").join("Cargo.toml"),
+        r#"
+[package]
+name = "component-alpha"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "component_alpha"
+
+[dependencies]
+uniffi = { version = "=0.31.0" }
+"#,
+    );
+    write_temp_fixture_file(
+        &workspace_dir.join("component-alpha").join("src").join("lib.rs"),
+        r#"
+#[uniffi::export]
+pub fn alpha_value() -> u32 {
+    1
+}
+
+uniffi::setup_scaffolding!();
+"#,
+    );
+    write_temp_fixture_file(
+        &workspace_dir.join("component-beta").join("Cargo.toml"),
+        r#"
+[package]
+name = "component-beta"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "component_beta"
+
+[dependencies]
+uniffi = { version = "=0.31.0" }
+"#,
+    );
+    write_temp_fixture_file(
+        &workspace_dir.join("component-beta").join("src").join("lib.rs"),
+        r#"
+#[uniffi::export]
+pub fn beta_value() -> u32 {
+    2
+}
+
+uniffi::setup_scaffolding!();
+"#,
+    );
+    write_temp_fixture_file(
+        &workspace_dir.join("megazord").join("Cargo.toml"),
+        r#"
+[package]
+name = "megazord-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "megazord_fixture"
+crate-type = ["cdylib"]
+
+[dependencies]
+component-alpha = { path = "../component-alpha" }
+component-beta = { path = "../component-beta" }
+"#,
+    );
+    write_temp_fixture_file(
+        &workspace_dir.join("megazord").join("src").join("lib.rs"),
+        r#"
+component_alpha::uniffi_reexport_scaffolding!();
+component_beta::uniffi_reexport_scaffolding!();
+
+#[unsafe(no_mangle)]
+pub extern "C" fn megazord_fixture_ping() -> u32 {
+    component_alpha::alpha_value() + component_beta::beta_value()
+}
+"#,
+    );
+
+    run_cargo_command(
+        fixture_name,
+        "generate-lockfile",
+        &manifest_path,
+        &target_dir,
+        &["generate-lockfile", "--offline"],
+    );
+
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            manifest_path.as_str(),
+            "--message-format=json-render-diagnostics",
+        ])
+        .env("CARGO_TARGET_DIR", target_dir.as_str())
+        .output()
+        .unwrap_or_else(|error| {
+            panic!("failed to run cargo build for fixture {fixture_name}: {error}")
+        });
+
+    if !output.status.success() {
+        panic!(
+            "failed to build fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let library_path =
+        find_cdylib_artifact(&output.stdout, "megazord_fixture").unwrap_or_else(|| {
+            panic!(
+                "failed to locate cdylib artifact for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+        });
+
+    BuiltMultiComponentFixtureCdylib {
+        workspace_dir,
+        manifest_path,
+        library_path,
+        available_crate_names: vec!["component_alpha".to_string(), "component_beta".to_string()],
     }
 }
 
@@ -260,6 +424,11 @@ pub fn stage_package_benchmark_scripts(package_dir: &Utf8PathBuf) {
         .join("benchmarks");
     let target_dir = package_dir.join("benchmarks");
     copy_dir_all(&source_dir, &target_dir);
+}
+
+fn write_temp_fixture_file(path: &Utf8PathBuf, contents: &str) {
+    fs::write(path.as_std_path(), contents.trim_start())
+        .unwrap_or_else(|error| panic!("failed to write temp fixture file {path}: {error}"));
 }
 
 pub fn run_typescript_check(package_dir: &Utf8PathBuf, script_name: &str, source: &str) {

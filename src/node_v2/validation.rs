@@ -4,7 +4,8 @@ use super::GenerateNodePackageOptions;
 
 pub(crate) fn validate_generate_options(options: &GenerateNodePackageOptions) -> Result<()> {
     validate_output_dir(options)?;
-    validate_library_input_path(options)
+    validate_library_input_path(options)?;
+    validate_manifest_path(options)
 }
 
 fn validate_output_dir(options: &GenerateNodePackageOptions) -> Result<()> {
@@ -33,6 +34,24 @@ fn validate_library_input_path(options: &GenerateNodePackageOptions) -> Result<(
             "library source '{}' is not a supported cdylib (.so, .dylib, or .dll)",
             options.lib_source
         );
+    }
+
+    Ok(())
+}
+
+fn validate_manifest_path(options: &GenerateNodePackageOptions) -> Result<()> {
+    let Some(manifest_path) = options.manifest_path.as_ref() else {
+        return Ok(());
+    };
+
+    if manifest_path.as_str().trim().is_empty() {
+        bail!("--manifest-path cannot be empty");
+    }
+    if !manifest_path.exists() {
+        bail!("manifest path '{}' does not exist", manifest_path);
+    }
+    if !manifest_path.is_file() {
+        bail!("manifest path '{}' is not a file", manifest_path);
     }
 
     Ok(())

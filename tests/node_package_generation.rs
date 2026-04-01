@@ -158,6 +158,35 @@ fn rejects_file_out_dir_from_programmatic_entrypoint() {
 }
 
 #[test]
+fn rejects_directory_manifest_path_from_programmatic_entrypoint() {
+    let built_fixture = build_fixture_cdylib("callbacks");
+    let package_dir = temp_dir_path("directory-manifest-path-package");
+
+    let error = generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.workspace_dir.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect_err("directory manifest path should be rejected by the v2 entrypoint");
+
+    assert!(
+        error.to_string().contains(&format!(
+            "manifest path '{}' is not a file",
+            built_fixture.workspace_dir
+        )),
+        "unexpected error: {error:#}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn installs_fixture_package_npm_dependencies_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;

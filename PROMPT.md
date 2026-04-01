@@ -175,7 +175,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Keep explicit crate filtering behavior when --crate-name is provided.
 - [x] Validate the library input path in the new flow.
 - [x] Validate --out-dir in the new flow.
-- [ ] Validate --manifest-path if provided.
+- [x] Validate --manifest-path if provided.
 - [ ] Validate mutually incompatible Node options in the new v2 surface.
 - [ ] Remove --config-override from CLI parsing.
 - [ ] Remove --cdylib-name from CLI parsing.

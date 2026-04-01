@@ -217,14 +217,17 @@ impl CallbackInterfaceModel {
         callback_interface: &CallbackInterface,
         ci: &ComponentInterface,
     ) -> Result<Self> {
+        let vtable_methods = callback_interface.vtable_methods();
+        validate_callback_vtable_definition(
+            &callback_interface.vtable_definition(),
+            &vtable_methods,
+            callback_interface.name(),
+        )?;
+
         Ok(Self {
             name: callback_interface.name().to_string(),
             docstring: callback_interface.docstring().map(str::to_owned),
-            methods: callback_method_models(
-                callback_interface.methods(),
-                callback_interface.ffi_callbacks(),
-                ci,
-            )?,
+            methods: callback_method_models(vtable_methods, ci)?,
             ffi_init_callback_identifier: ffi_symbol_identifier(
                 callback_interface.ffi_init_callback().name(),
             ),
@@ -240,10 +243,19 @@ impl CallbackInterfaceModel {
     }
 
     fn from_object(object: &Object, ci: &ComponentInterface) -> Result<Self> {
+        let vtable_methods = object.vtable_methods();
+        let vtable_definition = object.vtable_definition().with_context(|| {
+            format!(
+                "callback trait object {} is missing its UniFFI vtable definition",
+                object.name()
+            )
+        })?;
+        validate_callback_vtable_definition(&vtable_definition, &vtable_methods, object.name())?;
+
         Ok(Self {
             name: object.name().to_string(),
             docstring: object.docstring().map(str::to_owned),
-            methods: callback_method_models(object.methods(), object.ffi_callbacks(), ci)?,
+            methods: callback_method_models(vtable_methods, ci)?,
             ffi_init_callback_identifier: ffi_symbol_identifier(object.ffi_init_callback().name()),
             ffi_object_clone_identifier: ffi_symbol_identifier(object.ffi_object_clone().name()),
             ffi_object_free_identifier: ffi_symbol_identifier(object.ffi_object_free().name()),
@@ -366,21 +378,43 @@ impl MethodModel {
 }
 
 fn callback_method_models(
-    methods: Vec<&Method>,
-    ffi_callbacks: Vec<FfiCallbackFunction>,
+    vtable_methods: Vec<(FfiCallbackFunction, Method)>,
     ci: &ComponentInterface,
 ) -> Result<Vec<MethodModel>> {
-    assert_eq!(
-        methods.len(),
-        ffi_callbacks.len(),
-        "UniFFI callback method metadata and callback symbol lists diverged"
-    );
-
-    methods
+    vtable_methods
         .into_iter()
-        .zip(ffi_callbacks)
-        .map(|(method, ffi_callback)| MethodModel::from_callback_method(method, ci, &ffi_callback))
+        .map(|(ffi_callback, method)| MethodModel::from_callback_method(&method, ci, &ffi_callback))
         .collect()
+}
+
+fn validate_callback_vtable_definition(
+    vtable_definition: &FfiStruct,
+    vtable_methods: &[(FfiCallbackFunction, Method)],
+    interface_name: &str,
+) -> Result<()> {
+    let actual_fields = vtable_definition
+        .fields()
+        .iter()
+        .map(|field| field.name().to_string())
+        .collect::<Vec<_>>();
+    let expected_fields = std::iter::once("uniffi_free".to_string())
+        .chain(std::iter::once("uniffi_clone".to_string()))
+        .chain(
+            vtable_methods
+                .iter()
+                .map(|(_, method)| method.name().to_string()),
+        )
+        .collect::<Vec<_>>();
+
+    if actual_fields != expected_fields {
+        bail!(
+            "callback interface {interface_name} vtable field order changed: expected {:?}, found {:?}",
+            expected_fields,
+            actual_fields
+        );
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

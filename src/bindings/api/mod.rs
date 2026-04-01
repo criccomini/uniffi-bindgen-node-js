@@ -863,6 +863,40 @@ mod tests {
     }
 
     #[test]
+    fn component_model_uses_uniffi_vtable_field_order_for_callback_interfaces() {
+        let ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            callback interface Logger {
+                void write(string message);
+                [Async] string latest();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+
+        let model = ComponentModel::from_ci(&ci).expect("callback interfaces should build");
+        let vtable_definition = ci.callback_interface_definitions()[0].vtable_definition();
+        let vtable_fields = vtable_definition
+            .fields()
+            .iter()
+            .map(|field| field.name())
+            .collect::<Vec<_>>();
+
+        assert_eq!(&vtable_fields[..2], ["uniffi_free", "uniffi_clone"]);
+        assert_eq!(
+            model.callback_interfaces[0]
+                .methods
+                .iter()
+                .map(|method| method.name.as_str())
+                .collect::<Vec<_>>(),
+            vtable_fields[2..].to_vec()
+        );
+    }
+
+    #[test]
     fn callback_interface_clone_free_symbols_use_the_crate_name_from_full_module_paths() {
         assert_eq!(
             uniffi_meta::clone_fn_symbol_name("fixture_crate::logging", "Logger"),
@@ -912,6 +946,45 @@ mod tests {
         assert_eq!(model.callback_interfaces.len(), 1);
         assert!(model.objects.is_empty());
         assert_eq!(actual_identifiers, expected_identifiers);
+    }
+
+    #[test]
+    fn component_model_uses_uniffi_vtable_field_order_for_callback_trait_objects() {
+        let mut ci = ComponentInterface::from_webidl(
+            r#"
+            namespace example {};
+
+            [Trait, WithForeign]
+            interface Logger {
+                void write(string message);
+                [Async] string latest();
+            };
+            "#,
+            "fixture_crate",
+        )
+        .expect("UDL should parse");
+        ci.derive_ffi_funcs()
+            .expect("trait callback objects should derive their FFI symbols");
+
+        let model = ComponentModel::from_ci(&ci).expect("callback trait objects should build");
+        let vtable_definition = ci.object_definitions()[0]
+            .vtable_definition()
+            .expect("trait callback objects should expose a vtable");
+        let vtable_fields = vtable_definition
+            .fields()
+            .iter()
+            .map(|field| field.name())
+            .collect::<Vec<_>>();
+
+        assert_eq!(&vtable_fields[..2], ["uniffi_free", "uniffi_clone"]);
+        assert_eq!(
+            model.callback_interfaces[0]
+                .methods
+                .iter()
+                .map(|method| method.name.as_str())
+                .collect::<Vec<_>>(),
+            vtable_fields[2..].to_vec()
+        );
     }
 
     #[test]

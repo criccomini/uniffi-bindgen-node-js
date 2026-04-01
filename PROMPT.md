@@ -238,7 +238,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revalidate contract-version lookup logic against UniFFI 0.31.
 - [x] Update checksum mismatch diagnostics if needed for the new naming/layout.
 - [x] Update contract mismatch diagnostics if needed for the new naming/layout.
-- [ ] Revalidate async Rust future helper symbol names against UniFFI 0.30/0.31.
+- [x] Revalidate async Rust future helper symbol names against UniFFI 0.30/0.31.
 - [ ] Revalidate foreign-future callback naming against UniFFI 0.30/0.31.
 - [ ] Revalidate callback vtable field ordering against UniFFI 0.30/0.31.
 - [ ] Update generated callback registration code to the new ordering and semantics.

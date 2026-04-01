@@ -8,6 +8,7 @@ use self::support::{
     load_fixture_component_interface, read_package_file_tree, remove_dir_all, temp_dir_path,
 };
 use serde_json::Value;
+use uniffi_bindgen::interface::{Callable, ComponentInterface};
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 fn read_generated_component_ffi_js(package_dir: &camino::Utf8PathBuf, namespace: &str) -> String {
@@ -90,6 +91,18 @@ fn parse_generated_expected_contract_version(ffi_js: &str) -> u32 {
         .expect("generated ffi js should include an expected contract version")
 }
 
+fn async_scaffolding_symbols<T: Callable>(
+    callable: &T,
+    ci: &ComponentInterface,
+) -> [String; 4] {
+    [
+        callable.ffi_rust_future_poll(ci),
+        callable.ffi_rust_future_cancel(ci),
+        callable.ffi_rust_future_complete(ci),
+        callable.ffi_rust_future_free(ci),
+    ]
+}
+
 #[test]
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
@@ -165,6 +178,66 @@ fn infers_the_only_component_when_crate_name_is_omitted() {
 
     remove_dir_all(&built_fixture.workspace_dir);
     remove_dir_all(&package_dir);
+}
+
+#[test]
+fn generated_async_helpers_use_loader_derived_uniffi_symbol_names() {
+    let generated = generate_fixture_package("basic");
+    let ffi_js = read_generated_component_ffi_js(
+        &generated.package_dir,
+        &generated.built_fixture.namespace,
+    );
+    let async_runtime_js = fs::read_to_string(
+        generated
+            .package_dir
+            .join("runtime")
+            .join("async-rust-call.js")
+            .as_std_path(),
+    )
+    .expect("generated async runtime should be readable");
+    let ci = load_fixture_component_interface(&generated.built_fixture);
+    let expected_symbols = ci
+        .function_definitions()
+        .iter()
+        .filter(|function| function.is_async())
+        .flat_map(|function| async_scaffolding_symbols(function, &ci))
+        .chain(
+            ci.object_definitions()
+                .iter()
+                .flat_map(|object| object.constructors())
+                .filter(|constructor| constructor.is_async())
+                .flat_map(|constructor| async_scaffolding_symbols(constructor, &ci)),
+        )
+        .chain(
+            ci.object_definitions()
+                .iter()
+                .flat_map(|object| object.methods())
+                .filter(|method| method.is_async())
+                .flat_map(|method| async_scaffolding_symbols(method, &ci)),
+        )
+        .collect::<Vec<_>>();
+
+    assert!(
+        !expected_symbols.is_empty(),
+        "basic fixture should expose at least one async callable for symbol verification"
+    );
+    for symbol in expected_symbols {
+        assert!(
+            ffi_js.contains(&symbol),
+            "generated ffi js should include the UniFFI-provided async helper symbol {symbol}"
+        );
+    }
+    assert!(
+        async_runtime_js.contains("export const RUST_FUTURE_POLL_WAKE = 1;"),
+        "generated async runtime should use the UniFFI 0.30/0.31 wake poll constant: {async_runtime_js}"
+    );
+    assert!(
+        !async_runtime_js.contains("MAYBE_READY"),
+        "generated async runtime should not reference the pre-0.30 MaybeReady poll name: {async_runtime_js}"
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(&generated.package_dir);
 }
 
 #[test]

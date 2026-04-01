@@ -437,6 +437,9 @@ pub(crate) struct AsyncScaffoldingModel {
 impl AsyncScaffoldingModel {
     fn from_callable<T: Callable>(callable: &T, ci: &ComponentInterface) -> Option<Self> {
         callable.is_async().then(|| Self {
+            // UniFFI 0.30/0.31 owns the rust_future_* helper naming contract,
+            // including return-type suffixes, so always ask the callable/CI
+            // for the exact exported symbols instead of reconstructing them.
             poll_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_poll(ci)),
             cancel_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_cancel(ci)),
             complete_identifier: ffi_symbol_identifier(&callable.ffi_rust_future_complete(ci)),

@@ -14,6 +14,7 @@ use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;
+    let spec = fixture_spec("basic");
     let namespace = &generated.built_fixture.namespace;
     let expected_library_filename = format!(
         "{}{}.{}",
@@ -44,7 +45,18 @@ fn generates_basic_fixture_node_package_in_a_temp_directory() {
         assert!(path.is_file(), "expected generated package file at {path}");
     }
 
+    let mut expected_paths = spec.generated_package_relative_paths();
+    expected_paths.push(expected_library_filename);
+    expected_paths.sort();
+
     remove_dir_all(&generated.built_fixture.workspace_dir);
+    assert_eq!(
+        read_package_file_tree(package_dir)
+            .into_keys()
+            .collect::<Vec<_>>(),
+        expected_paths,
+        "unexpected generated package file layout"
+    );
     remove_dir_all(package_dir);
 }
 
@@ -532,6 +544,17 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
         bundled_library_path,
         &package_dir.join(&bundled_library_relative_path),
         "generator should stage the host library at the expected bundled-prebuild path"
+    );
+
+    let mut expected_paths = fixture_spec("basic").generated_package_relative_paths();
+    expected_paths.push(bundled_library_relative_path.clone());
+    expected_paths.sort();
+    assert_eq!(
+        read_package_file_tree(package_dir)
+            .into_keys()
+            .collect::<Vec<_>>(),
+        expected_paths,
+        "unexpected bundled package file layout"
     );
 
     install_fixture_package_dependencies(package_dir);

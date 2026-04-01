@@ -670,6 +670,51 @@ fn bundled_prebuilds_option_emits_bundled_loader_metadata() {
 }
 
 #[test]
+fn generated_bundled_package_stages_the_input_cdylib_under_prebuilds() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            bundled_prebuilds: true,
+            manual_load: false,
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let input_library_path = &generated.built_fixture.library_path;
+    let library_filename = input_library_path
+        .file_name()
+        .expect("fixture library path should have a filename");
+    let bundled_target = generated
+        .bundled_prebuild_target
+        .as_ref()
+        .expect("bundled generation should record the staged host target");
+    let bundled_prebuild_path = generated
+        .bundled_prebuild_path
+        .as_ref()
+        .expect("bundled generation should stage the input cdylib under prebuilds/");
+
+    assert!(
+        generated.sibling_library_path.is_none(),
+        "bundled generation should not also stage a root-level sibling library"
+    );
+    assert_eq!(
+        bundled_prebuild_path,
+        &package_dir
+            .join("prebuilds")
+            .join(bundled_target)
+            .join(library_filename),
+        "bundled generation should stage the input cdylib inside prebuilds/<target>/"
+    );
+    assert_eq!(
+        fs::read(input_library_path.as_std_path()).expect("fixture library should be readable"),
+        fs::read(bundled_prebuild_path.as_std_path()).expect("staged prebuild should be readable"),
+        "bundled generation should stage the exact input cdylib contents"
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn manual_load_option_exports_manual_lifecycle_helpers() {
     let built_fixture = build_fixture_cdylib("basic");
     let package_dir = temp_dir_path("manual-load-helpers");

@@ -1181,6 +1181,83 @@ assert.equal(isLoaded(), false);
 }
 
 #[test]
+fn manual_load_unload_is_idempotent_across_repeated_cycles() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            manual_load: true,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let staged_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("manual-load idempotence package should stage the native library at the package root");
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "manual-load-idempotence-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{
+  Store,
+  echo_bytes,
+  load,
+  unload,
+}} from "./index.js";
+import {{ isLoaded }} from "./fixture-ffi.js";
+
+const stagedLibraryPath = {staged_library_path_json};
+const seed = {{
+  name: "seed",
+  value: new Uint8Array([1, 2]),
+  maybe_value: undefined,
+  chunks: [new Uint8Array([3]), new Uint8Array([4, 5])],
+}};
+
+assert.equal(isLoaded(), false);
+assert.equal(unload(), false);
+
+const firstBindings = load(stagedLibraryPath);
+assert.equal(isLoaded(), true);
+assert.strictEqual(load(stagedLibraryPath), firstBindings);
+
+const firstStore = new Store(seed);
+assert.deepStrictEqual(Array.from(echo_bytes(new Uint8Array([7, 8, 9]))), [7, 8, 9]);
+await firstStore.fetch_async(true);
+firstStore.dispose();
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+assert.equal(unload(), false);
+
+const secondBindings = load(stagedLibraryPath);
+assert.equal(isLoaded(), true);
+assert.notStrictEqual(secondBindings, firstBindings);
+assert.strictEqual(secondBindings.library, firstBindings.library);
+assert.strictEqual(secondBindings.ffiFunctions, firstBindings.ffiFunctions);
+
+const secondStore = new Store(seed);
+await secondStore.fetch_async(true);
+secondStore.dispose();
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+assert.equal(unload(), false);
+"#,
+            staged_library_path_json =
+                serde_json::to_string(staged_library_path.as_str()).expect("path should serialize"),
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempotent() {
     let generated = generate_fixture_package_with_options(
         "basic",

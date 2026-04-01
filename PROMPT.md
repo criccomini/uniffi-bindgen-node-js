@@ -275,7 +275,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for host-target directory naming in bundled mode.
 - [x] Add coverage for manual-load with bundled-prebuild packages.
 - [x] Add coverage for manual-load with root-staged packages.
-- [ ] Add coverage for load/unload idempotence after the ABI updates.
+- [x] Add coverage for load/unload idempotence after the ABI updates.
 - [ ] Add coverage for callback interfaces under the new UniFFI ABI.
 - [ ] Add coverage for async callbacks under the new UniFFI ABI.
 - [ ] Add coverage for object clone/free semantics under the new ABI.

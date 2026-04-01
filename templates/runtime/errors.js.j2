@@ -66,11 +66,24 @@ export class ContractVersionMismatchError extends UniffiRuntimeError {
 
 export class ChecksumMismatchError extends UniffiRuntimeError {
   constructor(kind, expected, actual, options = {}) {
+    const libraryPath =
+      options.details != null && typeof options.details === "object"
+        ? options.details.libraryPath
+        : undefined;
     super(
-      `UniFFI checksum mismatch for ${kind}: expected ${String(expected)}, got ${String(actual)}.`,
+      `UniFFI checksum mismatch for ${String(kind)}${
+        libraryPath == null ? "" : ` in ${JSON.stringify(libraryPath)}`
+      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. Regenerate the package from this library or load the intended staged binary.`,
       {
         ...options,
-        details: { kind, expected, actual },
+        details: {
+          ...(options.details != null && typeof options.details === "object"
+            ? options.details
+            : {}),
+          kind,
+          expected,
+          actual,
+        },
       },
     );
   }

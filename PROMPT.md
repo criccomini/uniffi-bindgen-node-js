@@ -236,7 +236,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Remove any symbol synthesis that duplicates information UniFFI now exposes directly.
 - [x] Revalidate checksum extraction logic against UniFFI 0.31.
 - [x] Revalidate contract-version lookup logic against UniFFI 0.31.
-- [ ] Update checksum mismatch diagnostics if needed for the new naming/layout.
+- [x] Update checksum mismatch diagnostics if needed for the new naming/layout.
 - [ ] Update contract mismatch diagnostics if needed for the new naming/layout.
 - [ ] Revalidate async Rust future helper symbol names against UniFFI 0.30/0.31.
 - [ ] Revalidate foreign-future callback naming against UniFFI 0.30/0.31.

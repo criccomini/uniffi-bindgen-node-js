@@ -1129,7 +1129,7 @@ mod tests {
         );
         assert!(
             component_ffi_js.contains(
-                "throw new ChecksumMismatchError(\"uniffi_fixture_crate_checksum_func_current_generation\", expected, actual);"
+                "throw new ChecksumMismatchError(\"uniffi_fixture_crate_checksum_func_current_generation\", expected, actual, {"
             ),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );

@@ -367,7 +367,11 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums[{{ checksum.name_json }}];
     const actual = actualChecksums[{{ checksum.name_json }}];
     if (actual !== expected) {
-      throw new ChecksumMismatchError({{ checksum.name_json }}, expected, actual);
+      throw new ChecksumMismatchError({{ checksum.name_json }}, expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+        },
+      });
     }
   }
 {% endfor %}

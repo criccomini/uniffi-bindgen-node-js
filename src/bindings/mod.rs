@@ -368,6 +368,21 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_root_staging_does_not_emit_prebuild_directories() {
+        let output_dir = temp_dir_path("staged-root-without-prebuilds");
+        write_test_package(&output_dir, &component_with_namespace("example"))
+            .expect("write_bindings should succeed");
+
+        let prebuilds_dir = output_dir.join("prebuilds");
+        assert!(
+            !prebuilds_dir.exists(),
+            "root staging should not emit bundled prebuild directories at {prebuilds_dir}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_stages_native_library_in_host_prebuild_directory() {
         let output_dir = temp_dir_path("staged-bundled-library");
         let mut component = component_with_namespace("example");

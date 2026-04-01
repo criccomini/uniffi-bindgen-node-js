@@ -214,7 +214,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Reuse one authoritative implementation for target naming between production and tests.
 - [x] Ensure staged library filenames come from the actual input library filename, not a separate config field.
 - [x] Ensure Windows/non-lib filename handling remains correct.
-- [ ] Ensure root-level staging and bundled-prebuild staging are mutually exclusive in one run.
+- [x] Ensure root-level staging and bundled-prebuild staging are mutually exclusive in one run.
 - [ ] Ensure manual_load does not suppress native-library staging.
 - [ ] Decide and implement overwrite behavior when a staged library already exists in out_dir.
 - [ ] Ensure package generation is deterministic when rerun into an empty directory.

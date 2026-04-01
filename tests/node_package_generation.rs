@@ -153,6 +153,38 @@ fn generates_basic_fixture_node_package_in_a_temp_directory() {
 }
 
 #[test]
+fn generated_default_package_stages_the_input_cdylib_at_the_package_root() {
+    let generated = generate_fixture_package("basic");
+    let package_dir = &generated.package_dir;
+    let input_library_path = &generated.built_fixture.library_path;
+    let library_filename = input_library_path
+        .file_name()
+        .expect("fixture library path should have a filename");
+    let staged_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("default generation should stage the input cdylib at the package root");
+
+    assert_eq!(
+        staged_library_path,
+        &package_dir.join(library_filename),
+        "default generation should stage the input cdylib next to the generated JS files"
+    );
+    assert!(
+        generated.bundled_prebuild_path.is_none(),
+        "default generation should not also stage a bundled prebuild"
+    );
+    assert_eq!(
+        fs::read(input_library_path.as_std_path()).expect("fixture library should be readable"),
+        fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
+        "default generation should stage the exact input cdylib contents"
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn infers_the_only_component_when_crate_name_is_omitted() {
     let built_fixture = build_fixture_cdylib("basic");
     let package_dir = temp_dir_path("infer-basic-package");

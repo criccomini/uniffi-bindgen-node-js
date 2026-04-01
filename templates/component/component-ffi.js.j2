@@ -27,6 +27,7 @@ export const ffiMetadata = Object.freeze({
   namespace: {{ context.namespace_json }},
   cdylibName: {{ context.cdylib_name_json }},
   stagedLibraryFileName: {{ context.staged_library_file_name_json }},
+  stagedLibraryPackageRelativePath: {{ context.staged_library_package_relative_path_json }},
   libPathLiteral: {{ context.lib_path_literal_json }},
   bundledPrebuilds: {{ context.bundled_prebuilds }},
   manualLoad: {{ context.manual_load }},
@@ -55,28 +56,6 @@ const moduleFilename = fileURLToPath(import.meta.url);
 const moduleDirectory = dirname(moduleFilename);
 const libraryNotLoadedMessage =
   "The native library is not loaded. Call load(libraryPath) first.";
-
-function defaultSiblingLibraryFilename() {
-  const extensionByPlatform = {
-    darwin: ".dylib",
-    linux: ".so",
-    win32: ".dll",
-  };
-  const extension = extensionByPlatform[process.platform] ?? ".so";
-
-  if (process.platform === "win32") {
-    return ffiMetadata.cdylibName.endsWith(extension)
-      ? ffiMetadata.cdylibName
-      : `${ffiMetadata.cdylibName}${extension}`;
-  }
-
-  const libraryBaseName = ffiMetadata.cdylibName.startsWith("lib")
-    ? ffiMetadata.cdylibName
-    : `lib${ffiMetadata.cdylibName}`;
-  return libraryBaseName.endsWith(extension)
-    ? libraryBaseName
-    : `${libraryBaseName}${extension}`;
-}
 
 function bundledPrebuildPlatform() {
   switch (process.platform) {
@@ -137,7 +116,7 @@ function defaultBundledLibrary() {
 }
 
 function defaultSiblingLibraryPath() {
-  return join(moduleDirectory, defaultSiblingLibraryFilename());
+  return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);
 }
 
 function resolveLibraryPath(libraryPath = undefined) {

@@ -50,6 +50,7 @@ impl GeneratedPackage {
             &component.ci,
             cdylib_name,
             &layout.native_library.file_name,
+            layout.native_library.package_relative_path.as_str(),
             component.config.lib_path_literal.as_deref(),
             component.config.bundled_prebuilds,
             component.config.manual_load,

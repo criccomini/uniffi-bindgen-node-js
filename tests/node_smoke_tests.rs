@@ -861,6 +861,10 @@ assert.equal(registry.size, 0);
 fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;
+    let expected_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("basic fixture package should stage the native library at the package root");
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -869,6 +873,7 @@ fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
         &format!(
             r#"
 import assert from "node:assert/strict";
+import {{ realpathSync }} from "node:fs";
 import {{
   Config,
   FixtureErrorInvalidState,
@@ -883,9 +888,15 @@ import {{
   echo_record,
   echo_timestamp,
 }} from "./index.js";
+import {{ getFfiBindings, isLoaded }} from "./fixture-ffi.js";
+
+assert.equal(isLoaded(), true);
+assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
 
 {}
 "#,
+            serde_json::to_string(expected_library_path.as_str())
+                .expect("root-staged library path should serialize"),
             basic_fixture_api_smoke_body()
         ),
     );

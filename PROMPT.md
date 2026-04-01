@@ -247,7 +247,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revalidate manual-load reentrancy/idempotence under the new runtime model.
 - [x] Revalidate cached binding-core logic against the new handle/callback semantics.
 - [x] Revalidate bundled-prebuild resolution logic and target naming in generated JS.
-- [ ] Keep root-level default resolution behavior for non-bundled packages.
+- [x] Keep root-level default resolution behavior for non-bundled packages.
 - [ ] Keep explicit load(path) override behavior in manual-load mode.
 - [ ] Ensure generated loader error messages mention staged package paths accurately.
 - [ ] Revisit unsupported-feature validation for v2.

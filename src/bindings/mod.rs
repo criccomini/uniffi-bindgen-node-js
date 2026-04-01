@@ -1188,6 +1188,7 @@ mod tests {
           namespace: "example",
           cdylibName: "fixture",
           stagedLibraryFileName: "libfixture.dylib",
+          stagedLibraryPackageRelativePath: "libfixture.dylib",
           libPathLiteral: null,
           bundledPrebuilds: false,
           manualLoad: false,
@@ -1216,28 +1217,6 @@ mod tests {
         const moduleDirectory = dirname(moduleFilename);
         const libraryNotLoadedMessage =
           "The native library is not loaded. Call load(libraryPath) first.";
-
-        function defaultSiblingLibraryFilename() {
-          const extensionByPlatform = {
-            darwin: ".dylib",
-            linux: ".so",
-            win32: ".dll",
-          };
-          const extension = extensionByPlatform[process.platform] ?? ".so";
-
-          if (process.platform === "win32") {
-            return ffiMetadata.cdylibName.endsWith(extension)
-              ? ffiMetadata.cdylibName
-              : `${ffiMetadata.cdylibName}${extension}`;
-          }
-
-          const libraryBaseName = ffiMetadata.cdylibName.startsWith("lib")
-            ? ffiMetadata.cdylibName
-            : `lib${ffiMetadata.cdylibName}`;
-          return libraryBaseName.endsWith(extension)
-            ? libraryBaseName
-            : `${libraryBaseName}${extension}`;
-        }
 
         function bundledPrebuildPlatform() {
           switch (process.platform) {
@@ -1298,7 +1277,7 @@ mod tests {
         }
 
         function defaultSiblingLibraryPath() {
-          return join(moduleDirectory, defaultSiblingLibraryFilename());
+          return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);
         }
 
         function resolveLibraryPath(libraryPath = undefined) {
@@ -1504,6 +1483,7 @@ mod tests {
           namespace: string;
           cdylibName: string;
           stagedLibraryFileName: string;
+          stagedLibraryPackageRelativePath: string;
           libPathLiteral: string | null;
           bundledPrebuilds: boolean;
           manualLoad: boolean;
@@ -1596,6 +1576,10 @@ mod tests {
         assert!(
             metadata_and_resolution.contains("stagedLibraryFileName: \"libfixture.dylib\""),
             "ffi metadata should expose the staged library filename:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution.contains("stagedLibraryPackageRelativePath: "),
+            "ffi metadata should expose the staged package-relative path:\n{metadata_and_resolution}"
         );
         assert!(
             metadata_and_resolution.contains("function defaultBundledTarget()"),
@@ -1709,6 +1693,12 @@ mod tests {
         );
         assert!(
             component_ffi_js.contains("function defaultSiblingLibraryPath()"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains(
+                "return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);",
+            ),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

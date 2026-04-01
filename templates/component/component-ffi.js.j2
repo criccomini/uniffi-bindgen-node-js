@@ -120,7 +120,16 @@ function defaultSiblingLibraryPath() {
 }
 
 function resolveLibraryPath(libraryPath = undefined) {
-  const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+  if (libraryPath != null) {
+    return Object.freeze({
+      libraryPath: isAbsolute(libraryPath)
+        ? libraryPath
+        : join(moduleDirectory, libraryPath),
+      bundledPrebuild: null,
+    });
+  }
+
+  const rawLibraryPath = ffiMetadata.libPathLiteral;
   if (rawLibraryPath != null) {
     return Object.freeze({
       libraryPath: isAbsolute(rawLibraryPath)

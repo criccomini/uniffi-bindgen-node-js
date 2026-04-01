@@ -1281,7 +1281,16 @@ mod tests {
         }
 
         function resolveLibraryPath(libraryPath = undefined) {
-          const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+          if (libraryPath != null) {
+            return Object.freeze({
+              libraryPath: isAbsolute(libraryPath)
+                ? libraryPath
+                : join(moduleDirectory, libraryPath),
+              bundledPrebuild: null,
+            });
+          }
+
+          const rawLibraryPath = ffiMetadata.libPathLiteral;
           if (rawLibraryPath != null) {
             return Object.freeze({
               libraryPath: isAbsolute(rawLibraryPath)
@@ -1616,7 +1625,8 @@ mod tests {
         assert_contains_in_order(
             &metadata_and_resolution,
             &[
-                "const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;",
+                "if (libraryPath != null) {",
+                "const rawLibraryPath = ffiMetadata.libPathLiteral;",
                 "if (rawLibraryPath != null) {",
                 "if (ffiMetadata.bundledPrebuilds) {",
                 "libraryPath: defaultSiblingLibraryPath(),",
@@ -1702,8 +1712,11 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js
-                .contains("const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;"),
+            component_ffi_js.contains("if (libraryPath != null) {"),
+            "unexpected component FFI JS contents: {component_ffi_js}"
+        );
+        assert!(
+            component_ffi_js.contains("const rawLibraryPath = ffiMetadata.libPathLiteral;"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

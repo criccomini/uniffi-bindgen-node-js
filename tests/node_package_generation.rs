@@ -514,6 +514,7 @@ fn manual_load_loader_codegen_is_reentrant_for_the_same_canonical_path() {
     .expect("component ffi js should be readable");
 
     for expected in [
+        "if (libraryPath != null) {",
         "function canonicalizeExistingLibraryPath(libraryPath) {",
         "const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);",
         "if (loadedBindings.libraryPath === canonicalLibraryPath) {",

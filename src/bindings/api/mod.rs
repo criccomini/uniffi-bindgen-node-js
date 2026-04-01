@@ -29,59 +29,67 @@ pub(crate) struct RenderedComponentApi {
 }
 
 pub(crate) fn render_public_api(model: &ComponentModel) -> Result<RenderedComponentApi> {
-    model.render_public_api()
+    PublicApiTemplateModel::new(model).render()
 }
 
-impl ComponentModel {
-    pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
-        let renderer = PublicApiRenderer::new(self);
-        let requires_async_rust_future_hooks = self.requires_async_rust_future_hooks();
-        let js_sections = self.build_js_render_sections(requires_async_rust_future_hooks)?;
+struct PublicApiTemplateModel<'a> {
+    component: &'a ComponentModel,
+    namespace_doc_comment: String,
+    requires_async_rust_future_hooks: bool,
+}
+
+impl<'a> PublicApiTemplateModel<'a> {
+    fn new(component: &'a ComponentModel) -> Self {
+        Self {
+            component,
+            namespace_doc_comment: render_doc_comment(component.namespace_docstring.as_deref(), ""),
+            requires_async_rust_future_hooks: requires_async_rust_future_hooks(component),
+        }
+    }
+
+    fn render(&self) -> Result<RenderedComponentApi> {
+        let renderer = PublicApiRenderer::new(self.component);
+        let js_sections = self.build_js_render_sections()?;
 
         Ok(RenderedComponentApi {
-            namespace_doc_comment: render_doc_comment(self.namespace_docstring.as_deref(), ""),
+            namespace_doc_comment: self.namespace_doc_comment.clone(),
             js: renderer.render_js(js_sections)?,
             dts: renderer.render_dts()?,
-            requires_async_rust_future_hooks,
+            requires_async_rust_future_hooks: self.requires_async_rust_future_hooks,
         })
     }
 
-    fn build_js_render_sections(
-        &self,
-        requires_async_rust_future_hooks: bool,
-    ) -> Result<JsRenderSections> {
+    fn build_js_render_sections(&self) -> Result<JsRenderSections> {
         let mut sections = self.build_js_declaration_sections()?;
-        self.populate_js_runtime_sections(&mut sections, requires_async_rust_future_hooks)?;
+        self.populate_js_runtime_sections(&mut sections)?;
         Ok(sections)
     }
 
     fn build_js_declaration_sections(&self) -> Result<JsRenderSections> {
         Ok(JsRenderSections {
             unimplemented_helper: self.render_unimplemented_helper(),
-            flat_enums: render_fragments(&self.flat_enums, render_js_flat_enum_fragment)?,
-            tagged_enums: render_fragments(&self.tagged_enums, render_js_tagged_enum_fragment)?,
-            errors: render_fragments(&self.errors, render_js_error_fragment)?,
+            flat_enums: render_fragments(&self.component.flat_enums, render_js_flat_enum_fragment)?,
+            tagged_enums: render_fragments(
+                &self.component.tagged_enums,
+                render_js_tagged_enum_fragment,
+            )?,
+            errors: render_fragments(&self.component.errors, render_js_error_fragment)?,
             placeholder_converters: self.render_optional_placeholder_converters()?,
-            functions: render_fragments(&self.functions, render_js_function_fragment)?,
-            objects: render_fragments(&self.objects, render_js_object_fragment)?,
+            functions: render_fragments(&self.component.functions, render_js_function_fragment)?,
+            objects: render_fragments(&self.component.objects, render_js_object_fragment)?,
             ..JsRenderSections::default()
         })
     }
 
-    fn populate_js_runtime_sections(
-        &self,
-        sections: &mut JsRenderSections,
-        requires_async_rust_future_hooks: bool,
-    ) -> Result<()> {
+    fn populate_js_runtime_sections(&self, sections: &mut JsRenderSections) -> Result<()> {
         sections.runtime_helpers = self.render_runtime_helpers()?;
-        sections.async_rust_future_helpers =
-            self.render_async_rust_future_helpers(requires_async_rust_future_hooks)?;
-        sections.runtime_hooks = self.render_runtime_hooks(requires_async_rust_future_hooks)?;
+        sections.async_rust_future_helpers = self.render_async_rust_future_helpers()?;
+        sections.runtime_hooks = self.render_runtime_hooks()?;
         Ok(())
     }
 
     fn render_unimplemented_helper(&self) -> String {
-        if self.functions.is_empty() && self.objects.is_empty() {
+        if self.component.functions.is_empty() && self.component.objects.is_empty() {
             return String::new();
         }
 
@@ -90,21 +98,18 @@ impl ComponentModel {
     }
 
     fn render_runtime_helpers(&self) -> Result<String> {
-        if self.objects.is_empty() && !self.has_placeholder_converters() {
+        if self.component.objects.is_empty() && !has_placeholder_converters(self.component) {
             return Ok(String::new());
         }
 
         render_js_runtime_helpers_fragment(
-            &self.ffi_rustbuffer_from_bytes_identifier,
-            &self.ffi_rustbuffer_free_identifier,
+            &self.component.ffi_rustbuffer_from_bytes_identifier,
+            &self.component.ffi_rustbuffer_free_identifier,
         )
     }
 
-    fn render_async_rust_future_helpers(
-        &self,
-        requires_async_rust_future_hooks: bool,
-    ) -> Result<String> {
-        if !requires_async_rust_future_hooks {
+    fn render_async_rust_future_helpers(&self) -> Result<String> {
+        if !self.requires_async_rust_future_hooks {
             return Ok(String::new());
         }
 
@@ -112,77 +117,49 @@ impl ComponentModel {
     }
 
     fn render_optional_placeholder_converters(&self) -> Result<String> {
-        if !self.has_placeholder_converters() {
+        if !has_placeholder_converters(self.component) {
             return Ok(String::new());
         }
 
         self.render_js_placeholder_converters()
     }
 
-    fn render_runtime_hooks(&self, requires_async_rust_future_hooks: bool) -> Result<String> {
-        if self.callback_interfaces.is_empty() && !requires_async_rust_future_hooks {
+    fn render_runtime_hooks(&self) -> Result<String> {
+        if self.component.callback_interfaces.is_empty() && !self.requires_async_rust_future_hooks {
             return Ok(String::new());
         }
 
         render_js_runtime_hooks_fragment(
-            &self.callback_interfaces,
-            requires_async_rust_future_hooks,
+            &self.component.callback_interfaces,
+            self.requires_async_rust_future_hooks,
         )
     }
 
-    fn has_placeholder_converters(&self) -> bool {
-        self.has_data_type_placeholder_converters() || !self.callback_interfaces.is_empty()
-    }
-
-    fn has_data_type_placeholder_converters(&self) -> bool {
-        !self.records.is_empty()
-            || !self.flat_enums.is_empty()
-            || !self.tagged_enums.is_empty()
-            || !self.errors.is_empty()
-    }
-
-    fn requires_async_rust_future_hooks(&self) -> bool {
-        self.has_async_functions()
-            || self.has_async_objects()
-            || self.has_async_callback_interfaces()
-    }
-
-    fn has_async_functions(&self) -> bool {
-        self.functions.iter().any(|function| function.is_async)
-    }
-
-    fn has_async_objects(&self) -> bool {
-        self.objects.iter().any(object_has_async_members)
-    }
-
-    fn has_async_callback_interfaces(&self) -> bool {
-        self.callback_interfaces
-            .iter()
-            .any(callback_interface_has_async_methods)
-    }
-
     fn render_js_placeholder_converters(&self) -> Result<String> {
-        let mut lines = render_fragments(&self.records, render_js_record_converter_fragment)?;
+        let mut lines =
+            render_fragments(&self.component.records, render_js_record_converter_fragment)?;
         lines.extend(render_fragments(
-            &self.flat_enums,
+            &self.component.flat_enums,
             render_js_flat_enum_converter_fragment,
         )?);
         lines.extend(render_fragments(
-            &self.tagged_enums,
+            &self.component.tagged_enums,
             render_js_tagged_enum_converter_fragment,
         )?);
         lines.extend(render_fragments(
-            &self.errors,
+            &self.component.errors,
             render_js_error_converter_fragment,
         )?);
         lines.extend(render_fragments(
-            &self.callback_interfaces,
+            &self.component.callback_interfaces,
             render_js_callback_interface_converter_fragment,
         )?);
 
         Ok(lines.join("\n"))
     }
+}
 
+impl ComponentModel {
     fn validate_renderable_types(&self) -> Result<()> {
         self.validate_renderable_functions()?;
         self.validate_renderable_data_types()?;
@@ -219,6 +196,45 @@ impl ComponentModel {
     fn validate_renderable_objects(&self) -> Result<()> {
         self.objects.iter().try_for_each(validate_object_renderable)
     }
+}
+
+#[cfg(test)]
+impl ComponentModel {
+    pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {
+        render_public_api(self)
+    }
+}
+
+fn has_placeholder_converters(component: &ComponentModel) -> bool {
+    has_data_type_placeholder_converters(component) || !component.callback_interfaces.is_empty()
+}
+
+fn has_data_type_placeholder_converters(component: &ComponentModel) -> bool {
+    !component.records.is_empty()
+        || !component.flat_enums.is_empty()
+        || !component.tagged_enums.is_empty()
+        || !component.errors.is_empty()
+}
+
+fn requires_async_rust_future_hooks(component: &ComponentModel) -> bool {
+    has_async_functions(component)
+        || has_async_objects(component)
+        || has_async_callback_interfaces(component)
+}
+
+fn has_async_functions(component: &ComponentModel) -> bool {
+    component.functions.iter().any(|function| function.is_async)
+}
+
+fn has_async_objects(component: &ComponentModel) -> bool {
+    component.objects.iter().any(object_has_async_members)
+}
+
+fn has_async_callback_interfaces(component: &ComponentModel) -> bool {
+    component
+        .callback_interfaces
+        .iter()
+        .any(callback_interface_has_async_methods)
 }
 
 fn render_fragments<T>(items: &[T], render: impl Fn(&T) -> Result<String>) -> Result<Vec<String>> {

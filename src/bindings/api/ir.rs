@@ -16,6 +16,10 @@ pub(crate) fn build_public_api_ir(ci: &ComponentInterface) -> Result<ComponentMo
     ComponentModel::from_ci(ci)
 }
 
+/// Normalized public-API IR derived from a `ComponentInterface`.
+///
+/// Template-specific decisions live in the renderer layer so this stays a
+/// reusable conversion boundary between UniFFI metadata loading and codegen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ComponentModel {
     pub namespace_docstring: Option<String>,

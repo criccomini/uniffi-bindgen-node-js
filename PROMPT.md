@@ -198,7 +198,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update README.md manual-load explanation to reflect staged binaries plus explicit lifecycle control.
 - [x] Update README.md compatibility section to UniFFI 0.31.x.
 - [x] Update README.md supported-surface and limitations section for v2.
-- [ ] Update DEVELOPMENT.md architecture notes to describe loader-based v2.
+- [x] Update DEVELOPMENT.md architecture notes to describe loader-based v2.
 - [ ] Update DEVELOPMENT.md contributor commands if CLI shape changes.
 - [ ] Update DEVELOPMENT.md leak-probe instructions if package staging behavior changes.
 - [ ] Remove outdated references to v1 wording from docs and error strings.

@@ -410,6 +410,59 @@ fn reports_available_crate_names_when_a_library_contains_multiple_components() {
 }
 
 #[test]
+fn selects_the_requested_component_when_crate_name_is_provided() {
+    let built_fixture = build_proc_macro_multi_component_cdylib();
+    let package_dir = temp_dir_path("multi-component-selected-package");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: None,
+        crate_name: Some("component-alpha".to_string()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("crate-name selection should allow generation for the chosen component");
+
+    let package_json: Value = serde_json::from_str(
+        &fs::read_to_string(package_dir.join("package.json").as_std_path())
+            .expect("package.json should be readable"),
+    )
+    .expect("package.json should parse");
+
+    assert!(
+        package_dir.join("component_alpha.js").is_file(),
+        "expected selected component JS at {}",
+        package_dir.join("component_alpha.js")
+    );
+    assert!(
+        package_dir.join("component_alpha.d.ts").is_file(),
+        "expected selected component DTS at {}",
+        package_dir.join("component_alpha.d.ts")
+    );
+    assert!(
+        package_dir.join("component_alpha-ffi.js").is_file(),
+        "expected selected component FFI JS at {}",
+        package_dir.join("component_alpha-ffi.js")
+    );
+    assert!(
+        !package_dir.join("component_beta.js").exists(),
+        "unexpected non-selected component JS at {}",
+        package_dir.join("component_beta.js")
+    );
+    assert_eq!(
+        package_json.get("name").and_then(Value::as_str),
+        Some("component_alpha"),
+        "unexpected package.json contents: {package_json:#}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn rerunning_generation_into_fresh_empty_directories_is_deterministic() {
     let built_fixture = build_fixture_cdylib("basic");
     let first_package_dir = temp_dir_path("deterministic-package-first");

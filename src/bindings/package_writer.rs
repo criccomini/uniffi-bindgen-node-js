@@ -102,6 +102,7 @@ impl GeneratedPackage {
                 self.layout.index_js_path(),
                 PackageIndexJsTemplate {
                     namespace: self.layout.namespace.clone(),
+                    manual_load: self.manual_load,
                 }
                 .render(),
             )?,

@@ -220,7 +220,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Ensure package generation is deterministic when rerun into an empty directory.
 - [x] Keep generated package structure consistent with current published shape where still appropriate.
 - [x] Revisit package.json generation for any Node engine or export-field cleanup needed in v2.
-- [ ] Revisit top-level entrypoint generation to ensure manual-load and auto-load behavior are cleanly separated.
+- [x] Revisit top-level entrypoint generation to ensure manual-load and auto-load behavior are cleanly separated.
 - [ ] Revisit namespace file generation to ensure imports are minimal and correct after refactor.
 - [ ] Revisit runtime-helper file set to ensure only needed helpers are emitted.
 - [ ] Rebuild the normalized IR used by templates so orchestration concerns are not mixed into rendering structs.

@@ -44,6 +44,7 @@ pub(crate) struct PackageJsonTemplate {
 #[template(path = "package/index.js.j2", escape = "none")]
 pub(crate) struct PackageIndexJsTemplate {
     pub(crate) namespace: String,
+    pub(crate) manual_load: bool,
 }
 
 #[derive(Template)]

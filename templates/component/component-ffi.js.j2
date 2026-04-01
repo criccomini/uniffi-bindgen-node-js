@@ -318,12 +318,6 @@ export function configureRuntimeHooks(hooks = undefined) {
   runtimeHooks = Object.freeze(hooks ?? {});
 }
 
-{% if !context.requires_runtime_hooks %}
-if (!ffiMetadata.manualLoad) {
-  load();
-}
-{% endif %}
-
 function throwLibraryNotLoaded() {
   throw new LibraryNotLoadedError(libraryNotLoadedMessage);
 }

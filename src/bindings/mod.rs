@@ -226,8 +226,19 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
-            component_js.contains("loadFfi()"),
+            !component_js.contains("loadFfi()"),
             "unexpected component JS contents: {component_js}"
+        );
+
+        let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
+            .expect("index JS should be readable");
+        assert!(
+            index_js.contains("import { load as loadFfi } from \"./example-ffi.js\";"),
+            "unexpected index JS contents: {index_js}"
+        );
+        assert!(
+            index_js.contains("loadFfi();"),
+            "unexpected index JS contents: {index_js}"
         );
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
@@ -559,9 +570,11 @@ mod tests {
             component_js.contains("configureRuntimeHooks({"),
             "unexpected component JS contents: {component_js}"
         );
+        let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
+            .expect("index JS should be readable");
         assert!(
-            component_js.contains("loadFfi();"),
-            "unexpected component JS contents: {component_js}"
+            index_js.contains("loadFfi();"),
+            "unexpected index JS contents: {index_js}"
         );
         assert!(
             component_ffi_js
@@ -1691,14 +1704,21 @@ mod tests {
         write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_bindings should succeed");
 
+        let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
+            .expect("index JS should be readable");
+        assert!(
+            index_js.contains("import { load as loadFfi } from \"./example-ffi.js\";"),
+            "unexpected index JS contents: {index_js}"
+        );
+        assert!(
+            index_js.contains("loadFfi();"),
+            "unexpected index JS contents: {index_js}"
+        );
+
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
         assert!(
-            component_ffi_js.contains("if (!ffiMetadata.manualLoad) {"),
-            "unexpected component FFI JS contents: {component_ffi_js}"
-        );
-        assert!(
-            component_ffi_js.contains("  load();"),
+            !component_ffi_js.contains("if (!ffiMetadata.manualLoad) {\n  load();\n}"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
 
@@ -1723,6 +1743,14 @@ mod tests {
         assert!(
             component_dts.contains("export { load, unload } from \"./example-ffi.js\";"),
             "unexpected component DTS contents: {component_dts}"
+        );
+
+        let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
+            .expect("index JS should be readable");
+        assert_eq!(
+            index_js.trim(),
+            "export * from \"./example.js\";",
+            "unexpected index JS contents: {index_js}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");

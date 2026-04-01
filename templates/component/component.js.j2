@@ -4,7 +4,6 @@ import {
   ffiFunctions,
   getFfiBindings,
   getFfiTypes,
-  load as loadFfi,
 } from "./{{ namespace }}-ffi.js";
 {% if !ffi_types_imports.is_empty() %}
 import {
@@ -72,7 +71,3 @@ export { load, unload } from "./{{ namespace }}-ffi.js";
 {% endif %}
 
 {{ public_api_js }}
-
-if (!componentMetadata.manualLoad) {
-  loadFfi();
-}

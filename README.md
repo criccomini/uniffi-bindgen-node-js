@@ -53,6 +53,8 @@ uniffi-bindgen-node-js generate \
   --out-dir ./generated/your-package
 ```
 
+`--crate-name` is optional when the built library exposes exactly one UniFFI component. If the library exposes multiple components, the generator reports the discovered crate names and requires `--crate-name`.
+
 Use the built library file for your platform:
 
 - macOS: `libyour_crate.dylib`
@@ -81,28 +83,31 @@ console.log(greet("world"));
 ## CLI Reference
 
 ```sh
-uniffi-bindgen-node-js generate [OPTIONS] --crate-name <CRATE_NAME> --out-dir <OUT_DIR> <LIB_SOURCE>
+uniffi-bindgen-node-js generate [OPTIONS] --out-dir <OUT_DIR> <LIB_SOURCE>
 ```
 
 Required inputs:
 
 - `LIB_SOURCE`: path to a built `.so`, `.dylib`, or `.dll`
-- `--crate-name`: Cargo package name or library crate name
 - `--out-dir`: directory where the npm package will be written
 
-Optional flags:
+Optional component selection and source resolution:
+
+- `--crate-name <name>`: Cargo package name or library crate name when the library exposes more than one UniFFI component
+- `--manifest-path <Cargo.toml>`: Cargo.toml hint used when BindgenLoader needs workspace, UDL, or `uniffi.toml` resolution help
+
+Optional Node package settings:
 
 - `--package-name <name>`: npm package name to write into `package.json`
-- `--cdylib-name <name>`: native library basename used by the generated loader
 - `--node-engine <range>`: value written to `package.json` `engines.node`
-- `--lib-path-literal <path>`: hard-coded default path for the native library
-- `--bundled-prebuilds`: resolve the default library from `prebuilds/<target>/...`
-- `--manual-load`: export explicit `load()` and `unload()` helpers instead of auto-loading on import
-- `--config-override KEY=VALUE`: override supported `[bindings.node]` settings from the CLI
+- `--bundled-prebuilds`: stage the input cdylib into `prebuilds/<host-target>/` and resolve that staged library by default
+- `--manual-load`: export explicit `load()` and `unload()` helpers instead of auto-loading on import; the generated package still includes the staged native library
+
+Generated packages are always ESM. The v2 CLI does not offer CommonJS output or legacy native-library path overrides.
 
 ## Packaging Modes
 
-By default, the generated package expects a single native library for the current build and places it next to the generated JavaScript files:
+By default, the generator copies the input cdylib into the package root next to the generated JavaScript files, and the generated loader resolves that staged file by default:
 
 ```text
 your-package/
@@ -112,7 +117,7 @@ your-package/
   libyour_crate.dylib
 ```
 
-If you pass `--bundled-prebuilds`, the generated loader looks for platform-specific libraries under `prebuilds/<target>/`:
+If you pass `--bundled-prebuilds`, the generator stages the input cdylib into `prebuilds/<host-target>/` for the current host build, and the generated loader resolves platform-specific libraries from that layout:
 
 ```text
 your-package/
@@ -125,7 +130,7 @@ your-package/
     win32-x64/your_crate.dll
 ```
 
-This mode defines the lookup contract only. You still need to build and stage the per-target native libraries yourself.
+Each invocation stages one host-target build. Building a package that contains multiple targets still requires running the generator separately for each built cdylib and assembling the output layout yourself.
 
 Linux bundled targets include a libc suffix:
 
@@ -134,9 +139,9 @@ Linux bundled targets include a libc suffix:
 
 ## Manual Loading
 
-Without `--manual-load`, the generated package loads the native library during import.
+Without `--manual-load`, the generated package loads its staged native library during import.
 
-With `--manual-load`, the top-level package exports `load()` and `unload()` so you can choose the library path explicitly:
+With `--manual-load`, the top-level package still includes the staged native library, but it exports `load()` and `unload()` so you control when loading happens. Calling `load()` with no argument uses the staged package path; passing `load(path)` overrides it explicitly:
 
 ```sh
 uniffi-bindgen-node-js generate \
@@ -149,7 +154,7 @@ uniffi-bindgen-node-js generate \
 ```js
 import { load, unload, greet } from "./generated/your-package/index.js";
 
-load("./path/to/your/native/library");
+load();
 console.log(greet("world"));
 unload();
 ```
@@ -161,7 +166,6 @@ You can store Node generator settings in `uniffi.toml`:
 ```toml
 [bindings.node]
 package_name = "your-package"
-cdylib_name = "your_crate"
 node_engine = ">=16"
 bundled_prebuilds = true
 manual_load = false
@@ -170,25 +174,23 @@ manual_load = false
 Defaults:
 
 - `package_name`: UniFFI namespace
-- `cdylib_name`: UniFFI `cdylib` name from generation settings
 - `node_engine`: `>=16`
-- `lib_path_literal`: unset
 - `bundled_prebuilds`: `false`
 - `manual_load`: `false`
 
 CLI flags apply after config-file settings.
 
-`bundled_prebuilds = true` cannot be combined with `lib_path_literal`.
+Generated packages are always ESM. v2 rejects legacy `[bindings.node]` keys such as `cdylib_name`, `lib_path_literal`, `module_format`, and `commonjs` with explicit diagnostics.
 
 ## Compatibility
 
-- First-class target: UniFFI `0.29.5`
+- First-class target: UniFFI `0.31.x`
 - Generated output: ESM-only
 - Default Node engine range: `>=16`
 
 ## Supported UniFFI Surface
 
-The current generator supports:
+The v2 generator currently supports:
 
 - top-level functions
 - objects, constructors, and synchronous methods
@@ -202,6 +204,8 @@ The current generator supports:
 - `HashMap<K, V>`
 - `bytes` as `Uint8Array`
 - callback interfaces, including async methods
+
+Unsupported or not-yet-adopted UniFFI surfaces fail generation with an explicit diagnostic rather than producing partial bindings.
 
 Public API conventions:
 
@@ -222,4 +226,5 @@ The generator does not yet support:
 
 - UniFFI custom types
 - UniFFI external types
+- CommonJS package output
 - automatic multi-target package assembly

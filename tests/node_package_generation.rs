@@ -517,6 +517,48 @@ fn manual_load_loader_codegen_is_reentrant_for_the_same_canonical_path() {
 }
 
 #[test]
+fn loader_codegen_caches_binding_core_by_canonical_library_path() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("binding-core-cache");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: true,
+    })
+    .expect("package generation should emit binding-core cache handling");
+
+    let ffi_js = fs::read_to_string(
+        package_dir
+            .join(format!("{}-ffi.js", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component ffi js should be readable");
+
+    for expected in [
+        "let cachedBindingCore = null;",
+        "let cachedLibraryPath = null;",
+        "cachedLibraryPath === canonicalLibraryPath",
+        "cachedBindingCore.library.unload();",
+        "clearBindingCoreCache();",
+        "bindingCore = cacheBindingCore(canonicalLibraryPath, bindings);",
+    ] {
+        assert!(
+            ffi_js.contains(expected),
+            "unexpected component FFI JS contents: {ffi_js}"
+        );
+    }
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
     let built_fixture = build_fixture_cdylib("callbacks");
     let package_dir = temp_dir_path("callbacks-manifest-path-package");

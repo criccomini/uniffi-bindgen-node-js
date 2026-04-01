@@ -86,8 +86,8 @@ import assert from "node:assert/strict";
 import koffi from "koffi";
 import { createObjectFactory } from "./runtime/objects.js";
 
-const genericHandleType = koffi.pointer("RustArcPtr", koffi.opaque());
-const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+const genericHandleType = koffi.pointer("ForeignHandle", koffi.opaque());
+const resourceHandleType = koffi.pointer("ResourceHandle", koffi.opaque());
 
 class Resource {
   ping() {
@@ -100,7 +100,7 @@ const resourceFactory = createObjectFactory({
   createInstance: () => Object.create(Resource.prototype),
   handleType: () => resourceHandleType,
   cloneHandle(handle) {
-    assert.equal(handle.__type?.name, "RustArcPtrResource");
+    assert.equal(handle.__type?.name, "ResourceHandle");
     return handle.__pointer;
   },
 });
@@ -113,7 +113,7 @@ const rawHandle = {
 const resource = resourceFactory.create(rawHandle);
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
-assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "ForeignHandle");
 "#,
     );
 
@@ -206,8 +206,8 @@ import assert from "node:assert/strict";
 import koffi from "koffi";
 import { createObjectFactory } from "./runtime/objects.js";
 
-const genericHandleType = koffi.pointer("RustArcPtr", koffi.opaque());
-const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+const genericHandleType = koffi.pointer("ForeignHandle", koffi.opaque());
+const resourceHandleType = koffi.pointer("ResourceHandle", koffi.opaque());
 
 class Resource {
   ping() {
@@ -220,7 +220,7 @@ const resourceFactory = createObjectFactory({
   createInstance: () => Object.create(Resource.prototype),
   handleType: () => resourceHandleType,
   cloneHandle(handle) {
-    assert.equal(handle.__type?.name, "RustArcPtrResource");
+    assert.equal(handle.__type?.name, "ResourceHandle");
     assert.equal(handle.__addr, 42n);
     assert.equal(handle.__retagged, true);
     return handle.__pointer;
@@ -235,7 +235,7 @@ const rawHandle = {
 const resource = resourceFactory.createRetyped(rawHandle);
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
-assert.equal(resourceFactory.peekHandle(resource).__type?.name, "RustArcPtr");
+assert.equal(resourceFactory.peekHandle(resource).__type?.name, "ForeignHandle");
 "#,
     );
 
@@ -315,7 +315,7 @@ import assert from "node:assert/strict";
 import koffi from "koffi";
 import { createObjectFactory } from "./runtime/objects.js";
 
-const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+const resourceHandleType = koffi.pointer("ResourceHandle", koffi.opaque());
 
 class Resource {}
 
@@ -329,7 +329,7 @@ const resource = resourceFactory.create(42n);
 const typedHandle = resourceFactory.handle(resource);
 assert.equal(typedHandle.__decoded, true);
 assert.equal(typedHandle.__addr, 42n);
-assert.equal(typedHandle.__type?.name, "RustArcPtrResource");
+assert.equal(typedHandle.__type?.name, "ResourceHandle");
 "#,
     );
 
@@ -498,7 +498,7 @@ import assert from "node:assert/strict";
 import koffi from "koffi";
 import { createObjectFactory } from "./runtime/objects.js";
 
-const resourceHandleType = koffi.pointer("RustArcPtrResource", koffi.opaque());
+const resourceHandleType = koffi.pointer("ResourceHandle", koffi.opaque());
 
 class Resource {
   ping() {
@@ -541,9 +541,9 @@ assert.equal(typeof resource.ping, "function");
 assert.deepEqual(freedHandles, [42n]);
 const cloned = resource.ping();
 assert.equal(cloned.__retagged, true);
-assert.equal(cloned.__type?.name, "RustArcPtrResource");
+assert.equal(cloned.__type?.name, "ResourceHandle");
 assert.equal(cloned.__pointer, adoptedHandle);
-assert.equal(resourceFactory.handle(resource).__type?.name, "RustArcPtrResource");
+assert.equal(resourceFactory.handle(resource).__type?.name, "ResourceHandle");
 assert.strictEqual(resourceFactory.peekHandle(resource), adoptedHandle);
 assert.equal(resourceFactory.usesRawExternal(resource), true);
 assert.equal(resourceFactory.destroy(resource), true);

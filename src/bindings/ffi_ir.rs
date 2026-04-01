@@ -326,7 +326,7 @@ fn render_type_expr(type_: FfiType) -> String {
 }
 
 fn opaque_type_name(name: &str) -> String {
-    format!("RustArcPtr{name}")
+    format!("UniffiHandle{name}")
 }
 
 fn opaque_identifier(name: &str) -> String {

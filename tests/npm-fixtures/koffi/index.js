@@ -107,29 +107,6 @@ function validatePointerArgument(value, expectedType) {
     return;
   }
 
-  if (expectedType.name === "RustArcPtr") {
-    if (typeof value !== "object" || value == null || typeof value.__addr !== "bigint") {
-      throw new TypeError(
-        `Unexpected ${typeof value} value, expected ${pointerTypeName(expectedType)} *`,
-      );
-    }
-    const actualType = value.__type;
-    if (actualType == null) {
-      return;
-    }
-    if (!isPointerType(actualType)) {
-      throw new TypeError(
-        `Unexpected ${typeof value} value, expected ${pointerTypeName(expectedType)} *`,
-      );
-    }
-    if (actualType.name !== expectedType.name) {
-      throw new TypeError(
-        `Unexpected ${pointerTypeName(actualType)} * value, expected ${expectedType.name}`,
-      );
-    }
-    return;
-  }
-
   if (isExternalPointerValue(value)) {
     return;
   }
@@ -165,9 +142,6 @@ function validatePointerArgument(value, expectedType) {
 function wrapReturnValue(value, returnType) {
   if (!isOpaquePointerType(returnType) || value == null) {
     return value;
-  }
-  if (returnType.name === "RustArcPtr") {
-    return wrapExternalPointerValue(value);
   }
   return wrapPointerValue(value, returnType);
 }

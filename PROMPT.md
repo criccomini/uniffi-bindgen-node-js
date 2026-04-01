@@ -226,7 +226,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Rebuild the normalized IR used by templates so orchestration concerns are not mixed into rendering structs.
 - [x] Audit all ComponentInterface-to-IR conversion assumptions against UniFFI 0.31.
 - [x] Update object-handle modeling for the post-0.30 handle ABI.
-- [ ] Remove RustArcPtr-specific assumptions where UniFFI now uses handles.
+- [x] Remove RustArcPtr-specific assumptions where UniFFI now uses handles.
 - [ ] Update object free/clone logic to match UniFFI 0.30/0.31 semantics.
 - [ ] Update callback-interface handle logic to match UniFFI 0.30/0.31.
 - [ ] Update any generic-ABI object retyping logic in generated runtime/tests.

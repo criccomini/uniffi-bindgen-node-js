@@ -514,10 +514,7 @@ pub(crate) fn render_js_koffi_type_expression(
     }
 
     match type_ {
-        Type::Object { name, .. } => Ok(format!(
-            "{ffi_bindings_expr}.ffiTypes.{}",
-            ffi_opaque_identifier(name)
-        )),
+        Type::Object { .. } => Ok(format!("{ffi_bindings_expr}.ffiTypes.UniffiHandle")),
         Type::Custom { name, .. } => bail!("custom type '{name}' is not supported"),
         _ => unreachable!("all supported koffi types should have been handled"),
     }
@@ -739,10 +736,6 @@ pub(crate) fn foreign_future_complete_ffi_name(return_ffi_type: Option<&FfiType>
         "ForeignFutureComplete{}",
         FfiType::return_type_name(return_ffi_type).to_upper_camel_case()
     )
-}
-
-pub(crate) fn ffi_opaque_identifier(name: &str) -> String {
-    ffi_symbol_identifier(&format!("RustArcPtr{name}"))
 }
 
 fn sanitize_identifier(name: &str, allow_reserved: bool) -> String {

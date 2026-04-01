@@ -2300,6 +2300,18 @@ mod tests {
         );
         assert_eq!(
             render_js_koffi_type_expression(
+                &Type::Object {
+                    module_path: "crate".to_string(),
+                    name: "Store".to_string(),
+                    imp: uniffi_bindgen::interface::ObjectImpl::Struct,
+                },
+                "bindings",
+            )
+            .unwrap(),
+            "bindings.ffiTypes.UniffiHandle"
+        );
+        assert_eq!(
+            render_js_koffi_type_expression(
                 &Type::CallbackInterface {
                     module_path: "crate".to_string(),
                     name: "Logger".to_string(),

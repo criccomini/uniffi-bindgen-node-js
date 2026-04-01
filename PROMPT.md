@@ -251,8 +251,8 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Keep explicit load(path) override behavior in manual-load mode.
 - [x] Ensure generated loader error messages mention staged package paths accurately.
 - [ ] Revisit unsupported-feature validation for v2.
-- [ ] Keep explicit rejection for custom types unless intentionally added.
-- [ ] Keep explicit rejection for external types unless intentionally added.
+- [x] Keep explicit rejection for custom types unless intentionally added.
+- [x] Keep explicit rejection for external types unless intentionally added.
 - [ ] Decide whether record/enum methods are supported in v2.
 - [ ] If record/enum methods are not supported, add explicit diagnostics for them.
 - [ ] Decide whether exported trait methods on records/enums are supported in v2.

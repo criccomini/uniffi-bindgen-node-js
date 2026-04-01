@@ -218,6 +218,52 @@ fn bundled_prebuilds_option_emits_bundled_loader_metadata() {
 }
 
 #[test]
+fn manual_load_option_exports_manual_lifecycle_helpers() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("manual-load-helpers");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: true,
+    })
+    .expect("package generation should keep manual-load support");
+
+    let component_js = fs::read_to_string(
+        package_dir
+            .join(format!("{}.js", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component js should be readable");
+    let ffi_js = fs::read_to_string(
+        package_dir
+            .join(format!("{}-ffi.js", built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component ffi js should be readable");
+
+    assert!(
+        component_js.contains(&format!(
+            "export {{ load, unload }} from \"./{}-ffi.js\";",
+            built_fixture.namespace
+        )),
+        "unexpected component JS contents: {component_js}"
+    );
+    assert!(
+        ffi_js.contains("manualLoad: true"),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
 fn generates_udl_backed_callback_fixture_when_manifest_path_is_provided() {
     let built_fixture = build_fixture_cdylib("callbacks");
     let package_dir = temp_dir_path("callbacks-manifest-path-package");

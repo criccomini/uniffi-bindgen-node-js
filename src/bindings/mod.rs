@@ -602,7 +602,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_typed_object_handle_round_trip_support() {
+    fn write_bindings_emits_generic_abi_object_handle_round_trip_support() {
         let output_dir = temp_dir_path("object-handle-round-trip");
         let component = component_from_webidl(
             r#"
@@ -648,7 +648,7 @@ mod tests {
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(
-            objects_js.contains("return this.factory.createRetyped(handle);"),
+            objects_js.contains("return this.factory.createGenericAbi(handle);"),
             "unexpected runtime objects JS contents: {objects_js}"
         );
         assert!(

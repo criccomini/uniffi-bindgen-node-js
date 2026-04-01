@@ -232,7 +232,7 @@ const rawHandle = {
   __type: genericHandleType,
 };
 
-const resource = resourceFactory.createRetyped(rawHandle);
+const resource = resourceFactory.createGenericAbi(rawHandle);
 assert.equal(typeof resource.ping, "function");
 assert.doesNotThrow(() => resource.ping());
 assert.equal(resourceFactory.peekHandle(resource).__type?.name, "ForeignHandle");
@@ -338,7 +338,7 @@ assert.equal(typedHandle.__type?.name, "ResourceHandle");
 }
 
 #[test]
-fn runtime_object_converter_retypes_deserialized_handles() {
+fn runtime_object_converter_marks_deserialized_handles_as_generic_abi() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
 

@@ -227,9 +227,9 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Audit all ComponentInterface-to-IR conversion assumptions against UniFFI 0.31.
 - [x] Update object-handle modeling for the post-0.30 handle ABI.
 - [x] Remove RustArcPtr-specific assumptions where UniFFI now uses handles.
-- [ ] Update object free/clone logic to match UniFFI 0.30/0.31 semantics.
-- [ ] Update callback-interface handle logic to match UniFFI 0.30/0.31.
-- [ ] Update any generic-ABI object retyping logic in generated runtime/tests.
+- [x] Update object free/clone logic to match UniFFI 0.30/0.31 semantics.
+- [x] Update callback-interface handle logic to match UniFFI 0.30/0.31.
+- [x] Update any generic-ABI object retyping logic in generated runtime/tests.
 - [ ] Update FFI type rendering for changed UniFFI FfiType expectations.
 - [ ] Update return-value normalizers if the new handle ABI changes numeric handling.
 - [ ] Audit and update any module_path-derived symbol synthesis now that full module paths are present.

@@ -16,9 +16,7 @@ export interface UniffiObjectFactoryOptions<T extends object = UniffiObjectBase>
   freeHandle?: ((handle: unknown, value?: T) => void) | null;
   freeHandleGeneric?: ((handle: unknown, value?: T) => void) | null;
   freeHandleRawExternal?: ((handle: unknown, value?: T) => void) | null;
-  freeRetypedHandle?: ((handle: unknown, value?: T) => void) | null;
   handleType?: unknown | (() => unknown) | null;
-  retypeHandle?: ((handle: unknown) => unknown) | null;
   serializeHandle?: ((handle: unknown, value: T) => bigint | number) | null;
   deserializeHandle?: ((handle: bigint | number) => unknown) | null;
 }
@@ -39,7 +37,7 @@ export declare class UniffiObjectFactory<T extends object = UniffiObjectBase> {
   attach(instance: T, handle: unknown): T;
   bless(instance: T, handle: unknown): T;
   create(handle: unknown): T;
-  createRetyped(handle: unknown): T;
+  createGenericAbi(handle: unknown): T;
   createRawExternal(handle: unknown): T;
   handle(value: T): unknown;
   peekHandle(value: unknown): unknown;

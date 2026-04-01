@@ -158,7 +158,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Define the final v2 module layout and move code accordingly.
 - [x] Build BindgenPaths in the new orchestration path.
 - [x] Support --manifest-path for path/config/UDL resolution.
-- [ ] Decide and implement the exact BindgenPaths layering order used by v2.
+- [x] Decide and implement the exact BindgenPaths layering order used by v2.
 - [ ] Ensure config lookup is deterministic when both workspace discovery and --manifest-path are available.
 - [x] Create BindgenLoader in the new flow.
 - [x] Load metadata from the input library path with BindgenLoader.

@@ -3,6 +3,7 @@
 pub mod fixtures;
 
 use std::{
+    collections::BTreeMap,
     env, fs, process,
     process::Command,
     sync::atomic::{AtomicU64, Ordering},
@@ -285,6 +286,12 @@ pub fn remove_dir_all(path: &Utf8PathBuf) {
     }
 }
 
+pub fn read_package_file_tree(package_dir: &Utf8PathBuf) -> BTreeMap<String, Vec<u8>> {
+    let mut files = BTreeMap::new();
+    collect_package_file_tree(package_dir, package_dir, &mut files);
+    files
+}
+
 pub fn temp_dir_path(name: &str) -> Utf8PathBuf {
     static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -320,6 +327,41 @@ fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) {
                 panic!("failed to copy fixture file {entry_path} to {target_path}: {error}")
             });
         }
+    }
+}
+
+fn collect_package_file_tree(
+    package_dir: &Utf8PathBuf,
+    current_dir: &Utf8PathBuf,
+    files: &mut BTreeMap<String, Vec<u8>>,
+) {
+    let mut entries = fs::read_dir(current_dir.as_std_path())
+        .unwrap_or_else(|error| panic!("failed to read directory {current_dir}: {error}"))
+        .filter_map(|entry| entry.ok())
+        .map(|entry| {
+            Utf8PathBuf::from_path_buf(entry.path())
+                .unwrap_or_else(|path| panic!("package path should be utf-8: {}", path.display()))
+        })
+        .collect::<Vec<_>>();
+    entries.sort_unstable();
+
+    for entry_path in entries {
+        if entry_path.is_dir() {
+            collect_package_file_tree(package_dir, &entry_path, files);
+            continue;
+        }
+
+        let relative_path = entry_path
+            .strip_prefix(package_dir)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "package path {entry_path} should live under package root {package_dir}: {error}"
+                )
+            })
+            .to_string();
+        let contents = fs::read(entry_path.as_std_path())
+            .unwrap_or_else(|error| panic!("failed to read generated file {entry_path}: {error}"));
+        files.insert(relative_path, contents);
     }
 }
 

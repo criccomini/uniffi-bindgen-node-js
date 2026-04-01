@@ -4,8 +4,8 @@ use std::fs;
 
 use self::support::{
     FixturePackageOptions, build_fixture_cdylib, fixtures::fixture_spec, generate_fixture_package,
-    generate_fixture_package_with_options, install_fixture_package_dependencies, remove_dir_all,
-    temp_dir_path,
+    generate_fixture_package_with_options, install_fixture_package_dependencies,
+    read_package_file_tree, remove_dir_all, temp_dir_path,
 };
 use serde_json::Value;
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
@@ -106,6 +106,37 @@ fn defaults_package_name_to_the_selected_component_namespace() {
 
     remove_dir_all(&built_fixture.workspace_dir);
     remove_dir_all(&package_dir);
+}
+
+#[test]
+fn rerunning_generation_into_fresh_empty_directories_is_deterministic() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let first_package_dir = temp_dir_path("deterministic-package-first");
+    let second_package_dir = temp_dir_path("deterministic-package-second");
+
+    for out_dir in [&first_package_dir, &second_package_dir] {
+        generate_node_package(GenerateNodePackageOptions {
+            lib_source: built_fixture.library_path.clone(),
+            manifest_path: Some(built_fixture.manifest_path.clone()),
+            crate_name: Some(built_fixture.crate_name.clone()),
+            out_dir: out_dir.clone(),
+            package_name: Some(format!("{}-package", built_fixture.namespace)),
+            node_engine: None,
+            bundled_prebuilds: false,
+            manual_load: false,
+        })
+        .expect("package generation should be deterministic across fresh output directories");
+    }
+
+    assert_eq!(
+        read_package_file_tree(&first_package_dir),
+        read_package_file_tree(&second_package_dir),
+        "expected byte-for-byte identical package output across fresh directories"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&first_package_dir);
+    remove_dir_all(&second_package_dir);
 }
 
 #[test]

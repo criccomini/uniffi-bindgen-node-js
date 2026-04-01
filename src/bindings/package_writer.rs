@@ -69,20 +69,17 @@ impl GeneratedPackage {
 
     fn write_package_files(&self) -> Result<()> {
         let template_context = TemplateContext::from_package(self)?;
-        write_files(self.package_files(&template_context)?)?;
+        self.write_package_metadata_files(&template_context)?;
+        let mut files = self.component_api_files(&template_context)?;
+        files.extend(self.component_ffi_files()?);
+        write_files(files)?;
         self.write_runtime_files()?;
 
         Ok(())
     }
 
-    fn package_files(
-        &self,
-        template_context: &TemplateContext,
-    ) -> Result<Vec<(Utf8PathBuf, String)>> {
-        let mut files = self.package_metadata_files(template_context)?;
-        files.extend(self.component_api_files(template_context)?);
-        files.extend(self.component_ffi_files()?);
-        Ok(files)
+    fn write_package_metadata_files(&self, template_context: &TemplateContext) -> Result<()> {
+        write_files(self.package_metadata_files(template_context)?)
     }
 
     fn package_metadata_files(

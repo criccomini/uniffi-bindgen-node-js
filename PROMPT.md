@@ -204,7 +204,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Remove outdated references to v1 wording from docs and error strings.
 - [x] Design the new internal package layout abstraction around actual staged artifacts.
 - [x] Make the package writer create the output directory structure.
-- [ ] Make the package writer emit metadata files.
+- [x] Make the package writer emit metadata files.
 - [ ] Make the package writer emit namespace API JS/TS files.
 - [ ] Make the package writer emit FFI JS/TS files.
 - [ ] Make the package writer emit runtime helper files.

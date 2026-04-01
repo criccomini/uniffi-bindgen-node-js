@@ -1141,6 +1141,92 @@ try {{
 }
 
 #[test]
+fn callback_manual_load_unload_clears_pending_foreign_futures_and_callback_registrations() {
+    let generated = generate_fixture_package_with_options(
+        "callbacks",
+        FixturePackageOptions {
+            manual_load: true,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let namespace = &generated.built_fixture.namespace;
+    let staged_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("manual-load callbacks package should stage the native library at the package root");
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "callback-manual-unload-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import koffi from "koffi";
+import {{ LogLevel, init_logging, load, unload }} from "./index.js";
+import {{
+  createPendingForeignFuture,
+  foreignFutureHandleCount,
+}} from "./runtime/callbacks.js";
+import {{ isLoaded }} from "./{namespace}-ffi.js";
+
+const stagedLibraryPath = {staged_library_path_json};
+
+assert.equal(isLoaded(), false);
+load(stagedLibraryPath);
+assert.equal(isLoaded(), true);
+assert.ok(koffi.registeredCallbackCount() > 0);
+
+const firstRecords = [];
+init_logging(LogLevel.Info, {{
+  log(record) {{
+    firstRecords.push(record.message);
+  }},
+}});
+assert.deepStrictEqual(firstRecords, ["logging initialized"]);
+
+const pending = createPendingForeignFuture({{
+  callbackData: 41n,
+  complete() {{
+    throw new Error("unload should clear pending foreign futures before completion");
+  }},
+}});
+assert.equal(typeof pending.handle, "bigint");
+assert.equal(foreignFutureHandleCount(), 1);
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+assert.equal(foreignFutureHandleCount(), 0);
+assert.equal(koffi.registeredCallbackCount(), 0);
+
+load(stagedLibraryPath);
+assert.equal(isLoaded(), true);
+assert.ok(koffi.registeredCallbackCount() > 0);
+
+const secondRecords = [];
+init_logging(LogLevel.Info, {{
+  log(record) {{
+    secondRecords.push(record.message);
+  }},
+}});
+assert.deepStrictEqual(firstRecords, ["logging initialized"]);
+assert.deepStrictEqual(secondRecords, ["logging initialized"]);
+
+assert.equal(unload(), true);
+assert.equal(koffi.registeredCallbackCount(), 0);
+"#,
+            namespace = namespace,
+            staged_library_path_json =
+                serde_json::to_string(staged_library_path.as_str()).expect("path should serialize"),
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn bundled_mode_import_reports_missing_host_prebuild() {
     let generated = generate_fixture_package_with_options(
         "basic",

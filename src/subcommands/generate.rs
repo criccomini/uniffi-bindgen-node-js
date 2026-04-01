@@ -1,5 +1,4 @@
-use crate::GenerateNodePackageOptions;
-use crate::node_v2::{GenerateNodePackageCliOverrides, generate_node_package_with_cli_overrides};
+use crate::{GenerateNodePackageOptions, generate_node_package};
 use anyhow::bail;
 use camino::Utf8PathBuf;
 use clap::Args;
@@ -24,9 +23,6 @@ pub struct GenerateArgs {
     pub node_engine: Option<String>,
 
     #[arg(long)]
-    pub lib_path_literal: Option<String>,
-
-    #[arg(long)]
     pub bundled_prebuilds: bool,
 
     #[arg(long)]
@@ -35,21 +31,16 @@ pub struct GenerateArgs {
 
 pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     validate_args(&args)?;
-    generate_node_package_with_cli_overrides(
-        GenerateNodePackageOptions {
-            lib_source: args.lib_source,
-            manifest_path: args.manifest_path,
-            crate_name: args.crate_name,
-            out_dir: args.out_dir,
-            package_name: args.package_name,
-            node_engine: args.node_engine,
-            bundled_prebuilds: args.bundled_prebuilds,
-            manual_load: args.manual_load,
-        },
-        GenerateNodePackageCliOverrides {
-            lib_path_literal: args.lib_path_literal,
-        },
-    )
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: args.lib_source,
+        manifest_path: args.manifest_path,
+        crate_name: args.crate_name,
+        out_dir: args.out_dir,
+        package_name: args.package_name,
+        node_engine: args.node_engine,
+        bundled_prebuilds: args.bundled_prebuilds,
+        manual_load: args.manual_load,
+    })
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {

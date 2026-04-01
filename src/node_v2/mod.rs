@@ -28,25 +28,12 @@ pub struct GenerateNodePackageOptions {
     pub manual_load: bool,
 }
 
-#[derive(Debug, Clone, Default)]
-pub(crate) struct GenerateNodePackageCliOverrides {
-    pub lib_path_literal: Option<String>,
-}
-
 pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
-    generate_node_package_with_cli_overrides(options, GenerateNodePackageCliOverrides::default())
-}
-
-pub(crate) fn generate_node_package_with_cli_overrides(
-    options: GenerateNodePackageOptions,
-    cli_compat_overrides: GenerateNodePackageCliOverrides,
-) -> Result<()> {
     validate_generate_options(&options)?;
 
     let cli_overrides = NodeBindingCliOverrides::from_parts(
         options.package_name.clone(),
         options.node_engine.clone(),
-        cli_compat_overrides.lib_path_literal,
         options.bundled_prebuilds,
         options.manual_load,
     )?;

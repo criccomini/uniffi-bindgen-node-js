@@ -149,7 +149,6 @@ pub fn generate_fixture_package(
         out_dir: out_dir.clone(),
         package_name: Some(spec.package_name()),
         node_engine: None,
-        lib_path_literal: None,
         bundled_prebuilds: false,
         manual_load,
     })

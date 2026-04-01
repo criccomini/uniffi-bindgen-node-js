@@ -67,4 +67,24 @@ mod tests {
             "unexpected clap error: {error}"
         );
     }
+
+    #[test]
+    fn generate_cli_rejects_removed_lib_path_literal_flag() {
+        let error = Cli::try_parse_from([
+            "uniffi-bindgen-node-js",
+            "generate",
+            "/tmp/libfixture.dylib",
+            "--out-dir",
+            "/tmp/out",
+            "--lib-path-literal",
+            "./native/libfixture.dylib",
+        ])
+        .expect_err("removed --lib-path-literal flag should not parse");
+
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert!(
+            error.to_string().contains("--lib-path-literal"),
+            "unexpected clap error: {error}"
+        );
+    }
 }

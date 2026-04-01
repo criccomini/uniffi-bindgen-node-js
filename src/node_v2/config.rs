@@ -8,7 +8,6 @@ use uniffi_bindgen::{Component, ComponentInterface, interface::rename as apply_c
 pub(crate) struct NodeBindingCliOverrides {
     package_name: Option<String>,
     node_engine: Option<String>,
-    lib_path_literal: Option<String>,
     bundled_prebuilds: bool,
     manual_load: bool,
 }
@@ -17,14 +16,12 @@ impl NodeBindingCliOverrides {
     pub fn from_parts(
         package_name: Option<String>,
         node_engine: Option<String>,
-        lib_path_literal: Option<String>,
         bundled_prebuilds: bool,
         manual_load: bool,
     ) -> Result<Self> {
         Ok(Self {
             package_name: normalize_optional_value("--package-name", package_name)?,
             node_engine: normalize_optional_value("--node-engine", node_engine)?,
-            lib_path_literal: normalize_optional_value("--lib-path-literal", lib_path_literal)?,
             bundled_prebuilds,
             manual_load,
         })
@@ -33,10 +30,6 @@ impl NodeBindingCliOverrides {
     pub(crate) fn apply_to(&self, config: &mut NodeBindingGeneratorConfig) {
         apply_optional_string_override(&mut config.package_name, self.package_name.as_ref());
         apply_optional_value_override(&mut config.node_engine, self.node_engine.as_ref());
-        apply_optional_string_override(
-            &mut config.lib_path_literal,
-            self.lib_path_literal.as_ref(),
-        );
         enable_override(&mut config.bundled_prebuilds, self.bundled_prebuilds);
         enable_override(&mut config.manual_load, self.manual_load);
     }

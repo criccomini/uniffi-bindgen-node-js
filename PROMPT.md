@@ -149,7 +149,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Introduce a new Node-v2 orchestration module separate from rendering code.
 - [x] Introduce a new Node-v2 config parsing/normalization module.
 - [ ] Introduce a new package-layout/staging module.
-- [ ] Introduce a new component-selection module.
+- [x] Introduce a new component-selection module.
 - [ ] Introduce a new public-API IR builder module or boundary.
 - [ ] Introduce a new FFI-IR builder module or boundary.
 - [ ] Move package-writing logic out of the legacy monolithic src/bindings/mod.rs shape.

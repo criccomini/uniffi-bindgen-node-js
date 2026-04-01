@@ -59,6 +59,37 @@ fn parse_generated_checksums(ffi_js: &str) -> BTreeMap<String, u16> {
         .collect()
 }
 
+fn parse_generated_contract_version_function(ffi_js: &str) -> String {
+    extract_generated_ffi_integrity_block(ffi_js)
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("contractVersionFunction: ")
+                .map(|value| value.trim_end_matches(','))
+        })
+        .map(|value| {
+            serde_json::from_str(value)
+                .expect("generated contract version symbol should deserialize as JSON")
+        })
+        .expect("generated ffi js should include a contract version function symbol")
+}
+
+fn parse_generated_expected_contract_version(ffi_js: &str) -> u32 {
+    extract_generated_ffi_integrity_block(ffi_js)
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("expectedContractVersion: ")
+                .map(|value| value.trim_end_matches(','))
+        })
+        .map(|value| {
+            value
+                .parse()
+                .expect("generated contract version should parse as u32")
+        })
+        .expect("generated ffi js should include an expected contract version")
+}
+
 #[test]
 fn generates_basic_fixture_node_package_in_a_temp_directory() {
     let generated = generate_fixture_package("basic");
@@ -432,6 +463,41 @@ fn generated_ffi_integrity_uses_loader_derived_checksums() {
     assert_eq!(
         actual_checksums, expected_checksums,
         "generated ffi integrity metadata should match UniFFI loader-derived checksums"
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn generated_ffi_integrity_uses_loader_derived_contract_version() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let component_interface = load_fixture_component_interface(&built_fixture);
+    let package_dir = temp_dir_path("loader-derived-contract-version");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: built_fixture.library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: Some(format!("{}-package", built_fixture.namespace)),
+        node_engine: None,
+        bundled_prebuilds: false,
+        manual_load: false,
+    })
+    .expect("package generation should preserve loader-derived contract version metadata");
+
+    let ffi_js = read_generated_component_ffi_js(&package_dir, &built_fixture.namespace);
+
+    assert_eq!(
+        parse_generated_contract_version_function(&ffi_js),
+        component_interface.ffi_uniffi_contract_version().name(),
+        "generated ffi integrity metadata should use the loader-derived contract version symbol"
+    );
+    assert_eq!(
+        parse_generated_expected_contract_version(&ffi_js),
+        component_interface.uniffi_contract_version(),
+        "generated ffi integrity metadata should use the loader-derived contract version value"
     );
 
     remove_dir_all(&built_fixture.workspace_dir);

@@ -1227,6 +1227,82 @@ assert.equal(koffi.registeredCallbackCount(), 0);
 }
 
 #[test]
+fn object_handles_block_calls_while_unloaded_and_can_be_disposed_after_reloading() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            manual_load: true,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+    let namespace = &generated.built_fixture.namespace;
+    let staged_library_path = generated
+        .sibling_library_path
+        .as_ref()
+        .expect("manual-load basic package should stage the native library at the package root");
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "object-unload-smoke.mjs",
+        &format!(
+            r#"
+import assert from "node:assert/strict";
+import {{ Store, load, unload }} from "./index.js";
+import {{ LibraryNotLoadedError }} from "./runtime/errors.js";
+import {{ isLoaded }} from "./{namespace}-ffi.js";
+
+const stagedLibraryPath = {staged_library_path_json};
+const seed = {{
+  name: "seed",
+  value: new Uint8Array([1, 2]),
+  maybe_value: undefined,
+  chunks: [new Uint8Array([3]), new Uint8Array([4, 5])],
+}};
+
+assert.equal(isLoaded(), false);
+load(stagedLibraryPath);
+assert.equal(isLoaded(), true);
+
+const store = new Store(seed);
+assert.deepStrictEqual(Array.from(store.current().value), [1, 2]);
+
+assert.equal(unload(), true);
+assert.equal(isLoaded(), false);
+
+for (const operation of [
+  () => store.current(),
+  () => store.dispose(),
+]) {{
+  assert.throws(operation, (error) => {{
+    assert.ok(error instanceof LibraryNotLoadedError);
+    assert.equal(
+      error.message,
+      "The native library is not loaded. Call load(libraryPath) first.",
+    );
+    return true;
+  }});
+}}
+
+load(stagedLibraryPath);
+assert.equal(isLoaded(), true);
+assert.deepStrictEqual(Array.from(store.current().value), [1, 2]);
+assert.equal(store.dispose(), true);
+assert.equal(store.dispose(), false);
+assert.equal(unload(), true);
+"#,
+            namespace = namespace,
+            staged_library_path_json =
+                serde_json::to_string(staged_library_path.as_str()).expect("path should serialize"),
+        ),
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn bundled_mode_import_reports_missing_host_prebuild() {
     let generated = generate_fixture_package_with_options(
         "basic",

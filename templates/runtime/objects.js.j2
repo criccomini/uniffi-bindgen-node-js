@@ -369,8 +369,6 @@ export class UniffiObjectFactory {
       genericAbi,
       rawExternal: useRawExternal,
     });
-    this._unregisterFinalizer(value);
-    this._markDestroyed(value);
 
     const freeHandle =
       genericAbi
@@ -381,6 +379,8 @@ export class UniffiObjectFactory {
     if (typeof freeHandle === "function") {
       freeHandle(handle, value);
     }
+    this._unregisterFinalizer(value);
+    this._markDestroyed(value);
     return true;
   }
 

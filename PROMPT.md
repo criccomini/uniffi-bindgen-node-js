@@ -243,7 +243,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revalidate callback vtable field ordering against UniFFI 0.30/0.31.
 - [x] Update generated callback registration code to the new ordering and semantics.
 - [x] Update generated callback cleanup/unload logic if the new ABI requires it.
-- [ ] Revalidate object finalization and unload behavior with the new handle ABI.
+- [x] Revalidate object finalization and unload behavior with the new handle ABI.
 - [ ] Revalidate manual-load reentrancy/idempotence under the new runtime model.
 - [ ] Revalidate cached binding-core logic against the new handle/callback semantics.
 - [ ] Revalidate bundled-prebuild resolution logic and target naming in generated JS.

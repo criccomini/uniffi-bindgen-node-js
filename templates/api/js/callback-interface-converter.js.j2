@@ -46,10 +46,17 @@ function {{ converter.register_name }}(bindings, registrations, vtableReferences
     koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceFree),
   );
   registrations.push(uniffiFree);
+  const uniffiClone = koffi.register(
+    (uniffiHandle) => {{ converter.registry_name }}.cloneHandle(uniffiHandle),
+    koffi.pointer(bindings.ffiCallbacks.CallbackInterfaceClone),
+  );
+  registrations.push(uniffiClone);
   const uniffiVtable = koffi.alloc(bindings.ffiStructs.{{ converter.vtable_struct_name }}, 1);
   koffi.encode(uniffiVtable, bindings.ffiStructs.{{ converter.vtable_struct_name }}, {
+    uniffi_free: uniffiFree,
+    uniffi_clone: uniffiClone,
 {% for method in converter.methods %}    {{ method.property_name }}: {{ method.callback_name }},
-{% endfor %}    uniffi_free: uniffiFree,
+{% endfor %}
   });
   vtableReferences.push(uniffiVtable);
   bindings.ffiFunctions.{{ converter.ffi_init_callback_identifier }}(uniffiVtable);

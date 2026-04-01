@@ -1938,6 +1938,16 @@ mod tests {
             rendered.js
         );
         assert!(
+            rendered.js.contains("const uniffiClone = koffi.register("),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
+            rendered.js.contains("uniffi_clone: uniffiClone,"),
+            "unexpected JS output: {}",
+            rendered.js
+        );
+        assert!(
             rendered.js.contains("uniffiRustCaller.rustCall("),
             "unexpected JS output: {}",
             rendered.js

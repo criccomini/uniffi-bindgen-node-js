@@ -647,6 +647,76 @@ assert.deepEqual(freedHandles, [42n, 84n]);
 }
 
 #[test]
+fn runtime_callback_registry_clone_preserves_the_registered_implementation() {
+    let generated = generate_fixture_package("callbacks");
+    let output_dir = generated.package_dir.clone();
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"const koffi = {
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "callbacks-registry-clone-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import { createCallbackRegistry } from "./runtime/callbacks.js";
+
+const registry = createCallbackRegistry({
+  interfaceName: "LogSink",
+});
+const sink = {
+  latest() {
+    return "latest";
+  },
+};
+
+const originalHandle = registry.register(sink);
+const clonedHandle = registry.cloneHandle(originalHandle);
+
+assert.notEqual(clonedHandle, originalHandle);
+assert.strictEqual(registry.get(originalHandle), sink);
+assert.strictEqual(registry.get(clonedHandle), sink);
+
+registry.remove(originalHandle);
+assert.strictEqual(registry.get(clonedHandle), sink);
+assert.equal(registry.size, 1);
+assert.equal(registry.take(clonedHandle).latest(), "latest");
+assert.equal(registry.size, 0);
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+}
+
+#[test]
 fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
     let generated = generate_fixture_package("basic");
     let package_dir = &generated.package_dir;

@@ -2,7 +2,7 @@ use std::fs;
 
 use anyhow::{Result, anyhow, bail};
 use askama::Template;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use uniffi_bindgen::{BindingGenerator, Component, GenerationSettings};
 
@@ -305,19 +305,41 @@ fn reject_commonjs(commonjs: Option<bool>) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn parse_node_binding_config(
+    root_toml: &toml::Value,
+) -> Result<NodeBindingGeneratorConfig> {
+    Ok(
+        match root_toml
+            .get("bindings")
+            .and_then(|bindings| bindings.get("node"))
+        {
+            Some(value) => value.clone().try_into()?,
+            None => NodeBindingGeneratorConfig::default(),
+        },
+    )
+}
+
+pub(crate) fn finalize_node_binding_config(
+    ci: &uniffi_bindgen::ComponentInterface,
+    config: &mut NodeBindingGeneratorConfig,
+    cdylib_name: Option<&str>,
+    cli_overrides: &NodeBindingCliOverrides,
+) -> Result<()> {
+    if config.package_name.is_none() {
+        config.package_name = Some(ci.namespace().to_string());
+    }
+    if config.cdylib_name.is_none() {
+        config.cdylib_name = cdylib_name.map(str::to_string);
+    }
+    cli_overrides.apply_to(config);
+    config.validate()
+}
+
 impl BindingGenerator for NodeBindingGenerator {
     type Config = NodeBindingGeneratorConfig;
 
-    fn new_config(&self, _root_toml: &toml::value::Value) -> Result<Self::Config> {
-        Ok(
-            match _root_toml
-                .get("bindings")
-                .and_then(|bindings| bindings.get("node"))
-            {
-                Some(value) => value.clone().try_into()?,
-                None => Self::Config::default(),
-            },
-        )
+    fn new_config(&self, root_toml: &toml::value::Value) -> Result<Self::Config> {
+        parse_node_binding_config(root_toml)
     }
 
     fn update_component_configs(
@@ -326,14 +348,12 @@ impl BindingGenerator for NodeBindingGenerator {
         components: &mut Vec<Component<Self::Config>>,
     ) -> Result<()> {
         for component in components {
-            if component.config.package_name.is_none() {
-                component.config.package_name = Some(component.ci.namespace().to_string());
-            }
-            if component.config.cdylib_name.is_none() {
-                component.config.cdylib_name = settings.cdylib.clone();
-            }
-            self.cli_overrides.apply_to(&mut component.config);
-            component.config.validate()?;
+            finalize_node_binding_config(
+                &component.ci,
+                &mut component.config,
+                settings.cdylib.as_deref(),
+                &self.cli_overrides,
+            )?;
         }
         Ok(())
     }
@@ -351,11 +371,7 @@ impl BindingGenerator for NodeBindingGenerator {
             ),
         };
 
-        let package = GeneratedPackage::from_component(settings, component)?;
-        package.ensure_root_dir()?;
-        package.write_package_files()?;
-
-        Ok(())
+        write_generated_package(&settings.out_dir, component)
     }
 }
 
@@ -368,7 +384,7 @@ struct GeneratedPackageLayout {
 
 impl GeneratedPackageLayout {
     fn from_component(
-        settings: &GenerationSettings,
+        out_dir: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<Self> {
         let namespace = component.ci.namespace().trim();
@@ -385,7 +401,7 @@ impl GeneratedPackageLayout {
             .ok_or_else(|| anyhow!("node bindings generation requires a package_name"))?;
 
         Ok(Self {
-            root_dir: settings.out_dir.clone(),
+            root_dir: out_dir.to_path_buf(),
             namespace: namespace.to_string(),
             package_name: package_name.to_string(),
         })
@@ -443,11 +459,11 @@ struct GeneratedPackage {
 
 impl GeneratedPackage {
     fn from_component(
-        settings: &GenerationSettings,
+        out_dir: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<Self> {
         let public_api = ComponentModel::from_ci(&component.ci)?.render_public_api()?;
-        let layout = GeneratedPackageLayout::from_component(settings, component)?;
+        let layout = GeneratedPackageLayout::from_component(out_dir, component)?;
         let cdylib_name = component
             .config
             .cdylib_name
@@ -591,6 +607,15 @@ impl GeneratedPackage {
     fn write_runtime_files(&self) -> Result<()> {
         write_files(runtime_files(&self.layout)?)
     }
+}
+
+pub(crate) fn write_generated_package(
+    out_dir: &Utf8Path,
+    component: &Component<NodeBindingGeneratorConfig>,
+) -> Result<()> {
+    let package = GeneratedPackage::from_component(out_dir, component)?;
+    package.ensure_root_dir()?;
+    package.write_package_files()
 }
 
 struct ComponentJsImports {
@@ -1052,9 +1077,7 @@ mod tests {
         let root = source
             .parse::<toml::Value>()
             .expect("test TOML should deserialize");
-        NodeBindingGenerator::new(NodeBindingCliOverrides::default())
-            .new_config(&root)
-            .expect("node config should deserialize")
+        parse_node_binding_config(&root).expect("node config should deserialize")
     }
 
     #[test]
@@ -2271,14 +2294,9 @@ mod tests {
     #[test]
     fn generated_package_layout_resolves_output_paths_from_out_dir_and_namespace() {
         let out_dir = temp_dir_path("layout-paths");
-        let settings = GenerationSettings {
-            out_dir: out_dir.clone(),
-            try_format_code: false,
-            cdylib: Some("fixture".to_string()),
-        };
         let component = component_with_namespace("example");
 
-        let layout = GeneratedPackageLayout::from_component(&settings, &component).expect("layout");
+        let layout = GeneratedPackageLayout::from_component(&out_dir, &component).expect("layout");
 
         assert_eq!(layout.root_dir, out_dir);
         assert_eq!(

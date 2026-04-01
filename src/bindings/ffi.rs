@@ -271,13 +271,13 @@ impl FunctionModel {
         }
 
         let generic_argument_type_exprs = match arguments.first().copied().map(FfiArgument::type_) {
-            Some(FfiType::RustArcPtr(_)) => {
+            Some(FfiType::Handle) => {
                 let mut generic_argument_type_exprs = arguments
                     .iter()
                     .enumerate()
                     .map(|(index, argument)| {
                         if index == 0 {
-                            "ffiTypes.RustArcPtr".to_string()
+                            "ffiTypes.UniffiHandle".to_string()
                         } else {
                             render_type_expr(argument.type_())
                         }
@@ -339,9 +339,6 @@ fn collect_opaque_types_from_definition(definition: &FfiDefinition, names: &mut 
 
 fn collect_opaque_types_from_type(type_: &FfiType, names: &mut BTreeSet<String>) {
     match type_ {
-        FfiType::RustArcPtr(name) => {
-            names.insert(name.clone());
-        }
         FfiType::Reference(inner) | FfiType::MutReference(inner) => {
             collect_opaque_types_from_type(inner, names)
         }
@@ -386,7 +383,6 @@ fn render_type_expr(type_: FfiType) -> String {
         FfiType::Int64 => "\"int64_t\"".to_string(),
         FfiType::Float32 => "\"float\"".to_string(),
         FfiType::Float64 => "\"double\"".to_string(),
-        FfiType::RustArcPtr(name) => format!("ffiTypes.{}", opaque_identifier(&name)),
         FfiType::RustBuffer(_) => "ffiTypes.RustBuffer".to_string(),
         FfiType::ForeignBytes => "ffiTypes.ForeignBytes".to_string(),
         FfiType::Callback(name) => format!("koffi.pointer(ffiCallbacks.{})", js_identifier(&name)),

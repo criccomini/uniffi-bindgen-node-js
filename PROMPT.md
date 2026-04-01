@@ -135,8 +135,8 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 
 - [x] Bump root dependencies to UniFFI 0.31.x.
 - [x] Bump fixture crate dependencies to UniFFI 0.31.x.
-- [ ] Update any supporting dependency versions needed to compile cleanly with UniFFI 0.31.x.
-- [ ] Regenerate Cargo.lock.
+- [x] Update any supporting dependency versions needed to compile cleanly with UniFFI 0.31.x.
+- [x] Regenerate Cargo.lock.
 - [ ] Remove reliance on deprecated BindingGenerator.
 - [ ] Remove reliance on library_mode::generate_bindings.
 - [ ] Remove reliance on CrateConfigSupplier as the primary architecture.
@@ -146,7 +146,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [ ] Design and add a single v2 programmatic entrypoint for Node package generation.
 - [ ] Define a new request/options struct for the v2 programmatic entrypoint.
 - [ ] Define the internal result/data flow for generation so orchestration is explicit and testable.
-- [ ] Introduce a new Node-v2 orchestration module separate from rendering code.
+- [x] Introduce a new Node-v2 orchestration module separate from rendering code.
 - [ ] Introduce a new Node-v2 config parsing/normalization module.
 - [ ] Introduce a new package-layout/staging module.
 - [ ] Introduce a new component-selection module.

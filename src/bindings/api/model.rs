@@ -79,6 +79,7 @@ impl ComponentModel {
                 .collect(),
             records: ci
                 .record_definitions()
+                .iter()
                 .map(RecordModel::from_record)
                 .collect(),
             flat_enums,

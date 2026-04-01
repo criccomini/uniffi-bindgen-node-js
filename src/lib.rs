@@ -2,6 +2,7 @@
 
 pub mod bindings;
 mod cli;
+pub(crate) mod node_v2;
 pub mod subcommands;
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");

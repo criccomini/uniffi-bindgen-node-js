@@ -383,6 +383,21 @@ mod tests {
     }
 
     #[test]
+    fn write_bindings_manual_load_still_stages_the_native_library() {
+        let output_dir = temp_dir_path("manual-load-staged-library");
+        write_test_package(&output_dir, &component_with_manual_load("example"))
+            .expect("write_bindings should succeed");
+
+        let staged_library_path = output_dir.join(test_library_filename());
+        assert!(
+            staged_library_path.is_file(),
+            "manual_load should not suppress native library staging at {staged_library_path}"
+        );
+
+        fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn write_bindings_stages_native_library_in_host_prebuild_directory() {
         let output_dir = temp_dir_path("staged-bundled-library");
         let mut component = component_with_namespace("example");

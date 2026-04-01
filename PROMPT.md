@@ -215,7 +215,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Ensure staged library filenames come from the actual input library filename, not a separate config field.
 - [x] Ensure Windows/non-lib filename handling remains correct.
 - [x] Ensure root-level staging and bundled-prebuild staging are mutually exclusive in one run.
-- [ ] Ensure manual_load does not suppress native-library staging.
+- [x] Ensure manual_load does not suppress native-library staging.
 - [ ] Decide and implement overwrite behavior when a staged library already exists in out_dir.
 - [ ] Ensure package generation is deterministic when rerun into an empty directory.
 - [ ] Keep generated package structure consistent with current published shape where still appropriate.

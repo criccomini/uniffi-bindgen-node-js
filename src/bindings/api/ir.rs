@@ -12,6 +12,10 @@ use super::{
     validate_supported_features,
 };
 
+pub(crate) fn build_public_api_ir(ci: &ComponentInterface) -> Result<ComponentModel> {
+    ComponentModel::from_ci(ci)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ComponentModel {
     pub namespace_docstring: Option<String>,
@@ -24,14 +28,6 @@ pub(crate) struct ComponentModel {
     pub objects: Vec<ObjectModel>,
     pub ffi_rustbuffer_from_bytes_identifier: String,
     pub ffi_rustbuffer_free_identifier: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RenderedComponentApi {
-    pub namespace_doc_comment: String,
-    pub js: String,
-    pub dts: String,
-    pub requires_async_rust_future_hooks: bool,
 }
 
 impl ComponentModel {

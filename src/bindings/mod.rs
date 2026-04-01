@@ -12,7 +12,7 @@ mod api;
 mod ffi;
 
 use self::{
-    api::{ComponentModel, RenderedComponentApi},
+    api::{RenderedComponentApi, build_public_api_ir, render_public_api},
     ffi::{RenderedComponentFfi, render_component_ffi},
 };
 
@@ -33,7 +33,7 @@ impl GeneratedPackage {
         out_dir: &Utf8Path,
         component: &Component<NodeBindingGeneratorConfig>,
     ) -> Result<Self> {
-        let public_api = ComponentModel::from_ci(&component.ci)?.render_public_api()?;
+        let public_api = render_public_api(&build_public_api_ir(&component.ci)?)?;
         let layout = GeneratedPackageLayout::from_component(out_dir, component)?;
         let cdylib_name = component
             .config
@@ -598,8 +598,8 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use uniffi_bindgen::interface::ComponentInterface;
     use crate::node_v2::config::{NodeBindingCliOverrides, parse_node_binding_config};
+    use uniffi_bindgen::interface::ComponentInterface;
 
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {

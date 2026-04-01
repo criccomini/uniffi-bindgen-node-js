@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use askama::Template;
 
-use super::model::{AsyncCallbackMethodModel, VariantModel};
+use super::ir::{AsyncCallbackMethodModel, VariantModel};
 use super::{
     CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel, FieldModel,
     FunctionModel, MethodModel, ObjectModel, RecordModel, callback_interface_factory_name,

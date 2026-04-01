@@ -1,14 +1,14 @@
-mod model;
+mod ir;
 mod render;
 mod support;
 
 use anyhow::{Context, Result};
 use uniffi_bindgen::interface::Type;
 
-use self::model::AsyncScaffoldingModel;
-pub(crate) use self::model::{
+use self::ir::AsyncScaffoldingModel;
+pub(crate) use self::ir::{
     ArgumentModel, CallbackInterfaceModel, ComponentModel, ConstructorModel, EnumModel, ErrorModel,
-    FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, RenderedComponentApi,
+    FieldModel, FunctionModel, MethodModel, ObjectModel, RecordModel, build_public_api_ir,
 };
 use self::render::{
     JsRenderSections, PublicApiRenderer, render_js_async_rust_future_helpers_fragment,
@@ -19,6 +19,18 @@ use self::render::{
     render_js_tagged_enum_converter_fragment, render_js_tagged_enum_fragment,
 };
 pub(crate) use self::support::*;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RenderedComponentApi {
+    pub namespace_doc_comment: String,
+    pub js: String,
+    pub dts: String,
+    pub requires_async_rust_future_hooks: bool,
+}
+
+pub(crate) fn render_public_api(model: &ComponentModel) -> Result<RenderedComponentApi> {
+    model.render_public_api()
+}
 
 impl ComponentModel {
     pub(crate) fn render_public_api(&self) -> Result<RenderedComponentApi> {

@@ -1520,22 +1520,22 @@ mod tests {
     }
 
     #[test]
-    fn config_validation_rejects_commonjs_output() {
-        let config = parse_node_config(
+    fn parse_config_rejects_commonjs_legacy_settings() {
+        let root = toml::from_str::<toml::Value>(
             r#"
             [bindings.node]
             module_format = "commonjs"
+            commonjs = true
             "#,
-        );
-
-        let error = config
-            .validate()
-            .expect_err("CommonJS output should be rejected");
+        )
+        .expect("test TOML should deserialize");
+        let error =
+            parse_node_binding_config(&root).expect_err("legacy CommonJS settings should error");
 
         assert!(
             error
                 .to_string()
-                .contains("CommonJS output is not supported"),
+                .contains("generated Node packages are ESM-only in v2"),
             "unexpected error: {error}"
         );
     }
@@ -1561,7 +1561,7 @@ mod tests {
             assert!(
                 error
                     .to_string()
-                    .contains(&format!("unknown field `{key}`")),
+                    .contains(&format!("bindings.node.{key} was removed in v2")),
                 "unexpected error for {key}: {error}"
             );
         }
@@ -1573,21 +1573,16 @@ mod tests {
             r#"
             [bindings.node]
             package_name = "fixture-package"
-            cdylib_name = "fixture_cdylib"
             node_engine = ">=20"
-            lib_path_literal = "./native/libfixture.node"
             bundled_prebuilds = false
             manual_load = true
             "#,
         );
 
         assert_eq!(explicit.package_name.as_deref(), Some("fixture-package"));
-        assert_eq!(explicit.cdylib_name.as_deref(), Some("fixture_cdylib"));
+        assert_eq!(explicit.cdylib_name, None);
         assert_eq!(explicit.node_engine, ">=20");
-        assert_eq!(
-            explicit.lib_path_literal.as_deref(),
-            Some("./native/libfixture.node")
-        );
+        assert_eq!(explicit.lib_path_literal, None);
         assert!(!explicit.bundled_prebuilds);
         assert!(explicit.manual_load);
 
@@ -1618,23 +1613,22 @@ mod tests {
     }
 
     #[test]
-    fn config_validation_rejects_bundled_prebuilds_with_lib_path_literal() {
-        let config = parse_node_config(
+    fn parse_config_rejects_removed_lib_path_literal_setting() {
+        let root = toml::from_str::<toml::Value>(
             r#"
             [bindings.node]
             bundled_prebuilds = true
             lib_path_literal = "./native/libfixture.node"
             "#,
-        );
-
-        let error = config
-            .validate()
-            .expect_err("bundled_prebuilds with lib_path_literal should be rejected");
+        )
+        .expect("test TOML should deserialize");
+        let error =
+            parse_node_binding_config(&root).expect_err("lib_path_literal should be rejected");
 
         assert!(
             error
                 .to_string()
-                .contains("bundled_prebuilds cannot be enabled together with lib_path_literal"),
+                .contains("bindings.node.lib_path_literal was removed in v2"),
             "unexpected error: {error}"
         );
     }

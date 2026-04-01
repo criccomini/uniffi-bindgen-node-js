@@ -33,10 +33,7 @@ fn validate_library_input_path(options: &GenerateNodePackageOptions) -> Result<(
         );
     }
     if !options.lib_source.is_file() {
-        bail!(
-            "built UniFFI cdylib '{}' is not a file",
-            options.lib_source
-        );
+        bail!("built UniFFI cdylib '{}' is not a file", options.lib_source);
     }
     if !uniffi_bindgen::is_cdylib(&options.lib_source) {
         bail!(

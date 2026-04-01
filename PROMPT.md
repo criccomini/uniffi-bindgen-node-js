@@ -188,10 +188,10 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Keep --bundled-prebuilds flag support.
 - [x] Keep --manual-load flag support.
 - [ ] Preserve ESM-only output policy in validation and docs.
-- [ ] Remove v1 CommonJS-compatibility checks that only exist because of legacy config surface.
-- [ ] Keep explicit rejection for CommonJS-oriented config if it still appears in old config files.
-- [ ] Decide whether old config keys are hard errors or ignored with diagnostics.
-- [ ] Implement v2 config diagnostics for removed keys.
+- [x] Remove v1 CommonJS-compatibility checks that only exist because of legacy config surface.
+- [x] Keep explicit rejection for CommonJS-oriented config if it still appears in old config files.
+- [x] Decide whether old config keys are hard errors or ignored with diagnostics.
+- [x] Implement v2 config diagnostics for removed keys.
 - [ ] Update README.md CLI reference for the v2 interface.
 - [ ] Update README.md packaging explanation to state that the generator stages the native library itself.
 - [ ] Update README.md bundled-prebuild explanation to state host-target staging per invocation.

@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use anyhow::Result;
 use serde::Serialize;
 use uniffi_bindgen::interface::{
@@ -15,7 +13,6 @@ pub(crate) fn build_ffi_ir(ci: &ComponentInterface) -> ComponentFfiModel {
 pub(crate) struct ComponentFfiModel {
     pub(crate) contract_version: ContractVersionModel,
     pub(crate) checksums: Vec<ChecksumModel>,
-    pub(crate) opaque_types: Vec<OpaqueTypeModel>,
     pub(crate) pre_struct_callbacks: Vec<CallbackFunctionModel>,
     pub(crate) post_struct_callbacks: Vec<CallbackFunctionModel>,
     pub(crate) structs: Vec<StructModel>,
@@ -33,15 +30,12 @@ impl ComponentFfiModel {
                 expected,
             })
             .collect();
-        let mut opaque_names = BTreeSet::new();
         let mut pre_struct_callbacks = Vec::new();
         let mut post_struct_callbacks = Vec::new();
         let mut structs = Vec::new();
         let mut functions = Vec::new();
 
         for definition in ci.ffi_definitions() {
-            collect_opaque_types_from_definition(&definition, &mut opaque_names);
-
             match definition {
                 FfiDefinition::CallbackFunction(callback) => {
                     let model = CallbackFunctionModel::from_callback(&callback);
@@ -60,15 +54,6 @@ impl ComponentFfiModel {
             }
         }
 
-        let opaque_types = opaque_names
-            .into_iter()
-            .map(|name| OpaqueTypeModel {
-                identifier: opaque_identifier(&name),
-                name_json: json_string(&opaque_type_name(&name))
-                    .expect("opaque type names should serialize"),
-            })
-            .collect();
-
         Self {
             contract_version: ContractVersionModel {
                 identifier: js_identifier(&contract_version_symbol),
@@ -77,7 +62,6 @@ impl ComponentFfiModel {
                 expected: ci.uniffi_contract_version(),
             },
             checksums,
-            opaque_types,
             pre_struct_callbacks,
             post_struct_callbacks,
             structs,
@@ -98,12 +82,6 @@ pub(crate) struct ChecksumModel {
     pub(crate) identifier: String,
     pub(crate) name_json: String,
     pub(crate) expected: u16,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct OpaqueTypeModel {
-    pub(crate) identifier: String,
-    pub(crate) name_json: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -237,44 +215,6 @@ impl FunctionModel {
     }
 }
 
-fn collect_opaque_types_from_definition(definition: &FfiDefinition, names: &mut BTreeSet<String>) {
-    match definition {
-        FfiDefinition::Function(function) => {
-            function
-                .arguments()
-                .into_iter()
-                .for_each(|argument| collect_opaque_types_from_type(&argument.type_(), names));
-            if let Some(return_type) = function.return_type() {
-                collect_opaque_types_from_type(return_type, names);
-            }
-        }
-        FfiDefinition::CallbackFunction(callback) => {
-            callback
-                .arguments()
-                .into_iter()
-                .for_each(|argument| collect_opaque_types_from_type(&argument.type_(), names));
-            if let Some(return_type) = callback.return_type() {
-                collect_opaque_types_from_type(return_type, names);
-            }
-        }
-        FfiDefinition::Struct(struct_) => {
-            struct_
-                .fields()
-                .iter()
-                .for_each(|field| collect_opaque_types_from_type(&field.type_(), names));
-        }
-    }
-}
-
-fn collect_opaque_types_from_type(type_: &FfiType, names: &mut BTreeSet<String>) {
-    match type_ {
-        FfiType::Reference(inner) | FfiType::MutReference(inner) => {
-            collect_opaque_types_from_type(inner, names)
-        }
-        _ => {}
-    }
-}
-
 fn type_depends_on_structs(type_: &FfiType) -> bool {
     match type_ {
         FfiType::Struct(_) => true,
@@ -323,14 +263,6 @@ fn render_type_expr(type_: FfiType) -> String {
         }
         FfiType::VoidPointer => "ffiTypes.VoidPointer".to_string(),
     }
-}
-
-fn opaque_type_name(name: &str) -> String {
-    format!("UniffiHandle{name}")
-}
-
-fn opaque_identifier(name: &str) -> String {
-    js_identifier(&opaque_type_name(name))
 }
 
 fn js_identifier(name: &str) -> String {

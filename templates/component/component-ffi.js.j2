@@ -10,7 +10,6 @@ import {
   UniffiHandle,
   VoidPointer,
   defineCallbackVtable,
-  defineOpaquePointer,
   defineStructType,
   normalizeHandle,
   normalizeInt64,
@@ -140,9 +139,6 @@ function canonicalizeExistingLibraryPath(libraryPath) {
 
 function createBindingCore(libraryPath) {
   const library = koffi.load(libraryPath);
-{% for opaque_type in context.opaque_types %}
-  const {{ opaque_type.identifier }} = defineOpaquePointer({{ opaque_type.name_json }});
-{% endfor %}
 
   const ffiTypes = Object.freeze({
     UniffiHandle,
@@ -150,9 +146,6 @@ function createBindingCore(libraryPath) {
     RustBuffer,
     ForeignBytes,
     RustCallStatus,
-{% for opaque_type in context.opaque_types %}
-    {{ opaque_type.identifier }},
-{% endfor %}
   });
   const ffiCallbacks = {};
 {% for callback in context.pre_struct_callbacks %}

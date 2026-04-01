@@ -4,8 +4,8 @@ use serde::Serialize;
 use uniffi_bindgen::interface::ComponentInterface;
 
 use crate::bindings::ffi_ir::{
-    CallbackFunctionModel, ChecksumModel, ContractVersionModel, FunctionModel, OpaqueTypeModel,
-    StructModel, build_ffi_ir,
+    CallbackFunctionModel, ChecksumModel, ContractVersionModel, FunctionModel, StructModel,
+    build_ffi_ir,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,7 +31,6 @@ pub(crate) fn render_component_ffi(
         requires_runtime_hooks: component_requires_runtime_hooks(ci),
         contract_version: model.contract_version,
         checksums: model.checksums,
-        opaque_types: model.opaque_types,
         pre_struct_callbacks: model.pre_struct_callbacks,
         post_struct_callbacks: model.post_struct_callbacks,
         structs: model.structs,
@@ -75,7 +74,6 @@ struct ComponentFfiTemplateContext {
     requires_runtime_hooks: bool,
     contract_version: ContractVersionModel,
     checksums: Vec<ChecksumModel>,
-    opaque_types: Vec<OpaqueTypeModel>,
     pre_struct_callbacks: Vec<CallbackFunctionModel>,
     post_struct_callbacks: Vec<CallbackFunctionModel>,
     structs: Vec<StructModel>,

@@ -638,6 +638,10 @@ mod tests {
             "unexpected component JS contents: {component_js}"
         );
         assert!(
+            !component_js.contains("defineOpaquePointer"),
+            "unexpected component JS contents: {component_js}"
+        );
+        assert!(
             objects_js.contains("import koffi from \"koffi\";"),
             "unexpected runtime objects JS contents: {objects_js}"
         );

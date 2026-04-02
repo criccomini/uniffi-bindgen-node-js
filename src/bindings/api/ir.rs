@@ -480,38 +480,81 @@ struct AsyncCallbackAbi {
     dropped_callback_name: String,
 }
 
+struct AsyncCallbackArgumentNames {
+    complete_callback_name: String,
+    dropped_callback_struct_name: String,
+}
+
+fn resolve_async_callback_argument_names(
+    method_name: &str,
+    ffi_callback: &FfiCallbackFunction,
+) -> Result<AsyncCallbackArgumentNames> {
+    let [
+        complete_callback_arg,
+        callback_data_arg,
+        dropped_callback_arg,
+    ] = async_callback_trailing_arguments(method_name, ffi_callback)?;
+
+    Ok(AsyncCallbackArgumentNames {
+        complete_callback_name: callback_name_from_argument(
+            method_name,
+            complete_callback_arg,
+            "completion callback",
+        )?,
+        dropped_callback_struct_name: {
+            expect_uint64_argument(method_name, callback_data_arg, "callback data")?;
+            mut_referenced_struct_name(
+                method_name,
+                dropped_callback_arg,
+                "dropped-callback pointer",
+                "dropped-callback struct",
+            )?
+        },
+    })
+}
+
+fn resolve_completion_result_struct(
+    ci: &ComponentInterface,
+    complete_callback_name: &str,
+    method_name: &str,
+) -> Result<(String, bool)> {
+    let result_struct_name =
+        lookup_completion_result_struct(ci, complete_callback_name, method_name)?;
+    let result_struct = lookup_ffi_struct(ci, &result_struct_name, method_name)?;
+
+    Ok((
+        result_struct_name,
+        result_struct_has_return_value(&result_struct),
+    ))
+}
+
+fn resolve_dropped_callback_name(
+    ci: &ComponentInterface,
+    dropped_callback_struct_name: &str,
+    method_name: &str,
+) -> Result<String> {
+    let dropped_callback_struct = lookup_ffi_struct(ci, dropped_callback_struct_name, method_name)?;
+    lookup_dropped_callback_name(&dropped_callback_struct, method_name)
+}
+
 fn resolve_async_callback_abi(
     method: &Method,
     ffi_callback: &FfiCallbackFunction,
     ci: &ComponentInterface,
 ) -> Result<AsyncCallbackAbi> {
-    let [
-        complete_callback_arg,
-        callback_data_arg,
-        dropped_callback_arg,
-    ] = async_callback_trailing_arguments(method.name(), ffi_callback)?;
-    let complete_callback_name =
-        callback_name_from_argument(method.name(), complete_callback_arg, "completion callback")?;
-    expect_uint64_argument(method.name(), callback_data_arg, "callback data")?;
-    let dropped_callback_struct_name = mut_referenced_struct_name(
-        method.name(),
-        dropped_callback_arg,
-        "dropped-callback pointer",
-        "dropped-callback struct",
-    )?;
-
-    let result_struct_name =
-        lookup_completion_result_struct(ci, &complete_callback_name, method.name())?;
-    let result_struct = lookup_ffi_struct(ci, &result_struct_name, method.name())?;
-    let dropped_callback_struct =
-        lookup_ffi_struct(ci, &dropped_callback_struct_name, method.name())?;
+    let AsyncCallbackArgumentNames {
+        complete_callback_name,
+        dropped_callback_struct_name,
+    } = resolve_async_callback_argument_names(method.name(), ffi_callback)?;
+    let (result_struct_name, result_struct_has_return_value) =
+        resolve_completion_result_struct(ci, &complete_callback_name, method.name())?;
     let dropped_callback_name =
-        lookup_dropped_callback_name(&dropped_callback_struct, method.name())?;
+        resolve_dropped_callback_name(ci, &dropped_callback_struct_name, method.name())?;
 
     Ok(AsyncCallbackAbi {
         complete_callback_name,
         result_struct_name,
-        result_struct_has_return_value: result_struct_has_return_value(&result_struct),
+        result_struct_has_return_value,
         dropped_callback_struct_name,
         dropped_callback_name,
     })

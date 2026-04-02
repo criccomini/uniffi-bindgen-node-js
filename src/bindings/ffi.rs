@@ -22,35 +22,27 @@ pub(crate) fn render_component_ffi(
     bundled_prebuilds: bool,
     manual_load: bool,
 ) -> Result<RenderedComponentFfi> {
-    let model = build_ffi_ir(ci);
-    let template_context = ComponentFfiTemplateContext {
-        namespace_json: json_string(ci.namespace())?,
-        library_name_json: json_string(library_name)?,
-        staged_library_file_name_json: json_string(staged_library_file_name)?,
-        staged_library_package_relative_path_json: json_string(
-            staged_library_package_relative_path,
-        )?,
+    let context = ComponentFfiTemplateContext::from_parts(
+        ci,
+        library_name,
+        staged_library_file_name,
+        staged_library_package_relative_path,
         bundled_prebuilds,
         manual_load,
-        requires_runtime_hooks: component_requires_runtime_hooks(ci),
-        contract_version: model.contract_version,
-        checksums: model.checksums,
-        pre_struct_callbacks: model.pre_struct_callbacks,
-        post_struct_callbacks: model.post_struct_callbacks,
-        structs: model.structs,
-        functions: model.functions,
-    };
+    )?;
+    RenderedComponentFfi::from_context(context)
+}
 
-    Ok(RenderedComponentFfi {
-        js: ComponentFfiJsTemplate {
-            context: template_context.clone(),
-        }
-        .render()?,
-        dts: ComponentFfiDtsTemplate {
-            context: template_context,
-        }
-        .render()?,
-    })
+impl RenderedComponentFfi {
+    fn from_context(context: ComponentFfiTemplateContext) -> Result<Self> {
+        Ok(Self {
+            js: ComponentFfiJsTemplate {
+                context: context.clone(),
+            }
+            .render()?,
+            dts: ComponentFfiDtsTemplate { context }.render()?,
+        })
+    }
 }
 
 fn component_requires_runtime_hooks(ci: &ComponentInterface) -> bool {
@@ -83,6 +75,37 @@ struct ComponentFfiTemplateContext {
     post_struct_callbacks: Vec<CallbackFunctionModel>,
     structs: Vec<StructModel>,
     functions: Vec<FunctionModel>,
+}
+
+impl ComponentFfiTemplateContext {
+    fn from_parts(
+        ci: &ComponentInterface,
+        library_name: &str,
+        staged_library_file_name: &str,
+        staged_library_package_relative_path: &str,
+        bundled_prebuilds: bool,
+        manual_load: bool,
+    ) -> Result<Self> {
+        let model = build_ffi_ir(ci);
+
+        Ok(Self {
+            namespace_json: json_string(ci.namespace())?,
+            library_name_json: json_string(library_name)?,
+            staged_library_file_name_json: json_string(staged_library_file_name)?,
+            staged_library_package_relative_path_json: json_string(
+                staged_library_package_relative_path,
+            )?,
+            bundled_prebuilds,
+            manual_load,
+            requires_runtime_hooks: component_requires_runtime_hooks(ci),
+            contract_version: model.contract_version,
+            checksums: model.checksums,
+            pre_struct_callbacks: model.pre_struct_callbacks,
+            post_struct_callbacks: model.post_struct_callbacks,
+            structs: model.structs,
+            functions: model.functions,
+        })
+    }
 }
 
 fn json_string(value: &str) -> Result<String> {

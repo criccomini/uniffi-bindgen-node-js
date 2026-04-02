@@ -442,6 +442,99 @@ fn render_object_method_dispatch_lines(
     ]
 }
 
+enum AsyncCompleteSetup<'a> {
+    Value {
+        return_type: Option<&'a Type>,
+        complete_identifier: &'a str,
+    },
+    Object {
+        complete_identifier: &'a str,
+    },
+}
+
+struct AsyncJsCall<'a> {
+    indent: &'a str,
+    arguments: &'a [ArgumentModel],
+    start_call_expr: String,
+    async_ffi: &'a AsyncScaffoldingModel,
+    lift_func_expr: String,
+    throws_type: Option<&'a Type>,
+    complete_setup: AsyncCompleteSetup<'a>,
+    complete_before_free: bool,
+}
+
+fn render_async_complete_setup_lines(
+    indent: &str,
+    complete_setup: AsyncCompleteSetup<'_>,
+) -> Result<Vec<String>> {
+    match complete_setup {
+        AsyncCompleteSetup::Value {
+            return_type,
+            complete_identifier,
+        } => render_js_async_complete_setup(return_type, complete_identifier, indent),
+        AsyncCompleteSetup::Object {
+            complete_identifier,
+        } => render_js_async_object_complete_setup(complete_identifier, indent),
+    }
+}
+
+fn render_async_js_call_body(call: AsyncJsCall<'_>) -> Result<Vec<String>> {
+    let mut lines = render_js_argument_lowering(call.arguments)?;
+    lines.extend(render_async_complete_setup_lines(
+        call.indent,
+        call.complete_setup,
+    )?);
+    lines.extend(render_async_rust_call_lines(
+        call.indent,
+        call.start_call_expr,
+        call.async_ffi,
+        call.lift_func_expr,
+        call.throws_type,
+        call.complete_before_free,
+    )?);
+    Ok(lines)
+}
+
+fn render_sync_js_return_line(indent: &str, return_type: Option<&Type>) -> Result<Option<String>> {
+    return_type
+        .map(|return_type| {
+            Ok(format!(
+                "{indent}return {};",
+                render_js_lift_expression(return_type, "uniffiResult")?
+            ))
+        })
+        .transpose()
+}
+
+fn render_sync_js_call_body(
+    indent: &str,
+    arguments: &[ArgumentModel],
+    ffi_call_expr: String,
+    throws_type: Option<&Type>,
+    return_type: Option<&Type>,
+) -> Result<Vec<String>> {
+    let mut lines = render_js_argument_lowering(arguments)?;
+    lines.extend(render_sync_rust_call_lines(
+        indent,
+        ffi_call_expr,
+        throws_type,
+        return_type.map(|_| "uniffiResult"),
+    )?);
+
+    if let Some(return_line) = render_sync_js_return_line(indent, return_type)? {
+        lines.push(return_line);
+    }
+
+    Ok(lines)
+}
+
+fn render_constructor_return_line(attach_target: Option<&str>, factory_name: &str) -> String {
+    match attach_target {
+        Some(target) => format!("    return {}.attach({}, pointer);", factory_name, target),
+        None => format!("    return {}.create(pointer);", factory_name),
+    }
+}
+
 pub(super) fn render_js_function_body_lines(function: &FunctionModel) -> Result<Vec<String>> {
     if function.is_async {
         render_js_async_function_body(function)
@@ -505,10 +598,7 @@ fn render_js_sync_constructor_body(
         constructor.throws_type.as_ref(),
         Some("pointer"),
     )?);
-    lines.push(match attach_target {
-        Some(target) => format!("    return {}.attach({}, pointer);", factory_name, target),
-        None => format!("    return {}.create(pointer);", factory_name),
-    });
+    lines.push(render_constructor_return_line(attach_target, factory_name));
     Ok(lines)
 }
 
@@ -523,24 +613,22 @@ fn render_js_async_constructor_body(
             object_name, constructor.name
         )
     })?;
-    let mut lines = render_js_argument_lowering(&constructor.arguments)?;
     let start_args = render_js_ffi_call_args(&constructor.arguments, None);
-    lines.extend(render_js_async_object_complete_setup(
-        &async_ffi.complete_identifier,
-        "    ",
-    )?);
-    lines.extend(render_async_rust_call_lines(
-        "    ",
-        format!(
+    render_async_js_call_body(AsyncJsCall {
+        indent: "    ",
+        arguments: &constructor.arguments,
+        start_call_expr: format!(
             "ffiFunctions.{}({})",
             constructor.ffi_func_identifier, start_args
         ),
         async_ffi,
-        format!("(pointer) => {}.createRawExternal(pointer)", factory_name),
-        constructor.throws_type.as_ref(),
-        false,
-    )?);
-    Ok(lines)
+        lift_func_expr: format!("(pointer) => {}.createRawExternal(pointer)", factory_name),
+        throws_type: constructor.throws_type.as_ref(),
+        complete_setup: AsyncCompleteSetup::Object {
+            complete_identifier: &async_ffi.complete_identifier,
+        },
+        complete_before_free: false,
+    })
 }
 
 fn render_js_sync_method_body(
@@ -549,26 +637,19 @@ fn render_js_sync_method_body(
     _object_name: &str,
 ) -> Result<Vec<String>> {
     let mut lines = render_object_method_dispatch_lines(factory_name, &method.ffi_func_identifier);
-    lines.extend(render_js_argument_lowering(&method.arguments)?);
     let call_args = render_js_ffi_call_args_with_leading(
         &[String::from("loweredSelf")],
         &method.arguments,
         Some("status"),
     );
 
-    lines.extend(render_sync_rust_call_lines(
+    lines.extend(render_sync_js_call_body(
         "    ",
+        &method.arguments,
         format!("ffiMethod({call_args})"),
         method.throws_type.as_ref(),
-        method.return_type.as_ref().map(|_| "uniffiResult"),
+        method.return_type.as_ref(),
     )?);
-
-    if let Some(return_type) = method.return_type.as_ref() {
-        lines.push(format!(
-            "    return {};",
-            render_js_lift_expression(return_type, "uniffiResult")?
-        ));
-    }
 
     Ok(lines)
 }
@@ -585,48 +666,37 @@ fn render_js_async_method_body(
         )
     })?;
     let mut lines = render_object_method_dispatch_lines(factory_name, &method.ffi_func_identifier);
-    lines.extend(render_js_argument_lowering(&method.arguments)?);
     let start_args = render_js_ffi_call_args_with_leading(
         &[String::from("loweredSelf")],
         &method.arguments,
         None,
     );
-    lines.extend(render_js_async_complete_setup(
-        method.return_type.as_ref(),
-        &async_ffi.complete_identifier,
-        "    ",
-    )?);
-    lines.extend(render_async_rust_call_lines(
-        "    ",
-        format!("ffiMethod({start_args})"),
+    lines.extend(render_async_js_call_body(AsyncJsCall {
+        indent: "    ",
+        arguments: &method.arguments,
+        start_call_expr: format!("ffiMethod({start_args})"),
         async_ffi,
-        render_js_async_lift_closure(method.return_type.as_ref())?,
-        method.throws_type.as_ref(),
-        true,
-    )?);
+        lift_func_expr: render_js_async_lift_closure(method.return_type.as_ref())?,
+        throws_type: method.throws_type.as_ref(),
+        complete_setup: AsyncCompleteSetup::Value {
+            return_type: method.return_type.as_ref(),
+            complete_identifier: &async_ffi.complete_identifier,
+        },
+        complete_before_free: true,
+    })?);
 
     Ok(lines)
 }
 
 fn render_js_sync_function_body(function: &FunctionModel) -> Result<Vec<String>> {
-    let mut lines = render_js_argument_lowering(&function.arguments)?;
     let call_args = render_js_ffi_call_args(&function.arguments, Some("status"));
-
-    lines.extend(render_sync_rust_call_lines(
+    render_sync_js_call_body(
         "  ",
+        &function.arguments,
         format!("ffiFunctions.{}({call_args})", function.ffi_func_identifier),
         function.throws_type.as_ref(),
-        function.return_type.as_ref().map(|_| "uniffiResult"),
-    )?);
-
-    if let Some(return_type) = function.return_type.as_ref() {
-        lines.push(format!(
-            "  return {};",
-            render_js_lift_expression(return_type, "uniffiResult")?
-        ));
-    }
-
-    Ok(lines)
+        function.return_type.as_ref(),
+    )
 }
 
 fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>> {
@@ -636,26 +706,23 @@ fn render_js_async_function_body(function: &FunctionModel) -> Result<Vec<String>
             function.name
         )
     })?;
-    let mut lines = render_js_argument_lowering(&function.arguments)?;
     let start_args = render_js_ffi_call_args(&function.arguments, None);
-    lines.extend(render_js_async_complete_setup(
-        function.return_type.as_ref(),
-        &async_ffi.complete_identifier,
-        "  ",
-    )?);
-    lines.extend(render_async_rust_call_lines(
-        "  ",
-        format!(
+    render_async_js_call_body(AsyncJsCall {
+        indent: "  ",
+        arguments: &function.arguments,
+        start_call_expr: format!(
             "ffiFunctions.{}({start_args})",
             function.ffi_func_identifier
         ),
         async_ffi,
-        render_js_async_lift_closure(function.return_type.as_ref())?,
-        function.throws_type.as_ref(),
-        true,
-    )?);
-
-    Ok(lines)
+        lift_func_expr: render_js_async_lift_closure(function.return_type.as_ref())?,
+        throws_type: function.throws_type.as_ref(),
+        complete_setup: AsyncCompleteSetup::Value {
+            return_type: function.return_type.as_ref(),
+            complete_identifier: &async_ffi.complete_identifier,
+        },
+        complete_before_free: true,
+    })
 }
 
 // GENERATED CODE

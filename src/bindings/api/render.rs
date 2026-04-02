@@ -275,6 +275,41 @@ impl PrimaryConstructorJsView {
     }
 }
 
+struct ObjectFfiJsMetadata {
+    type_name_literal: String,
+    clone_symbol: String,
+    clone_identifier: String,
+    clone_raw_external_cache_key: String,
+    free_symbol: String,
+    free_identifier: String,
+    free_raw_external_cache_key: String,
+}
+
+impl ObjectFfiJsMetadata {
+    fn from_object(object: &ObjectModel) -> Result<Self> {
+        let clone_identifier = object.ffi_object_clone_identifier.as_str();
+        let free_identifier = object.ffi_object_free_identifier.as_str();
+
+        Ok(Self {
+            type_name_literal: json_string_literal(&object.name)?,
+            clone_symbol: json_string_literal(clone_identifier)?,
+            clone_identifier: clone_identifier.to_string(),
+            clone_raw_external_cache_key: raw_external_cache_key_literal(clone_identifier)?,
+            free_symbol: json_string_literal(free_identifier)?,
+            free_identifier: free_identifier.to_string(),
+            free_raw_external_cache_key: raw_external_cache_key_literal(free_identifier)?,
+        })
+    }
+}
+
+fn raw_external_cache_key_literal(identifier: &str) -> Result<String> {
+    json_string_literal(&format!("{identifier}:raw-external"))
+}
+
+fn unimplemented_constructor_member_literal(object_name: &str) -> Result<String> {
+    json_string_literal(&format!("{object_name}.constructor"))
+}
+
 fn is_sync_primary_constructor(constructor: &ConstructorModel) -> bool {
     constructor.is_primary && !constructor.is_async
 }
@@ -307,33 +342,27 @@ impl ObjectJsView {
     fn from_object(object: &ObjectModel) -> Result<Self> {
         let factory_name = object_factory_name(&object.name);
         let primary_constructor = PrimaryConstructorJsView::from_object(object, &factory_name)?;
+        let ffi = ObjectFfiJsMetadata::from_object(object)?;
 
         Ok(Self {
             doc_comment: render_doc_comment(object.docstring.as_deref(), ""),
             name: object.name.clone(),
             factory_name: factory_name.clone(),
             converter_name: object_converter_name(&object.name),
-            type_name_literal: json_string_literal(&object.name)?,
-            ffi_object_clone_symbol: json_string_literal(&object.ffi_object_clone_identifier)?,
-            ffi_object_clone_identifier: object.ffi_object_clone_identifier.clone(),
-            ffi_object_clone_raw_external_cache_key: json_string_literal(&format!(
-                "{}:raw-external",
-                object.ffi_object_clone_identifier
-            ))?,
-            ffi_object_free_symbol: json_string_literal(&object.ffi_object_free_identifier)?,
-            ffi_object_free_identifier: object.ffi_object_free_identifier.clone(),
-            ffi_object_free_raw_external_cache_key: json_string_literal(&format!(
-                "{}:raw-external",
-                object.ffi_object_free_identifier
-            ))?,
+            type_name_literal: ffi.type_name_literal,
+            ffi_object_clone_symbol: ffi.clone_symbol,
+            ffi_object_clone_identifier: ffi.clone_identifier,
+            ffi_object_clone_raw_external_cache_key: ffi.clone_raw_external_cache_key,
+            ffi_object_free_symbol: ffi.free_symbol,
+            ffi_object_free_identifier: ffi.free_identifier,
+            ffi_object_free_raw_external_cache_key: ffi.free_raw_external_cache_key,
             has_primary_constructor: primary_constructor.has_primary_constructor,
             primary_constructor_doc_comment: primary_constructor.doc_comment,
             primary_constructor_params: primary_constructor.params,
             primary_constructor_body_lines: primary_constructor.body_lines,
-            unimplemented_constructor_member: json_string_literal(&format!(
-                "{}.constructor",
-                object.name
-            ))?,
+            unimplemented_constructor_member: unimplemented_constructor_member_literal(
+                &object.name,
+            )?,
             constructors: render_secondary_constructors(object)?,
             methods: render_object_method_views(object)?,
         })
@@ -837,35 +866,62 @@ struct ErrorConverterVariantJsView {
     read_expr: String,
 }
 
-impl ErrorConverterVariantJsView {
-    fn from_variant(error: &ErrorModel, variant: &VariantModel, tag_index: usize) -> Result<Self> {
-        let class_name = variant_type_name(&error.name, &variant.name);
-        let allocation_size_expr = if error.is_flat {
-            "4".to_string()
-        } else {
-            render_buffered_variant_allocation_size_expression(&variant.fields, "value")?
-        };
-        let read_expr = if error.is_flat {
-            format!(
+struct ErrorVariantConverterIo {
+    allocation_size_expr: String,
+    write_fields: Vec<ConverterWriteFieldJsView>,
+    read_expr: String,
+}
+
+impl ErrorVariantConverterIo {
+    fn from_error_variant(
+        error: &ErrorModel,
+        variant: &VariantModel,
+        class_name: &str,
+    ) -> Result<Self> {
+        if error.is_flat {
+            return Self::flat(class_name);
+        }
+
+        Self::buffered(variant, class_name)
+    }
+
+    fn flat(class_name: &str) -> Result<Self> {
+        Ok(Self {
+            allocation_size_expr: "4".to_string(),
+            write_fields: Vec::new(),
+            read_expr: format!(
                 "new {}({}.read(reader))",
                 class_name,
                 render_js_type_converter_expression(&Type::String)?
-            )
-        } else {
-            let field_values = render_converter_read_expressions(&variant.fields)?;
-            format!("new {}({})", class_name, field_values.join(", "))
-        };
+            ),
+        })
+    }
+
+    fn buffered(variant: &VariantModel, class_name: &str) -> Result<Self> {
+        let field_values = render_converter_read_expressions(&variant.fields)?;
+
+        Ok(Self {
+            allocation_size_expr: render_buffered_variant_allocation_size_expression(
+                &variant.fields,
+                "value",
+            )?,
+            write_fields: render_converter_write_fields(&variant.fields, "value")?,
+            read_expr: format!("new {}({})", class_name, field_values.join(", ")),
+        })
+    }
+}
+
+impl ErrorConverterVariantJsView {
+    fn from_variant(error: &ErrorModel, variant: &VariantModel, tag_index: usize) -> Result<Self> {
+        let class_name = variant_type_name(&error.name, &variant.name);
+        let io = ErrorVariantConverterIo::from_error_variant(error, variant, &class_name)?;
 
         Ok(Self {
             class_name,
             tag_index,
-            allocation_size_expr,
-            write_fields: if error.is_flat {
-                Vec::new()
-            } else {
-                render_converter_write_fields(&variant.fields, "value")?
-            },
-            read_expr,
+            allocation_size_expr: io.allocation_size_expr,
+            write_fields: io.write_fields,
+            read_expr: io.read_expr,
         })
     }
 }
@@ -1724,36 +1780,56 @@ struct ObjectDtsView {
     methods: Vec<ObjectMethodDtsView>,
 }
 
+#[derive(Default)]
+struct PrimaryConstructorDtsView {
+    has_primary_constructor: bool,
+    doc_comment: String,
+    params: String,
+}
+
+impl PrimaryConstructorDtsView {
+    fn from_object(object: &ObjectModel) -> Result<Self> {
+        let Some(constructor) = primary_sync_constructor(object) else {
+            return Ok(Self::default());
+        };
+
+        Ok(Self {
+            has_primary_constructor: true,
+            doc_comment: render_doc_comment(constructor.docstring.as_deref(), "  "),
+            params: render_dts_params(&constructor.arguments)?,
+        })
+    }
+}
+
+fn render_secondary_constructor_dts_views(object: &ObjectModel) -> Result<Vec<ConstructorDtsView>> {
+    object
+        .constructors
+        .iter()
+        .filter(|constructor| !is_sync_primary_constructor(constructor))
+        .map(|constructor| ConstructorDtsView::from_constructor(&object.name, constructor))
+        .collect()
+}
+
+fn render_object_method_dts_views(object: &ObjectModel) -> Result<Vec<ObjectMethodDtsView>> {
+    object
+        .methods
+        .iter()
+        .map(ObjectMethodDtsView::from_method)
+        .collect()
+}
+
 impl ObjectDtsView {
     fn from_object(object: &ObjectModel) -> Result<Self> {
-        let primary_constructor = object
-            .constructors
-            .iter()
-            .find(|constructor| constructor.is_primary && !constructor.is_async);
+        let primary_constructor = PrimaryConstructorDtsView::from_object(object)?;
 
         Ok(Self {
             doc_comment: render_doc_comment(object.docstring.as_deref(), ""),
             name: object.name.clone(),
-            has_primary_constructor: primary_constructor.is_some(),
-            primary_constructor_doc_comment: render_doc_comment(
-                primary_constructor.and_then(|constructor| constructor.docstring.as_deref()),
-                "  ",
-            ),
-            primary_constructor_params: primary_constructor
-                .map(|constructor| render_dts_params(&constructor.arguments))
-                .transpose()?
-                .unwrap_or_default(),
-            constructors: object
-                .constructors
-                .iter()
-                .filter(|constructor| !constructor.is_primary || constructor.is_async)
-                .map(|constructor| ConstructorDtsView::from_constructor(&object.name, constructor))
-                .collect::<Result<_>>()?,
-            methods: object
-                .methods
-                .iter()
-                .map(ObjectMethodDtsView::from_method)
-                .collect::<Result<_>>()?,
+            has_primary_constructor: primary_constructor.has_primary_constructor,
+            primary_constructor_doc_comment: primary_constructor.doc_comment,
+            primary_constructor_params: primary_constructor.params,
+            constructors: render_secondary_constructor_dts_views(object)?,
+            methods: render_object_method_dts_views(object)?,
         })
     }
 }

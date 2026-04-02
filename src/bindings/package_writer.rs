@@ -55,12 +55,19 @@ impl GeneratedPackage {
         self.layout.ensure_output_dirs()
     }
 
+    fn generated_component_files(
+        &self,
+        template_context: &TemplateContext,
+    ) -> Result<Vec<(Utf8PathBuf, String)>> {
+        let mut files = self.component_api_files(template_context)?;
+        files.extend(self.component_ffi_files()?);
+        Ok(files)
+    }
+
     fn write_package_files(&self) -> Result<()> {
         let template_context = TemplateContext::from_package(self)?;
         self.write_package_metadata_files(&template_context)?;
-        let mut files = self.component_api_files(&template_context)?;
-        files.extend(self.component_ffi_files()?);
-        write_files(files)?;
+        write_files(self.generated_component_files(&template_context)?)?;
         self.write_runtime_files()?;
 
         Ok(())
@@ -176,26 +183,45 @@ impl GeneratedPackage {
         let component_dts_imports = ComponentDtsImports::from_public_api(&self.public_api.dts);
         let mut modules = BTreeSet::from(["errors", "ffi-types"]);
 
-        if !component_js_imports.ffi_converter_imports.is_empty() {
-            modules.insert("ffi-converters");
-        }
-        if !component_js_imports.async_rust_call_imports.is_empty() {
-            modules.insert("async-rust-call");
-        }
-        if !component_js_imports.callback_imports.is_empty() {
-            modules.insert("callbacks");
-        }
-        if !component_js_imports.object_imports.is_empty()
-            || component_dts_imports.needs_uniffi_object_base
+        for (module, required) in
+            runtime_module_flags(&component_js_imports, &component_dts_imports)
         {
-            modules.insert("objects");
-        }
-        if !component_js_imports.rust_call_imports.is_empty() {
-            modules.insert("rust-call");
+            if required {
+                modules.insert(module);
+            }
         }
 
         modules
     }
+}
+
+fn runtime_module_flags(
+    component_js_imports: &ComponentJsImports,
+    component_dts_imports: &ComponentDtsImports,
+) -> [(&'static str, bool); 5] {
+    [
+        (
+            "ffi-converters",
+            !component_js_imports.ffi_converter_imports.is_empty(),
+        ),
+        (
+            "async-rust-call",
+            !component_js_imports.async_rust_call_imports.is_empty(),
+        ),
+        (
+            "callbacks",
+            !component_js_imports.callback_imports.is_empty(),
+        ),
+        (
+            "objects",
+            !component_js_imports.object_imports.is_empty()
+                || component_dts_imports.needs_uniffi_object_base,
+        ),
+        (
+            "rust-call",
+            !component_js_imports.rust_call_imports.is_empty(),
+        ),
+    ]
 }
 
 pub(crate) fn write_generated_package(

@@ -210,12 +210,71 @@ function readEncodedValue(value) {
     : value;
 }
 
+function decodeAllocatedPrimitive(value, offset, type) {
+  if (!isAllocatedValue(value)) {
+    return readEncodedValue(value);
+  }
+
+  if (offset === 0 && type === "int8_t") {
+    const encoded = readEncodedValue(value);
+    if (encoded == null) {
+      return 0;
+    }
+    if (typeof encoded === "number") {
+      return encoded;
+    }
+    if (typeof encoded === "object" && encoded != null && typeof encoded.code === "number") {
+      return encoded.code;
+    }
+  }
+
+  throw new Error(
+    `mock koffi.decode does not support primitive decode for ${String(type)} at offset ${offset}`,
+  );
+}
+
+function decodeAllocatedValue(value, type) {
+  const decoded = readEncodedValue(value);
+  if (decoded != null) {
+    return decoded;
+  }
+  if (type?.kind === "struct" && type.name === "RustCallStatus") {
+    return {
+      code: CALL_SUCCESS,
+      error_buf: emptyRustBuffer(),
+    };
+  }
+  return decoded;
+}
+
 function writeEncodedValue(target, value) {
   if (!isAllocatedValue(target)) {
     return false;
   }
   target.__koffiValue = cloneEncodedValue(value);
   return true;
+}
+
+function createCallbackStatusSlot() {
+  return koffi.alloc("RustCallStatus", 1);
+}
+
+function readCallbackStatusSlot(slot) {
+  const status = readEncodedValue(slot);
+  return status ?? {
+    code: CALL_SUCCESS,
+    error_buf: emptyRustBuffer(),
+  };
+}
+
+function createOutParamSlot(label) {
+  return koffi.alloc(label, 1);
+}
+
+function wrapUnexpectedCallbackReason(errorBuffer) {
+  return rustBufferFromUtf8String(
+    `UnexpectedUniFFICallbackError(reason: ${JSON.stringify(decodeRustBufferString(errorBuffer))})`,
+  );
 }
 
 function setCallStatus(status, code, errorBuffer = emptyRustBuffer()) {
@@ -1276,50 +1335,44 @@ function createCallbacksFixtureRuntime(libraryPath) {
   }
 
   function invokeLogCollectorCallback(handle, recordBuffer) {
-    const callbackStatus = {
-      code: CALL_SUCCESS,
-      error_buf: emptyRustBuffer(),
-    };
+    const callbackStatus = createCallbackStatusSlot();
     requireCallbackMethod(
       logCollectorVtable,
       "LogCollector",
       "log",
       "invoking log collector callbacks",
     )(normalizeBigInt(handle), recordBuffer, undefined, callbackStatus);
-    return callbackStatus;
+    return readCallbackStatusSlot(callbackStatus);
   }
 
   function invokeLogSinkWriteCallback(handle, messageBuffer) {
-    const callbackStatus = {
-      code: CALL_SUCCESS,
-      error_buf: emptyRustBuffer(),
-    };
+    const callbackStatus = createCallbackStatusSlot();
     requireCallbackMethod(
       logSinkVtable,
       "LogSink",
       "write",
       "invoking log sink write callbacks",
     )(normalizeBigInt(handle), messageBuffer, undefined, callbackStatus);
-    return callbackStatus;
+    return readCallbackStatusSlot(callbackStatus);
   }
 
   function invokeLogSinkLatestCallback(handle) {
-    const callbackStatus = {
-      code: CALL_SUCCESS,
-      error_buf: emptyRustBuffer(),
-    };
-    const outReturn = {};
+    const callbackStatus = createCallbackStatusSlot();
+    const outReturn = createOutParamSlot("RustBuffer");
     requireCallbackMethod(
       logSinkVtable,
       "LogSink",
       "latest",
       "invoking log sink latest callbacks",
     )(normalizeBigInt(handle), outReturn, callbackStatus);
-    return { callbackStatus, outReturn };
+    return {
+      callbackStatus: readCallbackStatusSlot(callbackStatus),
+      outReturn: readEncodedValue(outReturn),
+    };
   }
 
   function invokeAsyncLogSinkCallback(handle, methodName, args, callbackData, completionCallback) {
-    const outDroppedCallback = {};
+    const outDroppedCallback = createOutParamSlot("ForeignFutureDroppedCallbackStruct");
     requireCallbackMethod(
       asyncLogSinkVtable,
       "AsyncLogSink",
@@ -1332,17 +1385,18 @@ function createCallbacksFixtureRuntime(libraryPath) {
       normalizeBigInt(callbackData),
       outDroppedCallback,
     );
+    const droppedCallback = readEncodedValue(outDroppedCallback);
     if (
-      outDroppedCallback.handle == null
-      || typeof outDroppedCallback.free !== "function"
+      droppedCallback?.handle == null
+      || typeof droppedCallback.free !== "function"
     ) {
       throw new Error(
         `AsyncLogSink.${methodName} did not populate a dropped-callback handle`,
       );
     }
     return {
-      free: outDroppedCallback.free,
-      handle: normalizeBigInt(outDroppedCallback.handle),
+      free: droppedCallback.free,
+      handle: normalizeBigInt(droppedCallback.handle),
     };
   }
 
@@ -1383,7 +1437,10 @@ function createCallbacksFixtureRuntime(libraryPath) {
     future.foreignFuture = null;
     future.ready = true;
     future.statusCode = result?.call_status?.code ?? CALL_SUCCESS;
-    future.errorBuffer = result?.call_status?.error_buf ?? emptyRustBuffer();
+    future.errorBuffer =
+      future.statusCode === CALL_UNEXPECTED_ERROR
+        ? wrapUnexpectedCallbackReason(result?.call_status?.error_buf ?? emptyRustBuffer())
+        : result?.call_status?.error_buf ?? emptyRustBuffer();
     if (future.kind === "rust_buffer") {
       future.returnValue = result?.return_value ?? emptyRustBuffer();
     }
@@ -2038,9 +2095,15 @@ const koffi = {
   registeredCallbackCount() {
     return REGISTERED_CALLBACKS.size;
   },
-  decode(value, type) {
-    if (value instanceof BigUint64Array && isOpaquePointerType(type)) {
-      return wrapPointerCast(wrapExternalPointerValue(value[0]), type);
+  decode(value, offsetOrType, maybeType) {
+    if (arguments.length >= 3) {
+      return decodeAllocatedPrimitive(value, offsetOrType, maybeType);
+    }
+    if (value instanceof BigUint64Array && isOpaquePointerType(offsetOrType)) {
+      return wrapPointerCast(wrapExternalPointerValue(value[0]), offsetOrType);
+    }
+    if (isAllocatedValue(value)) {
+      return decodeAllocatedValue(value, offsetOrType);
     }
     return readEncodedValue(value);
   },

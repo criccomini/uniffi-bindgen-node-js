@@ -2261,7 +2261,10 @@ assert.equal(foreignFutureHandleCount(), 1);
 unexpectedFailure.reject("unexpected async rejection");
 await assert.rejects(unexpectedPromise, (error) => {
   assert.equal(error.name, "RustPanic");
-  assert.equal(error.message, "unexpected async rejection");
+  assert.equal(
+    error.message,
+    'UnexpectedUniFFICallbackError(reason: "unexpected async rejection")',
+  );
   return true;
 });
 assert.equal(foreignFutureHandleCount(), 0);

@@ -345,11 +345,17 @@ export class UniffiObjectFactory {
       cloneHandle(handle, value),
       `${this.typeName} cloned handle`,
     );
-    return genericAbi || this._cloneFreeUsesUniffiHandle
-      ? clonedHandle
-      : useRawExternal
-        ? this._coerceHandle(clonedHandle)
-        : clonedHandle;
+    if (genericAbi) {
+      return clonedHandle;
+    }
+
+    if (useRawExternal) {
+      return this._cloneFreeUsesUniffiHandle
+        ? pointerAddress(clonedHandle)
+        : this._coerceHandle(clonedHandle);
+    }
+
+    return clonedHandle;
   }
 
   destroy(value) {

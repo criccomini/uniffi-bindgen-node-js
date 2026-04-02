@@ -311,7 +311,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Revalidate leak probes after the refactor.
 - [x] Revalidate ignored real-koffi tests after the refactor.
 - [x] Run cargo test --locked.
-- [ ] Run ignored Rust tests that are part of the existing acceptance bar.
+- [x] Run ignored Rust tests that are part of the existing acceptance bar.
 - [ ] Run the generated-package smoke suites on supported platforms as available.
 - [ ] Run TypeScript declaration checks through the existing test harness.
 - [ ] Run the leak probes as a final regression pass.

@@ -977,6 +977,123 @@ assert.deepEqual(freedHandles, [42n, 84n]);
 }
 
 #[test]
+fn runtime_object_factory_normalizes_raw_external_clones_for_uniffi_handle_calls() {
+    let generated = generate_fixture_package("basic");
+    let output_dir = generated.package_dir.clone();
+
+    fs::write(
+        output_dir.join("package.json").as_std_path(),
+        r#"{"type":"module"}"#,
+    )
+    .expect("package.json should be writable");
+
+    let koffi_dir = output_dir.join("node_modules").join("koffi");
+    fs::create_dir_all(koffi_dir.as_std_path()).expect("koffi fixture dir should be creatable");
+    fs::write(
+        koffi_dir.join("package.json").as_std_path(),
+        r#"{"name":"koffi","type":"module","main":"./index.js"}"#,
+    )
+    .expect("koffi package.json should be writable");
+    fs::write(
+        koffi_dir.join("index.js").as_std_path(),
+        r#"function normalizePointerAddress(value) {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return BigInt(value);
+  }
+  if (typeof value === "object" && value != null && typeof value.__addr === "bigint") {
+    return value.__addr;
+  }
+  throw new TypeError(`expected a pointer-compatible value, got ${typeof value}`);
+}
+
+const koffi = {
+  opaque() {
+    return { kind: "opaque" };
+  },
+  pointer(typeOrName, maybeType) {
+    return {
+      kind: "pointer",
+      name: maybeType == null ? null : typeOrName,
+      to: maybeType ?? typeOrName,
+    };
+  },
+  struct(name, fields) {
+    return {
+      kind: "struct",
+      name,
+      fields,
+    };
+  },
+  as(value, type) {
+    if (typeof value !== "object" || value == null || typeof value.__addr !== "bigint") {
+      throw new TypeError("Invalid argument");
+    }
+    return {
+      __addr: value.__addr,
+      __pointer: value,
+      __retagged: true,
+      __type: type,
+    };
+  },
+  address(pointer) {
+    return normalizePointerAddress(pointer);
+  },
+};
+
+export default koffi;
+"#,
+    )
+    .expect("koffi index.js should be writable");
+
+    run_node_script(
+        &output_dir,
+        "objects-raw-external-uniffi-handle-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import koffi from "koffi";
+import { createObjectFactory } from "./runtime/objects.js";
+
+const resourceHandleType = koffi.pointer("ResourceHandle", koffi.opaque());
+
+class Resource {}
+
+const rawHandle = {
+  __addr: 42n,
+};
+const adoptedHandle = {
+  __addr: 84n,
+};
+const seenCloneHandles = [];
+
+const resourceFactory = createObjectFactory({
+  typeName: "Resource",
+  createInstance: () => Object.create(Resource.prototype),
+  cloneFreeUsesUniffiHandle: true,
+  handleType: () => resourceHandleType,
+  cloneHandleRawExternal(handle) {
+    seenCloneHandles.push(handle.__addr);
+    return adoptedHandle;
+  },
+});
+
+const resource = resourceFactory.createRawExternal(rawHandle);
+assert.equal(resourceFactory.peekHandle(resource), adoptedHandle);
+assert.equal(resourceFactory.usesRawExternal(resource), true);
+assert.equal(resourceFactory.cloneHandle(resource), 84n);
+assert.deepEqual(seenCloneHandles, [42n, 84n]);
+assert.equal(resourceFactory.handle(resource).__type?.name, "ResourceHandle");
+assert.equal(resourceFactory.handle(resource).__pointer, adoptedHandle);
+"#,
+    );
+
+    remove_dir_all(&output_dir);
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+}
+
+#[test]
 fn runtime_callback_registry_clone_preserves_the_registered_implementation() {
     let generated = generate_fixture_package("callbacks");
     let output_dir = generated.package_dir.clone();

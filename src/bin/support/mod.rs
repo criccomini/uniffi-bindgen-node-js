@@ -407,7 +407,7 @@ fn artifact_path_from_message(
     artifact_filename(message, extension)
 }
 
-fn compiler_artifact_target<'a>(message: &'a Value) -> Option<&'a Value> {
+fn compiler_artifact_target(message: &Value) -> Option<&Value> {
     if message.get("reason")?.as_str()? != "compiler-artifact" {
         return None;
     }

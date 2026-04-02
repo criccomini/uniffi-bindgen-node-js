@@ -23,6 +23,27 @@ fn read_generated_component_ffi_js(package_dir: &camino::Utf8PathBuf, namespace:
     .expect("component ffi js should be readable")
 }
 
+fn extract_generated_block<'a>(contents: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+    let start = contents
+        .find(start_marker)
+        .unwrap_or_else(|| panic!("generated source should contain block marker {start_marker}"));
+    let end = contents[start..]
+        .find(end_marker)
+        .map(|offset| start + offset + end_marker.len())
+        .unwrap_or_else(|| panic!("generated source should terminate block {start_marker}"));
+    &contents[start..end]
+}
+
+fn assert_substrings_in_order(haystack: &str, expected: &[&str]) {
+    let mut offset = 0;
+    for needle in expected {
+        let relative_index = haystack[offset..]
+            .find(needle)
+            .unwrap_or_else(|| panic!("expected to find {needle:?} after:\n{}", &haystack[..offset]));
+        offset += relative_index + needle.len();
+    }
+}
+
 fn extract_generated_ffi_integrity_block(ffi_js: &str) -> &str {
     let start = ffi_js
         .find("export const ffiIntegrity = Object.freeze({")
@@ -363,6 +384,61 @@ fn generated_callback_clone_free_symbols_follow_full_module_paths() {
             component_js.contains(&symbol),
             "generated component JS should include the UniFFI-provided callback handle symbol {symbol}"
         );
+    }
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(&generated.package_dir);
+}
+
+#[test]
+fn generated_callback_vtables_include_uniffi_clone_and_free_slots_before_methods() {
+    let generated = generate_fixture_package("callbacks");
+    let component_js = fs::read_to_string(
+        generated
+            .package_dir
+            .join(format!("{}.js", generated.built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component js should be readable");
+
+    for (interface_name, expected_slots) in [
+        (
+            "AsyncLogSink",
+            &[
+                "uniffi_free: uniffiFree,",
+                "uniffi_clone: uniffiClone,",
+                "\"write\": writeCallback,",
+                "\"write_fallible\": write_fallibleCallback,",
+                "\"flush\": flushCallback,",
+            ][..],
+        ),
+        (
+            "LogCollector",
+            &[
+                "uniffi_free: uniffiFree,",
+                "uniffi_clone: uniffiClone,",
+                "\"log\": logCallback,",
+            ][..],
+        ),
+        (
+            "LogSink",
+            &[
+                "uniffi_free: uniffiFree,",
+                "uniffi_clone: uniffiClone,",
+                "\"write\": writeCallback,",
+                "\"latest\": latestCallback,",
+            ][..],
+        ),
+    ] {
+        let block = extract_generated_block(
+            &component_js,
+            &format!(
+                "koffi.encode(uniffiVtable, bindings.ffiStructs.VTableCallbackInterface{interface_name}, {{"
+            ),
+            "\n  });",
+        );
+
+        assert_substrings_in_order(block, expected_slots);
     }
 
     remove_dir_all(&generated.built_fixture.workspace_dir);

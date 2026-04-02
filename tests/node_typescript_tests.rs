@@ -17,6 +17,10 @@ fn typechecks_generated_basic_fixture_package_declarations() {
         r#"
 import {
   Config,
+  FixtureError,
+  FixtureErrorInvalidState,
+  FixtureErrorMissing,
+  FixtureErrorParse,
   Flavor,
   Reader,
   ReaderBuilder,
@@ -31,6 +35,23 @@ import {
   type BlobRecord,
   type TemporalRecord,
 } from "./index.js";
+import {
+  type FfiBindings,
+  type FfiIntegrity,
+  type FfiMetadata,
+  ffiIntegrity,
+  ffiMetadata,
+  getFfiBindings,
+  isLoaded,
+  load,
+  unload,
+} from "./fixture-ffi.js";
+import {
+  ChecksumMismatchError,
+  ContractVersionMismatchError,
+  UniffiInternalError,
+  type UniffiErrorOptions,
+} from "./runtime/errors.js";
 
 const seed: BlobRecord = {
   name: "seed",
@@ -69,6 +90,41 @@ const config: Config = Config.from_json("ok");
 const configValue: string = config.value();
 const readerBuilder = new ReaderBuilder(true);
 const asyncReader: Promise<Reader> = readerBuilder.build();
+const fixtureError: FixtureError = new FixtureErrorMissing();
+const missingError = new FixtureErrorMissing();
+const missingTag: "Missing" = missingError.tag;
+const invalidStateError: FixtureErrorInvalidState = new FixtureErrorInvalidState("bad state");
+const invalidStateTag: "InvalidState" = invalidStateError.tag;
+const invalidStateMessage: string = invalidStateError.message;
+const parseError: FixtureErrorParse = new FixtureErrorParse("bad parse");
+const parseTag: "Parse" = parseError.tag;
+const parseMessage: string = parseError.message;
+const ffiMetadataValue: Readonly<FfiMetadata> = ffiMetadata;
+const ffiIntegrityValue: Readonly<FfiIntegrity> = ffiIntegrity;
+const maybeBindings: Readonly<FfiBindings> = isLoaded() ? getFfiBindings() : load();
+const stillLoaded: boolean = isLoaded();
+const didUnload: boolean = unload();
+const errorOptions: UniffiErrorOptions = {
+  details: {
+    libraryPath: "/tmp/libfixture",
+    packageRelativePath: "fixture.node",
+  },
+};
+const checksumError: ChecksumMismatchError = new ChecksumMismatchError(
+  "fixture_checksum",
+  1,
+  2,
+  errorOptions,
+);
+const contractError: ContractVersionMismatchError = new ContractVersionMismatchError(
+  1,
+  2,
+  errorOptions,
+);
+const runtimeChecksumErrorCtor: typeof ChecksumMismatchError =
+  UniffiInternalError.ChecksumMismatchError;
+const runtimeContractErrorCtor: typeof ContractVersionMismatchError =
+  UniffiInternalError.ContractVersionMismatchError;
 
 void current;
 void echoedWhen;
@@ -86,6 +142,21 @@ void echoedRecord;
 void asyncRecord;
 void configValue;
 void asyncReader;
+void fixtureError;
+void missingTag;
+void invalidStateTag;
+void invalidStateMessage;
+void parseTag;
+void parseMessage;
+void ffiMetadataValue;
+void ffiIntegrityValue;
+void maybeBindings;
+void stillLoaded;
+void didUnload;
+void checksumError;
+void contractError;
+void runtimeChecksumErrorCtor;
+void runtimeContractErrorCtor;
 "#,
     );
 
@@ -104,6 +175,7 @@ fn typechecks_generated_callback_fixture_package_declarations() {
         "smoke.ts",
         r#"
 import {
+  AsyncLogError,
   AsyncLogErrorRejected,
   LogLevel,
   Settings,
@@ -172,6 +244,8 @@ const asyncSink: AsyncLogSink = {
 const asyncWrite: (message: string) => Promise<string> = asyncSink.write;
 const asyncWriteFallible: (message: string) => Promise<string> = asyncSink.write_fallible;
 const asyncFlush: () => Promise<void> = asyncSink.flush;
+const asyncLogError: AsyncLogError = new AsyncLogErrorRejected("bad write");
+const rejectedTag: "Rejected" = new AsyncLogErrorRejected("bad write").tag;
 
 emit(sink, "hello");
 const latestMessage: string | undefined = last_message(sink);
@@ -192,6 +266,8 @@ void missingMessage;
 void asyncWrite;
 void asyncWriteFallible;
 void asyncFlush;
+void asyncLogError;
+void rejectedTag;
 void emittedAsyncMessage;
 void emittedAsyncFallibleMessage;
 void flushedAsyncSink;

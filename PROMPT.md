@@ -282,7 +282,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for checksum validation under UniFFI 0.31.
 - [x] Add coverage for contract-version validation under UniFFI 0.31.
 - [x] Add coverage for error-class generation and throwing behavior after the refactor.
-- [ ] Add coverage for TypeScript output after any naming or surface changes.
+- [x] Add coverage for TypeScript output after any naming or surface changes.
 - [ ] Add coverage for package generation snapshots using the loader-based flow.
 - [ ] Replace tests that currently depend on BindingGenerator::write_bindings.
 - [ ] Replace tests that currently depend on manual GenerationSettings construction where no longer appropriate.

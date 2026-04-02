@@ -1095,6 +1095,72 @@ assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
 }
 
 #[test]
+fn generated_basic_fixture_throws_typed_generated_errors() {
+    let generated = generate_fixture_package("basic");
+    let package_dir = &generated.package_dir;
+
+    install_fixture_package_dependencies(package_dir);
+    run_node_script(
+        package_dir,
+        "generated-error-classes-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import {
+  Config,
+  FixtureError,
+  FixtureErrorInvalidState,
+  FixtureErrorMissing,
+  FixtureErrorParse,
+  ReaderBuilder,
+  Store,
+} from "./index.js";
+
+const store = new Store({
+  name: "seed",
+  value: new Uint8Array([1, 2]),
+  maybe_value: undefined,
+  chunks: [],
+});
+
+assert.equal(Object.getPrototypeOf(FixtureErrorMissing.prototype), FixtureError.prototype);
+assert.equal(Object.getPrototypeOf(FixtureErrorInvalidState.prototype), FixtureError.prototype);
+assert.equal(Object.getPrototypeOf(FixtureErrorParse.prototype), FixtureError.prototype);
+
+assert.throws(() => store.require_value(false), (error) => {
+  assert.ok(error instanceof FixtureErrorMissing);
+  assert.ok(error instanceof FixtureError);
+  assert.ok(error instanceof Error);
+  assert.equal(error.name, "FixtureErrorMissing");
+  assert.equal(error.tag, "Missing");
+  assert.equal(error.message, "Missing");
+  return true;
+});
+
+assert.throws(() => Config.from_json("not-json"), (error) => {
+  assert.ok(error instanceof FixtureErrorParse);
+  assert.ok(error instanceof FixtureError);
+  assert.equal(error.name, "FixtureErrorParse");
+  assert.equal(error.tag, "Parse");
+  assert.equal(error.message, "invalid json");
+  return true;
+});
+
+await assert.rejects(new ReaderBuilder(false).build(), (error) => {
+  assert.ok(error instanceof FixtureErrorInvalidState);
+  assert.ok(error instanceof FixtureError);
+  assert.equal(error.name, "FixtureErrorInvalidState");
+  assert.equal(error.tag, "InvalidState");
+  assert.equal(error.message, "builder rejected");
+  return true;
+});
+"#,
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn runs_plain_js_smoke_script_against_generated_callback_fixture_package() {
     let generated = generate_fixture_package("callbacks");
     let package_dir = &generated.package_dir;

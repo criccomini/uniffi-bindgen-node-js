@@ -14,6 +14,16 @@ use uniffi_bindgen::interface::{Callable, ComponentInterface};
 use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 use uniffi_meta::{clone_fn_symbol_name, free_fn_symbol_name};
 
+fn read_generated_component_js(package_dir: &camino::Utf8PathBuf, namespace: &str) -> String {
+    fs::read_to_string(package_dir.join(format!("{namespace}.js")).as_std_path())
+        .expect("component js should be readable")
+}
+
+fn read_generated_component_dts(package_dir: &camino::Utf8PathBuf, namespace: &str) -> String {
+    fs::read_to_string(package_dir.join(format!("{namespace}.d.ts")).as_std_path())
+        .expect("component d.ts should be readable")
+}
+
 fn read_generated_component_ffi_js(package_dir: &camino::Utf8PathBuf, namespace: &str) -> String {
     fs::read_to_string(
         package_dir
@@ -200,6 +210,48 @@ fn generated_default_package_stages_the_input_cdylib_at_the_package_root() {
         fs::read(input_library_path.as_std_path()).expect("fixture library should be readable"),
         fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
         "default generation should stage the exact input cdylib contents"
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
+fn generated_basic_fixture_emits_typed_error_class_definitions() {
+    let generated = generate_fixture_package("basic");
+    let package_dir = &generated.package_dir;
+    let namespace = &generated.built_fixture.namespace;
+    let component_js = read_generated_component_js(package_dir, namespace);
+    let component_dts = read_generated_component_dts(package_dir, namespace);
+
+    assert_substrings_in_order(
+        &component_js,
+        &[
+            "export class FixtureError extends globalThis.Error {",
+            "export class FixtureErrorMissing extends FixtureError {",
+            "this.name = \"FixtureErrorMissing\";",
+            "export class FixtureErrorInvalidState extends FixtureError {",
+            "this.name = \"FixtureErrorInvalidState\";",
+            "this[\"message\"] = message;",
+            "export class FixtureErrorParse extends FixtureError {",
+            "this.name = \"FixtureErrorParse\";",
+            "this[\"message\"] = message;",
+        ],
+    );
+    assert_substrings_in_order(
+        &component_dts,
+        &[
+            "export declare class FixtureError extends globalThis.Error {",
+            "readonly tag: string;",
+            "export declare class FixtureErrorMissing extends FixtureError {",
+            "readonly tag: \"Missing\";",
+            "export declare class FixtureErrorInvalidState extends FixtureError {",
+            "readonly tag: \"InvalidState\";",
+            "readonly \"message\": string;",
+            "export declare class FixtureErrorParse extends FixtureError {",
+            "readonly tag: \"Parse\";",
+            "readonly \"message\": string;",
+        ],
     );
 
     remove_dir_all(&generated.built_fixture.workspace_dir);

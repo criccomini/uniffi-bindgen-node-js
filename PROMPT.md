@@ -310,7 +310,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update leak helper binaries to rely on generator-owned staging rather than local copy logic.
 - [x] Revalidate leak probes after the refactor.
 - [x] Revalidate ignored real-koffi tests after the refactor.
-- [ ] Run cargo test --locked.
+- [x] Run cargo test --locked.
 - [ ] Run ignored Rust tests that are part of the existing acceptance bar.
 - [ ] Run the generated-package smoke suites on supported platforms as available.
 - [ ] Run TypeScript declaration checks through the existing test harness.

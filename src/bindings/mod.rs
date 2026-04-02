@@ -1076,7 +1076,7 @@ mod tests {
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
         assert!(
-            component_ffi_js.contains("expectedContractVersion: 29"),
+            component_ffi_js.contains("expectedContractVersion: 30"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(

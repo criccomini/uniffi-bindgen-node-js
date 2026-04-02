@@ -46,7 +46,7 @@ pub struct BuiltFixtureCdylib {
 pub struct GeneratedFixturePackage {
     pub built_fixture: BuiltFixtureCdylib,
     pub package_dir: Utf8PathBuf,
-    pub sibling_library_path: Utf8PathBuf,
+    pub staged_library_path: Utf8PathBuf,
 }
 
 pub fn repo_root() -> Utf8PathBuf {
@@ -154,16 +154,15 @@ pub fn generate_fixture_package(
     })
     .with_context(|| format!("failed to generate fixture package for {}", spec.dir_name))?;
 
-    let library_filename = built_fixture
-        .library_path
-        .file_name()
-        .ok_or_else(|| anyhow::anyhow!("fixture library path has no filename"))?;
-    let sibling_library_path = out_dir.join(library_filename);
-    copy_library(
-        &built_fixture.library_path,
-        &sibling_library_path,
-        "leak probe",
-    )?;
+    let staged_library_package_relative_path =
+        read_staged_library_package_relative_path(&out_dir, &built_fixture.namespace)?;
+    let staged_library_path = out_dir.join(&staged_library_package_relative_path);
+    if !staged_library_path.is_file() {
+        bail!(
+            "generated package staged native library '{}' is missing",
+            staged_library_path
+        );
+    }
 
     if install_npm {
         npm_install(&out_dir)?;
@@ -172,7 +171,7 @@ pub fn generate_fixture_package(
     Ok(GeneratedFixturePackage {
         built_fixture,
         package_dir: out_dir,
-        sibling_library_path,
+        staged_library_path,
     })
 }
 
@@ -266,22 +265,6 @@ fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn copy_library(
-    source_path: &Utf8PathBuf,
-    destination_path: &Utf8PathBuf,
-    context: &str,
-) -> Result<()> {
-    if let Some(parent) = destination_path.parent() {
-        fs::create_dir_all(parent.as_std_path())
-            .with_context(|| format!("failed to create {context} directory {parent}"))?;
-    }
-
-    fs::copy(source_path.as_std_path(), destination_path.as_std_path()).with_context(|| {
-        format!("failed to copy {context} library {source_path} to {destination_path}")
-    })?;
-    Ok(())
-}
-
 fn npm_install(package_dir: &Utf8PathBuf) -> Result<()> {
     let output = Command::new(npm_command())
         .args(["install", "--no-package-lock"])
@@ -365,4 +348,34 @@ fn find_cdylib_artifact(stdout: &[u8], crate_name: &str) -> Option<Utf8PathBuf> 
                 .find(|filename| filename.ends_with(extension))
                 .and_then(|filename| Utf8PathBuf::from_path_buf(filename.into()).ok())
         })
+}
+
+fn read_staged_library_package_relative_path(
+    package_dir: &Utf8PathBuf,
+    namespace: &str,
+) -> Result<Utf8PathBuf> {
+    let ffi_js_path = package_dir.join(format!("{namespace}-ffi.js"));
+    let ffi_js = fs::read_to_string(ffi_js_path.as_std_path())
+        .with_context(|| format!("failed to read generated ffi file {ffi_js_path}"))?;
+    let raw_relative_path = ffi_js
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("stagedLibraryPackageRelativePath: ")
+                .map(|value| value.trim_end_matches(','))
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "generated ffi file '{}' does not include stagedLibraryPackageRelativePath metadata",
+                ffi_js_path
+            )
+        })?;
+    let relative_path: String = serde_json::from_str(raw_relative_path).with_context(|| {
+        format!(
+            "generated ffi metadata in '{}' should serialize stagedLibraryPackageRelativePath as JSON",
+            ffi_js_path
+        )
+    })?;
+
+    Ok(Utf8PathBuf::from(relative_path))
 }

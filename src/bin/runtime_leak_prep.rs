@@ -35,7 +35,7 @@ fn main() -> Result<()> {
 
     println!("fixture: {}", generated.built_fixture.crate_name);
     println!("package_dir: {}", generated.package_dir);
-    println!("library_path: {}", generated.sibling_library_path);
+    println!("library_path: {}", generated.staged_library_path);
     println!("workspace_dir: {}", generated.built_fixture.workspace_dir);
 
     Ok(())

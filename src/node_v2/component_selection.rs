@@ -56,6 +56,9 @@ mod tests {
 
     use uniffi_bindgen::interface::ComponentInterface;
 
+    // Component-selection tests remain synthetic because they exercise selector behavior only.
+    // Multi-component loader coverage lives in the integration tests.
+
     fn test_component(crate_name: &str, namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {
             ci: ComponentInterface::from_webidl(

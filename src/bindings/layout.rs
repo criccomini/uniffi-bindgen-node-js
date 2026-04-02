@@ -207,6 +207,9 @@ mod tests {
 
     use uniffi_bindgen::interface::ComponentInterface;
 
+    // Layout tests stay synthetic because they only validate package path derivation. The
+    // integration suite covers loader-driven package generation end to end.
+
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {
             ci: ComponentInterface::from_webidl(

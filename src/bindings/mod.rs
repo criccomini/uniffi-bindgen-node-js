@@ -26,6 +26,9 @@ mod tests {
 
     use crate::node_v2::config::{parse_node_binding_config, NodeBindingGeneratorConfig};
 
+    // These unit tests intentionally build synthetic components so renderer and package-writer
+    // behavior can be asserted in isolation. Loader-path coverage belongs in integration tests.
+
     fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
         Component {
             ci: ComponentInterface::from_webidl(

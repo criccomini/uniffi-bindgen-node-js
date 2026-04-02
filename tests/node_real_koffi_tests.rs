@@ -31,7 +31,18 @@ import {{
   init_logging,
   last_message,
 }} from "./index.js";
-import {{ foreignFutureHandleCount }} from "./runtime/callbacks.js";
+import {{
+  UniffiCallbackRegistry,
+  foreignFutureHandleCount,
+  invokeAsyncCallbackMethod,
+  writeCallbackError,
+}} from "./runtime/callbacks.js";
+import {{ EMPTY_RUST_BUFFER }} from "./runtime/ffi-types.js";
+import {{
+  CALL_ERROR,
+  CALL_UNEXPECTED_ERROR,
+  createRustCallStatus,
+}} from "./runtime/rust-call.js";
 
 {}
 "#,
@@ -44,51 +55,21 @@ import {{ foreignFutureHandleCount }} from "./runtime/callbacks.js";
 }
 
 fn real_koffi_callback_fixture_api_smoke_body() -> &'static str {
-    r#"function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
-}
-
-async function nextTick() {
-  await new Promise((resolve) => setImmediate(resolve));
-}
-
-class SyncSink {
-  constructor(prefix = "sync") {
-    this.prefix = prefix;
-    this.messages = [];
-  }
-
+    r#"const messages = [];
+const sink = {
   write(message) {
-    this.messages.push(`${this.prefix}:${message}`);
-  }
-
+    messages.push(message);
+  },
   latest() {
-    return this.messages.at(-1);
-  }
-}
+    return messages.at(-1);
+  },
+};
 
-class LogCollector {
-  constructor() {
-    this.records = [];
-  }
-
-  log(record) {
-    this.records.push(record);
-  }
-}
-
-const sink = new SyncSink();
 assert.equal(last_message(undefined), undefined);
 emit(sink, "first");
 emit(sink, "second");
-assert.deepStrictEqual(sink.messages, ["sync:first", "sync:second"]);
-assert.equal(last_message(sink), "sync:second");
+assert.deepStrictEqual(messages, ["first", "second"]);
+assert.equal(last_message(sink), "second");
 
 const settings = Settings.default();
 settings.set("writer.cache_size", "1024");
@@ -105,9 +86,15 @@ batch.delete(Buffer.from([5]));
 batch.put(Buffer.from("k"), Buffer.from("value"));
 assert.equal(batch.operation_count(), 3);
 
-const collector = new LogCollector();
+const records = [];
+const collector = {
+  log(record) {
+    records.push(record);
+  },
+};
+
 init_logging(LogLevel.Info, collector);
-assert.deepStrictEqual(collector.records, [
+assert.deepStrictEqual(records, [
   {
     level: LogLevel.Info,
     target: "callbacks_fixture",
@@ -117,83 +104,184 @@ assert.deepStrictEqual(collector.records, [
     line: undefined,
   },
 ]);
+
 init_logging(LogLevel.Info, undefined);
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function nextTick() {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+async function withTimeout(promise, message) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), 1_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 assert.equal(foreignFutureHandleCount(), 0);
 
+const callbackLowererErrors = [];
+const callbackStatus = createRustCallStatus();
+const normalizedCallbackError = writeCallbackError(callbackStatus, "sync string failure", {
+  lowerError(error) {
+    callbackLowererErrors.push(error);
+    assert.ok(error instanceof Error);
+    assert.equal(error.message, "sync string failure");
+    return EMPTY_RUST_BUFFER;
+  },
+  lowerString(message) {
+    assert.fail(`unexpected lowerString call for lowered sync error: ${message}`);
+  },
+});
+assert.equal(callbackStatus.code, CALL_ERROR);
+assert.ok(normalizedCallbackError instanceof Error);
+assert.equal(normalizedCallbackError.message, "sync string failure");
+assert.deepStrictEqual(
+  callbackLowererErrors.map((error) => error.message),
+  ["sync string failure"],
+);
+
+const unexpectedCallbackMessages = [];
+const unexpectedCallbackStatus = createRustCallStatus();
+const unexpectedCallbackError = writeCallbackError(
+  unexpectedCallbackStatus,
+  "sync unexpected failure",
+  {
+    lowerError(error) {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "sync unexpected failure");
+      return null;
+    },
+    lowerString(message) {
+      unexpectedCallbackMessages.push(message);
+      return EMPTY_RUST_BUFFER;
+    },
+  },
+);
+assert.equal(unexpectedCallbackStatus.code, CALL_UNEXPECTED_ERROR);
+assert.ok(unexpectedCallbackError instanceof Error);
+assert.equal(unexpectedCallbackError.message, "sync unexpected failure");
+assert.deepStrictEqual(unexpectedCallbackMessages, ["sync unexpected failure"]);
+
+const runtimeLowererErrors = [];
+const runtimeCompletion = deferred();
+const runtimeRegistry = new UniffiCallbackRegistry({
+  interfaceName: "RuntimeAsyncSink",
+});
+const runtimeHandle = runtimeRegistry.register({
+  write(message) {
+    assert.equal(message, "runtime-string-failure");
+    return Promise.reject("runtime string failure");
+  },
+});
+
+const runtimeFutureHandle = invokeAsyncCallbackMethod({
+  registry: runtimeRegistry,
+  handle: runtimeHandle,
+  methodName: "write",
+  args: ["runtime-string-failure"],
+  callbackData: 99n,
+  complete(callbackData, result) {
+    runtimeCompletion.resolve({ callbackData, result });
+  },
+  lowerError(error) {
+    runtimeLowererErrors.push(error);
+    assert.ok(error instanceof Error);
+    assert.equal(error.message, "runtime string failure");
+    return EMPTY_RUST_BUFFER;
+  },
+  lowerString(message) {
+    assert.fail(`unexpected lowerString call for lowered async error: ${message}`);
+  },
+});
+assert.equal(typeof runtimeFutureHandle, "bigint");
+assert.equal(foreignFutureHandleCount(), 1);
+const completedRuntimeFailure = await withTimeout(
+  runtimeCompletion.promise,
+  "timed out waiting for async callback failure completion",
+);
+assert.equal(completedRuntimeFailure.callbackData, 99n);
+assert.equal(completedRuntimeFailure.result.call_status.code, CALL_ERROR);
+assert.equal(foreignFutureHandleCount(), 0);
+assert.deepStrictEqual(
+  runtimeLowererErrors.map((error) => error.message),
+  ["runtime string failure"],
+);
+runtimeRegistry.remove(runtimeHandle);
+
 const successWrite = deferred();
-class AsyncSuccessSink {
-  constructor() {
-    this.messages = [];
-  }
-
-  async write(message) {
-    this.messages.push({ message, self: this });
+const successSink = {
+  write(message) {
+    assert.equal(message, "async-success");
     return successWrite.promise;
-  }
+  },
+  write_fallible(message) {
+    return Promise.resolve(`fallible:${message}`);
+  },
+  flush() {
+    return Promise.resolve();
+  },
+};
 
-  async write_fallible(message) {
-    return `fallible:${message}`;
-  }
-
-  async flush() {}
-}
-
-const successSink = new AsyncSuccessSink();
 const successPromise = emit_async(successSink, "async-success");
 assert.equal(foreignFutureHandleCount(), 1);
 successWrite.resolve("async-success:done");
 assert.equal(await successPromise, "async-success:done");
-assert.deepStrictEqual(
-  successSink.messages.map(({ message }) => message),
-  ["async-success"],
-);
-assert.strictEqual(successSink.messages[0].self, successSink);
 assert.equal(foreignFutureHandleCount(), 0);
 
 const flushCompletion = deferred();
-class FlushSink {
-  constructor() {
-    this.flushCalls = 0;
-  }
+let flushStarted = false;
+const flushSink = {
+  write(message) {
+    return Promise.resolve(message);
+  },
+  write_fallible(message) {
+    return Promise.resolve(message);
+  },
+  flush() {
+    flushStarted = true;
+    return flushCompletion.promise;
+  },
+};
 
-  async write(message) {
-    return message;
-  }
-
-  async write_fallible(message) {
-    return message;
-  }
-
-  async flush() {
-    this.flushCalls += 1;
-    await flushCompletion.promise;
-  }
-}
-
-const flushSink = new FlushSink();
 const flushPromise = flush_async(flushSink);
-assert.equal(flushSink.flushCalls, 1);
+assert.equal(flushStarted, true);
 assert.equal(foreignFutureHandleCount(), 1);
 flushCompletion.resolve();
 await flushPromise;
 assert.equal(foreignFutureHandleCount(), 0);
 
 const typedFailure = deferred();
-class TypedErrorSink {
-  async write(message) {
-    return message;
-  }
-
-  async write_fallible(message) {
+const typedErrorSink = {
+  write(message) {
+    return Promise.resolve(message);
+  },
+  write_fallible(message) {
     assert.equal(message, "typed-error");
     return typedFailure.promise;
-  }
+  },
+  flush() {
+    return Promise.resolve();
+  },
+};
 
-  async flush() {}
-}
-
-const typedErrorSink = new TypedErrorSink();
 const typedPromise = emit_async_fallible(typedErrorSink, "typed-error");
 assert.equal(foreignFutureHandleCount(), 1);
 typedFailure.reject(new AsyncLogErrorRejected("typed rejection"));
@@ -207,55 +295,49 @@ await assert.rejects(typedPromise, (error) => {
 assert.equal(foreignFutureHandleCount(), 0);
 
 const unexpectedFailure = deferred();
-class UnexpectedErrorSink {
-  async write(message) {
-    return message;
-  }
-
-  async write_fallible(message) {
+const unexpectedErrorSink = {
+  write(message) {
+    return Promise.resolve(message);
+  },
+  write_fallible(message) {
     assert.equal(message, "unexpected-error");
     return unexpectedFailure.promise;
-  }
+  },
+  flush() {
+    return Promise.resolve();
+  },
+};
 
-  async flush() {}
-}
-
-const unexpectedErrorSink = new UnexpectedErrorSink();
 const unexpectedPromise = emit_async_fallible(unexpectedErrorSink, "unexpected-error");
 assert.equal(foreignFutureHandleCount(), 1);
 unexpectedFailure.reject("unexpected async rejection");
 await assert.rejects(unexpectedPromise, (error) => {
   assert.equal(error.name, "RustPanic");
-  assert.ok(error.message.includes("unexpected async rejection"));
+  assert.equal(
+    error.message,
+    'UnexpectedUniFFICallbackError(reason: "unexpected async rejection")',
+  );
   return true;
 });
 assert.equal(foreignFutureHandleCount(), 0);
 
 const cancelledWrite = deferred();
-class CancellationSink {
-  constructor() {
-    this.messages = [];
-  }
-
-  async write(message) {
-    this.messages.push({ message, self: this });
+const cancellationWrites = [];
+const cancellationSink = {
+  write(message) {
+    cancellationWrites.push(message);
     return cancelledWrite.promise;
-  }
+  },
+  write_fallible(message) {
+    return Promise.resolve(message);
+  },
+  flush() {
+    return Promise.resolve();
+  },
+};
 
-  async write_fallible(message) {
-    return message;
-  }
-
-  async flush() {}
-}
-
-const cancellationSink = new CancellationSink();
 cancel_emit_async(cancellationSink, "cancelled");
-assert.deepStrictEqual(
-  cancellationSink.messages.map(({ message }) => message),
-  ["cancelled"],
-);
-assert.strictEqual(cancellationSink.messages[0].self, cancellationSink);
+assert.deepStrictEqual(cancellationWrites, ["cancelled"]);
 assert.equal(foreignFutureHandleCount(), 0);
 cancelledWrite.resolve("ignored after cancellation");
 await cancelledWrite.promise;

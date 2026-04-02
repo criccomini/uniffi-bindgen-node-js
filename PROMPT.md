@@ -299,7 +299,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Strengthen unsupported-feature diagnostics coverage to assert grouped v2 diagnostics.
 - [x] Update tests/ffi_initialization_codegen.rs to assert new FFI metadata and lifecycle output.
 - [x] Update tests/codegen_snapshots.rs to use the loader-based path.
-- [ ] Update tests/node_real_koffi_tests.rs for any ABI/runtime changes.
+- [x] Update tests/node_real_koffi_tests.rs for any ABI/runtime changes.
 - [x] Add UniFFI 0.31 `ffi_fixture_basic_rust_future_*_u64` helpers to the koffi test shim.
 - [ ] Update tests/npm-fixtures/koffi/index.js so the fake koffi behavior matches UniFFI 0.30/0.31 handle/callback semantics.
 - [x] Update snapshot files for the new generated output.

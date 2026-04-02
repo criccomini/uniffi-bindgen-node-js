@@ -404,6 +404,54 @@ assert.throws(
 }
 
 #[test]
+fn load_fails_when_runtime_contract_validation_detects_staged_library_mismatch() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            manual_load: true,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+
+    install_fixture_package_dependencies(package_dir);
+    override_installed_koffi_load(
+        package_dir,
+        r#"
+if (name.endsWith("_uniffi_contract_version")) {
+  return (...args) => Number(original(...args)) + 1;
+}
+"#,
+    );
+    run_node_script(
+        package_dir,
+        "contract-validation-on-load-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import { load } from "./index.js";
+import { isLoaded } from "./fixture-ffi.js";
+import { ContractVersionMismatchError } from "./runtime/errors.js";
+
+assert.equal(isLoaded(), false);
+assert.throws(
+  () => load(),
+  (error) => {
+    assert(error instanceof ContractVersionMismatchError);
+    assert.match(error.details?.symbolName, /_uniffi_contract_version$/);
+    assert.equal(typeof error.details?.libraryPath, "string");
+    assert.equal(typeof error.details?.packageRelativePath, "string");
+    return true;
+  },
+);
+assert.equal(isLoaded(), false);
+"#,
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
 fn runtime_object_factory_keeps_raw_handles_for_follow_up_calls() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();

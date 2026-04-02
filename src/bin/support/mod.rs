@@ -39,6 +39,7 @@ pub struct BuiltFixtureCdylib {
     pub manifest_path: Utf8PathBuf,
     pub namespace: String,
     pub crate_name: String,
+    pub package_name: String,
     pub library_path: Utf8PathBuf,
 }
 
@@ -127,6 +128,7 @@ pub fn build_fixture_cdylib(kind: FixtureKind) -> Result<BuiltFixtureCdylib> {
         manifest_path,
         namespace: spec.namespace.to_string(),
         crate_name: spec.crate_name.to_string(),
+        package_name: spec.package_name(),
         library_path,
     })
 }
@@ -147,7 +149,7 @@ pub fn generate_fixture_package(
         manifest_path: Some(built_fixture.manifest_path.clone()),
         crate_name: Some(built_fixture.crate_name.clone()),
         out_dir: out_dir.clone(),
-        package_name: Some(spec.package_name()),
+        package_name: Some(built_fixture.package_name.clone()),
         node_engine: None,
         bundled_prebuilds: false,
         manual_load,

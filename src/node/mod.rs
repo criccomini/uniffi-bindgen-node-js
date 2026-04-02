@@ -16,6 +16,8 @@ use self::paths::build_bindgen_paths;
 use self::validation::validate_generate_options;
 use crate::bindings::{NodePackageSpec, write_generated_package};
 
+type NodeComponent = Component<NodePackageConfig>;
+
 #[derive(Debug, Clone)]
 pub struct GenerateNodePackageOptions {
     pub lib_source: Utf8PathBuf,
@@ -28,18 +30,40 @@ pub struct GenerateNodePackageOptions {
     pub manual_load: bool,
 }
 
+struct LoadedNodePackageInputs {
+    library_name: String,
+    components: Vec<NodeComponent>,
+}
+
 pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
     validate_generate_options(&options)?;
 
-    let cli_overrides = NodePackageCliOverrides::from_parts(
+    let cli_overrides = build_cli_overrides(&options)?;
+    let LoadedNodePackageInputs {
+        library_name,
+        components,
+    } = load_node_package_inputs(&options)?;
+    let mut component = select_configured_component(components, &options, &cli_overrides)?;
+    derive_component_ffi(&mut component)?;
+    let package_spec = build_package_spec(&component, &library_name)?;
+
+    write_selected_component_package(&options, &component, &package_spec)
+}
+
+fn build_cli_overrides(options: &GenerateNodePackageOptions) -> Result<NodePackageCliOverrides> {
+    NodePackageCliOverrides::from_parts(
         options.package_name.clone(),
         options.node_engine.clone(),
         options.bundled_prebuilds,
         options.manual_load,
-    )?;
+    )
+}
+
+fn load_node_package_inputs(
+    options: &GenerateNodePackageOptions,
+) -> Result<LoadedNodePackageInputs> {
     let paths = build_bindgen_paths(options.manifest_path.as_deref())
         .context("failed to build BindgenPaths for node package generation")?;
-
     let loader = BindgenLoader::new(paths);
     let library_name = loader
         .library_name(&options.lib_source)
@@ -62,7 +86,7 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
             options.lib_source
         )
     })?;
-    let mut components = loader
+    let components = loader
         .load_components(cis, |_, root_toml| parse_node_package_config(&root_toml))
         .with_context(|| {
             format!(
@@ -71,27 +95,46 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
             )
         })?;
 
-    finalize_component_configs(&mut components, &cli_overrides)?;
+    Ok(LoadedNodePackageInputs {
+        library_name,
+        components,
+    })
+}
+
+fn select_configured_component(
+    mut components: Vec<NodeComponent>,
+    options: &GenerateNodePackageOptions,
+    cli_overrides: &NodePackageCliOverrides,
+) -> Result<NodeComponent> {
+    finalize_component_configs(&mut components, cli_overrides)?;
     apply_component_renames(&mut components);
 
     let normalized_crate_name = options
         .crate_name
         .as_deref()
         .map(normalize_crate_name_selector);
-    let mut component = select_component(components, normalized_crate_name.as_deref())?;
+    select_component(components, normalized_crate_name.as_deref())
+}
+
+fn derive_component_ffi(component: &mut NodeComponent) -> Result<()> {
     component.ci.derive_ffi_funcs().with_context(|| {
         format!(
             "failed to derive FFI functions for crate '{}'",
             component.ci.crate_name()
         )
-    })?;
-    let package_spec = build_package_spec(&component, &library_name)?;
+    })
+}
 
+fn write_selected_component_package(
+    options: &GenerateNodePackageOptions,
+    component: &NodeComponent,
+    package_spec: &NodePackageSpec,
+) -> Result<()> {
     write_generated_package(
         &options.out_dir,
         &options.lib_source,
         &component.ci,
-        &package_spec,
+        package_spec,
     )
     .with_context(|| {
         format!(
@@ -103,7 +146,7 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
 }
 
 fn finalize_component_configs(
-    components: &mut [Component<NodePackageConfig>],
+    components: &mut [NodeComponent],
     cli_overrides: &NodePackageCliOverrides,
 ) -> Result<()> {
     for component in components {
@@ -112,10 +155,7 @@ fn finalize_component_configs(
     Ok(())
 }
 
-fn build_package_spec(
-    component: &Component<NodePackageConfig>,
-    library_name: &str,
-) -> Result<NodePackageSpec> {
+fn build_package_spec(component: &NodeComponent, library_name: &str) -> Result<NodePackageSpec> {
     let package_name = component.config.package_name.clone().ok_or_else(|| {
         anyhow!(
             "node package generation requires a resolved package name for crate '{}'",

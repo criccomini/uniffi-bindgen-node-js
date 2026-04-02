@@ -1,4 +1,7 @@
+use std::fmt::Display;
+
 use anyhow::{Result, bail};
+use camino::Utf8Path;
 
 use super::GenerateNodePackageOptions;
 
@@ -9,9 +12,7 @@ pub(crate) fn validate_generate_options(options: &GenerateNodePackageOptions) ->
 }
 
 fn validate_output_dir(options: &GenerateNodePackageOptions) -> Result<()> {
-    if options.out_dir.as_str().trim().is_empty() {
-        bail!("--out-dir cannot be empty");
-    }
+    validate_non_empty_path(options.out_dir.as_ref(), "--out-dir")?;
     if options.out_dir.exists() && !options.out_dir.is_dir() {
         bail!(
             "--out-dir '{}' exists but is not a directory",
@@ -23,18 +24,15 @@ fn validate_output_dir(options: &GenerateNodePackageOptions) -> Result<()> {
 }
 
 fn validate_library_input_path(options: &GenerateNodePackageOptions) -> Result<()> {
-    if options.lib_source.as_str().trim().is_empty() {
-        bail!("<LIB_SOURCE> cannot be empty");
-    }
-    if !options.lib_source.exists() {
-        bail!(
+    validate_non_empty_path(options.lib_source.as_ref(), "<LIB_SOURCE>")?;
+    validate_existing_file(
+        options.lib_source.as_ref(),
+        format!(
             "built UniFFI cdylib '{}' does not exist",
             options.lib_source
-        );
-    }
-    if !options.lib_source.is_file() {
-        bail!("built UniFFI cdylib '{}' is not a file", options.lib_source);
-    }
+        ),
+        format!("built UniFFI cdylib '{}' is not a file", options.lib_source),
+    )?;
     if !uniffi_bindgen::is_cdylib(&options.lib_source) {
         bail!(
             "built UniFFI cdylib '{}' must end in .so, .dylib, or .dll",
@@ -46,21 +44,39 @@ fn validate_library_input_path(options: &GenerateNodePackageOptions) -> Result<(
 }
 
 fn validate_manifest_path(options: &GenerateNodePackageOptions) -> Result<()> {
-    let Some(manifest_path) = options.manifest_path.as_ref() else {
+    let Some(manifest_path) = options.manifest_path.as_deref() else {
         return Ok(());
     };
 
-    if manifest_path.as_str().trim().is_empty() {
-        bail!("--manifest-path cannot be empty");
-    }
-    if !manifest_path.exists() {
-        bail!("manifest path '{}' does not exist", manifest_path);
-    }
-    if !manifest_path.is_file() {
-        bail!(
+    validate_non_empty_path(manifest_path, "--manifest-path")?;
+    validate_existing_file(
+        manifest_path,
+        format!("manifest path '{}' does not exist", manifest_path),
+        format!(
             "--manifest-path '{}' must point to a Cargo.toml file",
             manifest_path
-        );
+        ),
+    )
+}
+
+fn validate_non_empty_path(path: &Utf8Path, label: &str) -> Result<()> {
+    if path.as_str().trim().is_empty() {
+        bail!("{label} cannot be empty");
+    }
+
+    Ok(())
+}
+
+fn validate_existing_file(
+    path: &Utf8Path,
+    missing_message: impl Display,
+    invalid_type_message: impl Display,
+) -> Result<()> {
+    if !path.exists() {
+        bail!("{missing_message}");
+    }
+    if !path.is_file() {
+        bail!("{invalid_type_message}");
     }
 
     Ok(())

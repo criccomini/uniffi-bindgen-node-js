@@ -6,6 +6,8 @@ use self::support::{fixtures::fixture_spec, generate_fixture_package, remove_dir
 
 fn snapshot_package_output_for_fixture(name: &str) -> String {
     let spec = fixture_spec(name);
+    // Build a real fixture cdylib and generate through the public v2 entrypoint
+    // so these snapshots track the loader-driven package output.
     let generated = generate_fixture_package(name);
 
     let mut snapshot = String::new();

@@ -295,7 +295,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update tests/node_smoke_tests.rs for new runtime/ABI expectations.
 - [x] Update tests/node_async_runtime_tests.rs for any async symbol/name/layout changes.
 - [x] Update tests/node_buffer_tests.rs for any ABI or converter changes.
-- [ ] Update tests/node_typescript_tests.rs for any public-surface changes.
+- [x] Update tests/node_typescript_tests.rs for any public-surface changes.
 - [ ] Update tests/unsupported_feature_diagnostics.rs to assert new v2 diagnostics.
 - [ ] Update tests/ffi_initialization_codegen.rs to assert new FFI metadata and lifecycle output.
 - [ ] Update tests/codegen_snapshots.rs to use the loader-based path.

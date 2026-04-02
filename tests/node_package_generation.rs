@@ -140,12 +140,7 @@ fn generates_basic_fixture_node_package_in_a_temp_directory() {
     let package_dir = &generated.package_dir;
     let spec = fixture_spec("basic");
     let namespace = &generated.built_fixture.namespace;
-    let expected_library_filename = format!(
-        "{}{}.{}",
-        std::env::consts::DLL_PREFIX,
-        generated.built_fixture.crate_name,
-        std::env::consts::DLL_EXTENSION
-    );
+    let staged_library_relative_path = generated.staged_library_package_relative_path.to_string();
 
     for relative_path in [
         "package.json",
@@ -163,14 +158,14 @@ fn generates_basic_fixture_node_package_in_a_temp_directory() {
         "runtime/handle-map.js",
         "runtime/callbacks.js",
         "runtime/objects.js",
-        &expected_library_filename,
+        &staged_library_relative_path,
     ] {
         let path = package_dir.join(relative_path);
         assert!(path.is_file(), "expected generated package file at {path}");
     }
 
     let mut expected_paths = spec.generated_package_relative_paths();
-    expected_paths.push(expected_library_filename);
+    expected_paths.push(staged_library_relative_path);
     expected_paths.sort();
 
     remove_dir_all(&generated.built_fixture.workspace_dir);
@@ -201,6 +196,11 @@ fn generated_default_package_stages_the_input_cdylib_at_the_package_root() {
         staged_library_path,
         &package_dir.join(library_filename),
         "default generation should stage the input cdylib next to the generated JS files"
+    );
+    assert_eq!(
+        generated.staged_library_package_relative_path,
+        camino::Utf8PathBuf::from(library_filename),
+        "default generation should record the staged root library path in ffi metadata"
     );
     assert!(
         generated.bundled_prebuild_path.is_none(),
@@ -933,6 +933,7 @@ fn generated_bundled_package_stages_the_input_cdylib_under_prebuilds() {
         .bundled_prebuild_target
         .as_ref()
         .expect("bundled generation should record the staged host target");
+    let expected_relative_path = format!("prebuilds/{bundled_target}/{library_filename}");
     let bundled_prebuild_path = generated
         .bundled_prebuild_path
         .as_ref()
@@ -943,11 +944,13 @@ fn generated_bundled_package_stages_the_input_cdylib_under_prebuilds() {
         "bundled generation should not also stage a root-level sibling library"
     );
     assert_eq!(
+        generated.staged_library_package_relative_path.as_str(),
+        expected_relative_path,
+        "bundled generation should record the staged host-target prebuild path in ffi metadata"
+    );
+    assert_eq!(
         bundled_prebuild_path,
-        &package_dir
-            .join("prebuilds")
-            .join(bundled_target)
-            .join(library_filename),
+        &package_dir.join(&generated.staged_library_package_relative_path),
         "bundled generation should stage the input cdylib inside prebuilds/<target>/"
     );
     assert_eq!(
@@ -978,17 +981,18 @@ fn bundled_package_resolves_the_staged_host_target_directory_at_runtime() {
         .bundled_prebuild_path
         .as_ref()
         .expect("bundled generation should stage a host-target prebuild");
-    let expected_relative_path = staged_prebuild_path
-        .strip_prefix(package_dir)
-        .expect("staged prebuild should live inside the generated package")
-        .as_str()
-        .to_string();
+    let expected_relative_path = generated.staged_library_package_relative_path.to_string();
     let expected_library_filename = generated
         .built_fixture
         .library_path
         .file_name()
         .expect("fixture library path should have a filename")
         .to_string();
+    assert_eq!(
+        staged_prebuild_path,
+        &package_dir.join(&generated.staged_library_package_relative_path),
+        "bundled generation should stage the prebuild at the metadata-reported package path"
+    );
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -1469,17 +1473,12 @@ fn generates_callback_fixture_package_with_expected_files_and_local_koffi_fixtur
     let generated = generate_fixture_package("callbacks");
     let package_dir = &generated.package_dir;
     let spec = fixture_spec("callbacks");
-    let expected_library_filename = format!(
-        "{}{}.{}",
-        std::env::consts::DLL_PREFIX,
-        generated.built_fixture.crate_name,
-        std::env::consts::DLL_EXTENSION
-    );
+    let staged_library_relative_path = generated.staged_library_package_relative_path.to_string();
 
     for relative_path in spec
         .generated_package_relative_paths()
         .into_iter()
-        .chain(std::iter::once(expected_library_filename))
+        .chain(std::iter::once(staged_library_relative_path))
     {
         let path = package_dir.join(&relative_path);
         assert!(path.is_file(), "expected generated package file at {path}");
@@ -1512,12 +1511,6 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
     );
     let package_dir = &generated.package_dir;
     let namespace = &generated.built_fixture.namespace;
-    let expected_library_filename = format!(
-        "{}{}.{}",
-        std::env::consts::DLL_PREFIX,
-        generated.built_fixture.crate_name,
-        std::env::consts::DLL_EXTENSION
-    );
     let bundled_target = generated
         .bundled_prebuild_target
         .as_deref()
@@ -1526,13 +1519,22 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
         .bundled_prebuild_path
         .as_ref()
         .expect("bundled-mode fixture package should record the staged prebuild path");
-    let bundled_library_relative_path =
-        format!("prebuilds/{bundled_target}/{expected_library_filename}");
-    let root_library_path = package_dir.join(&expected_library_filename);
+    let expected_library_filename = generated
+        .built_fixture
+        .library_path
+        .file_name()
+        .expect("fixture library path should have a filename");
+    let bundled_library_relative_path = generated.staged_library_package_relative_path.to_string();
+    let root_library_path = package_dir.join(expected_library_filename);
 
     assert!(
         generated.sibling_library_path.is_none(),
         "bundled-mode helper should not stage a sibling library at the package root"
+    );
+    assert_eq!(
+        bundled_library_relative_path,
+        format!("prebuilds/{bundled_target}/{expected_library_filename}"),
+        "bundled-mode fixture package should report the staged host prebuild through ffi metadata"
     );
 
     for relative_path in [

@@ -1027,6 +1027,7 @@ pub(crate) fn validate_type_renderable(type_: &Type, context: &str) -> Result<()
     Ok(())
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;

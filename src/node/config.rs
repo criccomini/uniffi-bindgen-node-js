@@ -238,6 +238,7 @@ pub(crate) fn apply_component_renames(components: &mut [Component<NodePackageCon
     }
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use anyhow::Result;

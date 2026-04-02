@@ -50,6 +50,7 @@ pub(crate) fn normalize_crate_name_selector(crate_name: &str) -> String {
     crate_name.replace('-', "_")
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use super::*;

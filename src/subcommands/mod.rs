@@ -25,6 +25,7 @@ pub fn run(command: Command) -> anyhow::Result<()> {
     }
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use clap::{CommandFactory, Parser, error::ErrorKind};

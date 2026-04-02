@@ -197,6 +197,7 @@ impl StagedNativeLibraryLayout {
     }
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use super::*;

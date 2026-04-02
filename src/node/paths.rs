@@ -117,6 +117,7 @@ impl BindgenPathsLayer for CargoMetadataPathsLayer {
     }
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

@@ -295,6 +295,7 @@ fn json_string(value: &str) -> Result<String> {
     Ok(serde_json::to_string(value)?)
 }
 
+// GENERATED CODE
 #[cfg(test)]
 mod tests {
     use super::render_return_normalizer_expr;

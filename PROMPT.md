@@ -315,8 +315,9 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Run the generated-package smoke suites on supported platforms as available.
 - [x] Run TypeScript declaration checks through the existing test harness.
 - [x] Run the leak probes as a final regression pass.
-- [ ] Review the final crate for any dead code left behind by the v1 architecture removal.
+- [x] Review the final crate for any dead code left behind by the v1 architecture removal.
 - [x] Remove obsolete helper functions and tests tied only to v1 compatibility behavior.
 - [x] Remove obsolete config parsing branches tied only to removed CLI/config knobs.
-- [ ] Remove obsolete documentation references to deprecated architecture.
+- [x] Remove obsolete documentation references to deprecated architecture.
 - [x] Ensure the final crate surface is clean, Node-focused, and clearly centered on self-contained package generation from a built cdylib.
+✅

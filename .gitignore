@@ -1,3 +1,9 @@
 /target
 /fixtures/*/Cargo.lock
 /fixtures/*/target
+.xdg-cache
+.xdg-data
+.uv-bin
+.uv-cache
+.uv-tools
+.home

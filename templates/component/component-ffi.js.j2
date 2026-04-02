@@ -262,12 +262,12 @@ export function load(libraryPath = undefined) {
   if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {
     if (bundledPrebuild !== null) {
       throw new Error(
-        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.`,
+        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. The generated package expects ${JSON.stringify(bundledPrebuild.packageRelativePath)} at ${JSON.stringify(resolvedLibraryPath)}.`,
       );
     }
 
     throw new Error(
-      `No staged UniFFI library was found at ${JSON.stringify(packageRelativePath)} inside the generated package. Expected ${JSON.stringify(resolvedLibraryPath)}.`,
+      `No packaged UniFFI library was found at ${JSON.stringify(packageRelativePath)}. The generated package expects ${JSON.stringify(resolvedLibraryPath)}.`,
     );
   }
 

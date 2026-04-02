@@ -4,13 +4,14 @@ use self::support::{
     FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
     install_fixture_package_benchmark_dependencies,
     install_fixture_package_dependencies_with_real_koffi, remove_dir_all, run_node_program,
-    stage_package_benchmark_scripts,
+    stage_fixture_package_native_library, stage_package_benchmark_scripts,
 };
 
 #[test]
 #[ignore = "requires npm registry access to install real koffi and tinybench"]
 fn benchmarks_basic_generated_package_hot_paths() {
     let generated = generate_fixture_package("basic");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     stage_package_benchmark_scripts(package_dir);
@@ -34,6 +35,7 @@ fn benchmarks_basic_generated_package_hot_paths() {
 #[ignore = "requires npm registry access to install real koffi and tinybench"]
 fn benchmarks_callback_generated_package_hot_paths() {
     let generated = generate_fixture_package("callbacks");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     stage_package_benchmark_scripts(package_dir);
@@ -57,6 +59,7 @@ fn benchmarks_callback_generated_package_hot_paths() {
 #[ignore = "requires npm registry access to install real koffi and tinybench"]
 fn benchmarks_generated_package_startup_and_lifecycle() {
     let eager_generated = generate_fixture_package("basic");
+    stage_fixture_package_native_library(&eager_generated);
     let eager_package_dir = &eager_generated.package_dir;
     let manual_generated = generate_fixture_package_with_options(
         "basic",
@@ -65,6 +68,7 @@ fn benchmarks_generated_package_startup_and_lifecycle() {
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&manual_generated);
     let manual_package_dir = &manual_generated.package_dir;
 
     stage_package_benchmark_scripts(eager_package_dir);

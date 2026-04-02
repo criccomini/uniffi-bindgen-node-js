@@ -6,7 +6,7 @@ use clap::Args;
 #[derive(Debug, Clone, Args)]
 #[command(
     about = "Generate a self-contained ESM Node package from a built UniFFI cdylib",
-    long_about = "Generate a self-contained ESM Node package from a built UniFFI cdylib.\n\nThe generator loads UniFFI component metadata from the native library, selects one component, renders the Node package files, and stages the native library into the generated package layout."
+    long_about = "Generate a self-contained ESM Node package from a built UniFFI cdylib.\n\nThe generator loads UniFFI component metadata from the native library, selects one component, renders the Node package files, and records the default packaged library path that the generated loader will resolve at runtime."
 )]
 pub struct GenerateArgs {
     /// Path to the built UniFFI cdylib (.so, .dylib, or .dll) to package.
@@ -33,11 +33,11 @@ pub struct GenerateArgs {
     #[arg(long, value_name = "NODE_ENGINE")]
     pub node_engine: Option<String>,
 
-    /// Stage the native library into prebuilds/<host-target>/ instead of the package root.
+    /// Resolve the packaged native library from prebuilds/<host-target>/ instead of the package root.
     #[arg(long)]
     pub bundled_prebuilds: bool,
 
-    /// Emit manual load and unload helpers instead of auto-loading on import.
+    /// Emit manual load and unload helpers instead of auto-loading from the default packaged path on import.
     #[arg(long)]
     pub manual_load: bool,
 }

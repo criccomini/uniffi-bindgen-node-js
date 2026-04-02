@@ -7,11 +7,11 @@ use uniffi_bindgen::{Component, ComponentInterface, interface::rename as apply_c
 const REMOVED_NODE_CONFIG_KEYS: &[RemovedNodeConfigKey] = &[
     RemovedNodeConfigKey {
         key: "cdylib_name",
-        guidance: "the generator now derives the staged native library name from the input cdylib, so delete this setting",
+        guidance: "the generator now derives the expected packaged native library name from the input cdylib, so delete this setting",
     },
     RemovedNodeConfigKey {
         key: "lib_path_literal",
-        guidance: "the generator now stages the input cdylib into the generated package, so delete this setting",
+        guidance: "generated loaders now derive the default packaged native library path, so delete this setting and either place the library there during packaging or call load(path)",
     },
     RemovedNodeConfigKey {
         key: "module_format",

@@ -327,27 +327,22 @@ mod tests {
     }
 
     #[test]
-    fn write_generated_package_stages_native_library_in_package_root_by_default() {
+    fn write_generated_package_records_the_default_package_root_library_path_without_copying() {
         let output_dir = temp_dir_path("staged-root-library");
         write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_generated_package should succeed");
 
         let staged_library_path = output_dir.join(test_library_filename());
         assert!(
-            staged_library_path.is_file(),
-            "expected staged native library at {staged_library_path}"
-        );
-        assert_eq!(
-            fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
-            b"fixture-native-library",
-            "unexpected staged library contents"
+            !staged_library_path.exists(),
+            "write_generated_package should not copy the native library into {staged_library_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
 
     #[test]
-    fn write_generated_package_overwrites_an_existing_staged_native_library_file() {
+    fn write_generated_package_leaves_existing_native_library_files_untouched() {
         let output_dir = temp_dir_path("overwrite-staged-root-library");
         let staged_library_path = output_dir.join(test_library_filename());
 
@@ -356,12 +351,12 @@ mod tests {
             .expect("seed stale staged library");
 
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_generated_package should overwrite the staged library");
+            .expect("write_generated_package should succeed without touching native library files");
 
         assert_eq!(
             fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
-            b"fixture-native-library",
-            "existing staged native library should be replaced with the input cdylib"
+            b"stale-native-library",
+            "existing native library files should be left untouched for external packaging workflows"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
@@ -383,22 +378,22 @@ mod tests {
     }
 
     #[test]
-    fn write_generated_package_manual_load_still_stages_the_native_library() {
+    fn write_generated_package_manual_load_does_not_copy_the_native_library() {
         let output_dir = temp_dir_path("manual-load-staged-library");
         write_test_package(&output_dir, &component_with_manual_load("example"))
             .expect("write_generated_package should succeed");
 
         let staged_library_path = output_dir.join(test_library_filename());
         assert!(
-            staged_library_path.is_file(),
-            "manual_load should not suppress native library staging at {staged_library_path}"
+            !staged_library_path.exists(),
+            "manual_load should not cause the generator to copy the native library into {staged_library_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
 
     #[test]
-    fn write_generated_package_stages_native_library_in_host_prebuild_directory() {
+    fn write_generated_package_creates_host_prebuild_directories_without_copying() {
         let output_dir = temp_dir_path("staged-bundled-library");
         let mut component = component_with_namespace("example");
         component.spec.bundled_prebuilds = true;
@@ -426,20 +421,15 @@ mod tests {
             .expect("expected one bundled prebuild target directory");
         let staged_library_path = bundled_target_path.join(test_library_filename());
         assert!(
-            staged_library_path.is_file(),
-            "expected bundled native library at {staged_library_path}"
-        );
-        assert_eq!(
-            fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
-            b"fixture-native-library",
-            "unexpected staged library contents"
+            !staged_library_path.exists(),
+            "expected the bundled prebuild path to be recorded without copying the native library into {staged_library_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
 
     #[test]
-    fn write_generated_package_stages_the_input_filename_instead_of_library_name() {
+    fn write_generated_package_uses_the_input_filename_instead_of_library_name() {
         let output_dir = temp_dir_path("staged-input-filename");
         let mut component = component_with_namespace("example");
         component.spec.library_name = "ffi_symbol_name".to_string();
@@ -455,19 +445,19 @@ mod tests {
 
         let staged_library_path = output_dir.join(&input_library_filename);
         assert!(
-            staged_library_path.is_file(),
-            "expected staged native library at {staged_library_path}"
+            !staged_library_path.exists(),
+            "write_generated_package should not copy the native library into {staged_library_path}"
         );
         assert!(
             !library_named_path.exists(),
-            "staged library path should come from the input filename, not library_name: {library_named_path}"
+            "packaged library path should come from the input filename, not library_name: {library_named_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
     }
 
     #[test]
-    fn write_generated_package_preserves_windows_style_filenames_in_bundled_prebuilds() {
+    fn write_generated_package_preserves_windows_style_filenames_in_bundled_prebuild_paths() {
         let output_dir = temp_dir_path("staged-windows-filename");
         let mut component = component_with_namespace("example");
         component.spec.bundled_prebuilds = true;
@@ -486,12 +476,12 @@ mod tests {
         let prefixed_library_path = bundled_target_path.join("libfixture.dll");
 
         assert!(
-            staged_library_path.is_file(),
-            "expected bundled native library at {staged_library_path}"
+            !staged_library_path.exists(),
+            "expected the bundled library path to preserve the input filename without copying into {staged_library_path}"
         );
         assert!(
             !prefixed_library_path.exists(),
-            "bundled staging should preserve the exact input filename instead of forcing a lib-prefixed variant: {prefixed_library_path}"
+            "bundled prebuild paths should preserve the exact input filename instead of forcing a lib-prefixed variant: {prefixed_library_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
@@ -1201,310 +1191,310 @@ mod tests {
                 "=== metadata ===\n{metadata_section}\n\n=== lifecycle ===\n{lifecycle_section}"
             ),
             @r#"
-        === metadata ===
-        export const ffiMetadata = Object.freeze({
-          namespace: "example",
-          cdylibName: "fixture",
-          stagedLibraryFileName: "libfixture.dylib",
-          stagedLibraryPackageRelativePath: "libfixture.dylib",
-          bundledPrebuilds: false,
-          manualLoad: false,
-        });
+=== metadata ===
+export const ffiMetadata = Object.freeze({
+  namespace: "example",
+  cdylibName: "fixture",
+  stagedLibraryFileName: "libfixture.dylib",
+  stagedLibraryPackageRelativePath: "libfixture.dylib",
+  bundledPrebuilds: false,
+  manualLoad: false,
+});
 
-        export const ffiIntegrity = Object.freeze({
-          contractVersionFunction: "ffi_fixture_crate_uniffi_contract_version",
-          expectedContractVersion: 30,
-          checksums: Object.freeze({
+export const ffiIntegrity = Object.freeze({
+  contractVersionFunction: "ffi_fixture_crate_uniffi_contract_version",
+  expectedContractVersion: 30,
+  checksums: Object.freeze({
 
-            "uniffi_fixture_crate_checksum_func_current_generation": <CHECKSUM>,
+    "uniffi_fixture_crate_checksum_func_current_generation": <CHECKSUM>,
 
-          }),
-        });
+  }),
+});
 
-        let loadedBindings = null;
-        let loadedFfiTypes = null;
-        let loadedFfiFunctions = null;
-        // Koffi retains native state for repeated lib.func() declarations, so keep a
-        // single binding core alive across unload/load cycles and evict stale cores
-        // when switching to a different canonical library path.
-        let cachedBindingCore = null;
-        let cachedLibraryPath = null;
-        let runtimeHooks = Object.freeze({});
-        const moduleFilename = fileURLToPath(import.meta.url);
-        const moduleDirectory = dirname(moduleFilename);
-        const libraryNotLoadedMessage =
-          "The native library is not loaded. Call load(libraryPath) first.";
+let loadedBindings = null;
+let loadedFfiTypes = null;
+let loadedFfiFunctions = null;
+// Koffi retains native state for repeated lib.func() declarations, so keep a
+// single binding core alive across unload/load cycles and evict stale cores
+// when switching to a different canonical library path.
+let cachedBindingCore = null;
+let cachedLibraryPath = null;
+let runtimeHooks = Object.freeze({});
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirectory = dirname(moduleFilename);
+const libraryNotLoadedMessage =
+  "The native library is not loaded. Call load(libraryPath) first.";
 
-        function bundledPrebuildPlatform() {
-          switch (process.platform) {
-            case "aix":
-            case "android":
-            case "darwin":
-            case "freebsd":
-            case "linux":
-            case "openbsd":
-            case "win32":
-              return process.platform;
-            default:
-              throw new Error(
-                `Unsupported Node platform ${JSON.stringify(process.platform)} for UniFFI bundled prebuild resolution.`,
-              );
-          }
-        }
+function bundledPrebuildPlatform() {
+  switch (process.platform) {
+    case "aix":
+    case "android":
+    case "darwin":
+    case "freebsd":
+    case "linux":
+    case "openbsd":
+    case "win32":
+      return process.platform;
+    default:
+      throw new Error(
+        `Unsupported Node platform ${JSON.stringify(process.platform)} for UniFFI bundled prebuild resolution.`,
+      );
+  }
+}
 
-        function bundledPrebuildArch() {
-          switch (process.arch) {
-            case "arm":
-            case "arm64":
-            case "ia32":
-            case "loong64":
-            case "ppc64":
-            case "riscv64":
-            case "s390x":
-            case "x64":
-              return process.arch;
-            default:
-              throw new Error(
-                `Unsupported Node architecture ${JSON.stringify(process.arch)} for UniFFI bundled prebuild resolution.`,
-              );
-          }
-        }
+function bundledPrebuildArch() {
+  switch (process.arch) {
+    case "arm":
+    case "arm64":
+    case "ia32":
+    case "loong64":
+    case "ppc64":
+    case "riscv64":
+    case "s390x":
+    case "x64":
+      return process.arch;
+    default:
+      throw new Error(
+        `Unsupported Node architecture ${JSON.stringify(process.arch)} for UniFFI bundled prebuild resolution.`,
+      );
+  }
+}
 
-        function defaultBundledTarget() {
-          const platform = bundledPrebuildPlatform();
-          const arch = bundledPrebuildArch();
-          if (platform !== "linux") {
-            return `${platform}-${arch}`;
-          }
+function defaultBundledTarget() {
+  const platform = bundledPrebuildPlatform();
+  const arch = bundledPrebuildArch();
+  if (platform !== "linux") {
+    return `${platform}-${arch}`;
+  }
 
-          const glibcVersionRuntime =
-            process.report?.getReport?.().header?.glibcVersionRuntime;
-          const linuxLibc = glibcVersionRuntime == null ? "musl" : "gnu";
-          return `${platform}-${arch}-${linuxLibc}`;
-        }
+  const glibcVersionRuntime =
+    process.report?.getReport?.().header?.glibcVersionRuntime;
+  const linuxLibc = glibcVersionRuntime == null ? "musl" : "gnu";
+  return `${platform}-${arch}-${linuxLibc}`;
+}
 
-        function defaultBundledLibrary() {
-          const target = defaultBundledTarget();
-          const filename = ffiMetadata.stagedLibraryFileName;
-          return Object.freeze({
-            target,
-            packageRelativePath: `prebuilds/${target}/${filename}`,
-            libraryPath: join(moduleDirectory, "prebuilds", target, filename),
-          });
-        }
+function defaultBundledLibrary() {
+  const target = defaultBundledTarget();
+  const filename = ffiMetadata.stagedLibraryFileName;
+  return Object.freeze({
+    target,
+    packageRelativePath: `prebuilds/${target}/${filename}`,
+    libraryPath: join(moduleDirectory, "prebuilds", target, filename),
+  });
+}
 
-        function defaultSiblingLibraryPath() {
-          return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);
-        }
+function defaultSiblingLibraryPath() {
+  return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);
+}
 
-        function resolveLibraryPath(libraryPath = undefined) {
-          if (libraryPath != null) {
-            return Object.freeze({
-              libraryPath: isAbsolute(libraryPath)
-                ? libraryPath
-                : join(moduleDirectory, libraryPath),
-              packageRelativePath: null,
-              bundledPrebuild: null,
-            });
-          }
+function resolveLibraryPath(libraryPath = undefined) {
+  if (libraryPath != null) {
+    return Object.freeze({
+      libraryPath: isAbsolute(libraryPath)
+        ? libraryPath
+        : join(moduleDirectory, libraryPath),
+      packageRelativePath: null,
+      bundledPrebuild: null,
+    });
+  }
 
-          if (ffiMetadata.bundledPrebuilds) {
-            const bundledPrebuild = defaultBundledLibrary();
-            return Object.freeze({
-              libraryPath: bundledPrebuild.libraryPath,
-              packageRelativePath: bundledPrebuild.packageRelativePath,
-              bundledPrebuild,
-            });
-          }
+  if (ffiMetadata.bundledPrebuilds) {
+    const bundledPrebuild = defaultBundledLibrary();
+    return Object.freeze({
+      libraryPath: bundledPrebuild.libraryPath,
+      packageRelativePath: bundledPrebuild.packageRelativePath,
+      bundledPrebuild,
+    });
+  }
 
-          return Object.freeze({
-            libraryPath: defaultSiblingLibraryPath(),
-            packageRelativePath: ffiMetadata.stagedLibraryPackageRelativePath,
-            bundledPrebuild: null,
-          });
-        }
+  return Object.freeze({
+    libraryPath: defaultSiblingLibraryPath(),
+    packageRelativePath: ffiMetadata.stagedLibraryPackageRelativePath,
+    bundledPrebuild: null,
+  });
+}
 
-        function canonicalizeExistingLibraryPath(libraryPath) {
-          if (!existsSync(libraryPath)) {
-            return libraryPath;
-          }
+function canonicalizeExistingLibraryPath(libraryPath) {
+  if (!existsSync(libraryPath)) {
+    return libraryPath;
+  }
 
-          return typeof realpathSync.native === "function"
-            ? realpathSync.native(libraryPath)
-            : realpathSync(libraryPath);
-        }
+  return typeof realpathSync.native === "function"
+    ? realpathSync.native(libraryPath)
+    : realpathSync(libraryPath);
+}
 
-        === lifecycle ===
-        export function load(libraryPath = undefined) {
-          const resolution = resolveLibraryPath(libraryPath);
-          const resolvedLibraryPath = resolution.libraryPath;
-          const packageRelativePath = resolution.packageRelativePath;
-          const bundledPrebuild = resolution.bundledPrebuild;
-          const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
+=== lifecycle ===
+export function load(libraryPath = undefined) {
+  const resolution = resolveLibraryPath(libraryPath);
+  const resolvedLibraryPath = resolution.libraryPath;
+  const packageRelativePath = resolution.packageRelativePath;
+  const bundledPrebuild = resolution.bundledPrebuild;
+  const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
 
-          if (loadedBindings !== null) {
-            if (loadedBindings.libraryPath === canonicalLibraryPath) {
-              return loadedBindings;
-            }
+  if (loadedBindings !== null) {
+    if (loadedBindings.libraryPath === canonicalLibraryPath) {
+      return loadedBindings;
+    }
 
-            throw new Error(
-              `The native library is already loaded from ${JSON.stringify(loadedBindings.libraryPath)}. Call unload() before loading a different library path.`,
-            );
-          }
+    throw new Error(
+      `The native library is already loaded from ${JSON.stringify(loadedBindings.libraryPath)}. Call unload() before loading a different library path.`,
+    );
+  }
 
-          if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {
-            if (bundledPrebuild !== null) {
-              throw new Error(
-                `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.`,
-              );
-            }
+  if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {
+    if (bundledPrebuild !== null) {
+      throw new Error(
+        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. The generated package expects ${JSON.stringify(bundledPrebuild.packageRelativePath)} at ${JSON.stringify(resolvedLibraryPath)}.`,
+      );
+    }
 
-            throw new Error(
-              `No staged UniFFI library was found at ${JSON.stringify(packageRelativePath)} inside the generated package. Expected ${JSON.stringify(resolvedLibraryPath)}.`,
-            );
-          }
+    throw new Error(
+      `No packaged UniFFI library was found at ${JSON.stringify(packageRelativePath)}. The generated package expects ${JSON.stringify(resolvedLibraryPath)}.`,
+    );
+  }
 
-          let bindingCore =
-            cachedLibraryPath === canonicalLibraryPath
-              ? cachedBindingCore
-              : null;
-          if (bindingCore == null && cachedBindingCore != null) {
-            cachedBindingCore.library.unload();
-            clearBindingCoreCache();
-          }
+  let bindingCore =
+    cachedLibraryPath === canonicalLibraryPath
+      ? cachedBindingCore
+      : null;
+  if (bindingCore == null && cachedBindingCore != null) {
+    cachedBindingCore.library.unload();
+    clearBindingCoreCache();
+  }
 
-          const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);
-          try {
-            runtimeHooks.onLoad?.(bindings);
-            if (bindingCore == null) {
-              validateContractVersion(bindings);
-              validateChecksums(bindings);
-              bindingCore = cacheBindingCore(canonicalLibraryPath, bindings);
-            }
-          } catch (error) {
-            try {
-              runtimeHooks.onUnload?.(bindings);
-            } catch {
-              // Preserve the original initialization failure.
-            }
-            if (bindingCore == null) {
-              try {
-                bindings.library.unload();
-              } catch {
-                // Preserve the original initialization failure.
-              }
-            }
-            throw error;
-          }
+  const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);
+  try {
+    runtimeHooks.onLoad?.(bindings);
+    if (bindingCore == null) {
+      validateContractVersion(bindings);
+      validateChecksums(bindings);
+      bindingCore = cacheBindingCore(canonicalLibraryPath, bindings);
+    }
+  } catch (error) {
+    try {
+      runtimeHooks.onUnload?.(bindings);
+    } catch {
+      // Preserve the original initialization failure.
+    }
+    if (bindingCore == null) {
+      try {
+        bindings.library.unload();
+      } catch {
+        // Preserve the original initialization failure.
+      }
+    }
+    throw error;
+  }
 
-          loadedBindings = bindings;
-          loadedFfiTypes = bindings.ffiTypes;
-          loadedFfiFunctions = bindings.ffiFunctions;
-          return loadedBindings;
-        }
+  loadedBindings = bindings;
+  loadedFfiTypes = bindings.ffiTypes;
+  loadedFfiFunctions = bindings.ffiFunctions;
+  return loadedBindings;
+}
 
-        export function unload() {
-          if (loadedBindings === null) {
-            return false;
-          }
+export function unload() {
+  if (loadedBindings === null) {
+    return false;
+  }
 
-          let hookError = null;
-          try {
-            runtimeHooks.onUnload?.(loadedBindings);
-          } catch (error) {
-            hookError = error;
-          }
-          loadedBindings = null;
-          loadedFfiTypes = null;
-          loadedFfiFunctions = null;
-          if (hookError != null) {
-            throw hookError;
-          }
-          return true;
-        }
+  let hookError = null;
+  try {
+    runtimeHooks.onUnload?.(loadedBindings);
+  } catch (error) {
+    hookError = error;
+  }
+  loadedBindings = null;
+  loadedFfiTypes = null;
+  loadedFfiFunctions = null;
+  if (hookError != null) {
+    throw hookError;
+  }
+  return true;
+}
 
-        export function isLoaded() {
-          return loadedBindings !== null;
-        }
+export function isLoaded() {
+  return loadedBindings !== null;
+}
 
-        export function configureRuntimeHooks(hooks = undefined) {
-          runtimeHooks = Object.freeze(hooks ?? {});
-        }
+export function configureRuntimeHooks(hooks = undefined) {
+  runtimeHooks = Object.freeze(hooks ?? {});
+}
 
-        function throwLibraryNotLoaded() {
-          throw new LibraryNotLoadedError(libraryNotLoadedMessage);
-        }
+function throwLibraryNotLoaded() {
+  throw new LibraryNotLoadedError(libraryNotLoadedMessage);
+}
 
-        export function getFfiBindings() {
-          if (loadedBindings === null) {
-            throwLibraryNotLoaded();
-          }
+export function getFfiBindings() {
+  if (loadedBindings === null) {
+    throwLibraryNotLoaded();
+  }
 
-          return loadedBindings;
-        }
+  return loadedBindings;
+}
 
-        export function getFfiTypes() {
-          if (loadedFfiTypes === null) {
-            throwLibraryNotLoaded();
-          }
+export function getFfiTypes() {
+  if (loadedFfiTypes === null) {
+    throwLibraryNotLoaded();
+  }
 
-          return loadedFfiTypes;
-        }
+  return loadedFfiTypes;
+}
 
-        function getLoadedFfiFunctions() {
-          if (loadedFfiFunctions === null) {
-            throwLibraryNotLoaded();
-          }
+function getLoadedFfiFunctions() {
+  if (loadedFfiFunctions === null) {
+    throwLibraryNotLoaded();
+  }
 
-          return loadedFfiFunctions;
-        }
+  return loadedFfiFunctions;
+}
 
-        export function getContractVersion(bindings = getFfiBindings()) {
-          return bindings.ffiFunctions.ffi_fixture_crate_uniffi_contract_version();
-        }
+export function getContractVersion(bindings = getFfiBindings()) {
+  return bindings.ffiFunctions.ffi_fixture_crate_uniffi_contract_version();
+}
 
-        export function validateContractVersion(bindings = getFfiBindings()) {
-          const actual = getContractVersion(bindings);
-          const expected = ffiIntegrity.expectedContractVersion;
-          if (actual !== expected) {
-            throw new ContractVersionMismatchError(expected, actual, {
-              details: {
-                libraryPath: bindings.libraryPath,
-                packageRelativePath: bindings.packageRelativePath,
-                symbolName: ffiIntegrity.contractVersionFunction,
-              },
-            });
-          }
-          return actual;
-        }
+export function validateContractVersion(bindings = getFfiBindings()) {
+  const actual = getContractVersion(bindings);
+  const expected = ffiIntegrity.expectedContractVersion;
+  if (actual !== expected) {
+    throw new ContractVersionMismatchError(expected, actual, {
+      details: {
+        libraryPath: bindings.libraryPath,
+        packageRelativePath: bindings.packageRelativePath,
+        symbolName: ffiIntegrity.contractVersionFunction,
+      },
+    });
+  }
+  return actual;
+}
 
-        export function getChecksums(bindings = getFfiBindings()) {
-          return Object.freeze({
+export function getChecksums(bindings = getFfiBindings()) {
+  return Object.freeze({
 
-            "uniffi_fixture_crate_checksum_func_current_generation": bindings.ffiFunctions.uniffi_fixture_crate_checksum_func_current_generation(),
+    "uniffi_fixture_crate_checksum_func_current_generation": bindings.ffiFunctions.uniffi_fixture_crate_checksum_func_current_generation(),
 
-          });
-        }
+  });
+}
 
-        export function validateChecksums(bindings = getFfiBindings()) {
-          const actualChecksums = getChecksums(bindings);
+export function validateChecksums(bindings = getFfiBindings()) {
+  const actualChecksums = getChecksums(bindings);
 
-          {
-            const expected = ffiIntegrity.checksums["uniffi_fixture_crate_checksum_func_current_generation"];
-            const actual = actualChecksums["uniffi_fixture_crate_checksum_func_current_generation"];
-            if (actual !== expected) {
-              throw new ChecksumMismatchError("uniffi_fixture_crate_checksum_func_current_generation", expected, actual, {
-                details: {
-                  libraryPath: bindings.libraryPath,
-                  packageRelativePath: bindings.packageRelativePath,
-                },
-              });
-            }
-          }
+  {
+    const expected = ffiIntegrity.checksums["uniffi_fixture_crate_checksum_func_current_generation"];
+    const actual = actualChecksums["uniffi_fixture_crate_checksum_func_current_generation"];
+    if (actual !== expected) {
+      throw new ChecksumMismatchError("uniffi_fixture_crate_checksum_func_current_generation", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
+    }
+  }
 
-          return actualChecksums;
-        }
-        "#
+  return actualChecksums;
+}
+"#
         );
 
         insta::assert_snapshot!(
@@ -1659,7 +1649,7 @@ mod tests {
                 "if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {",
                 "if (bundledPrebuild !== null) {",
                 "No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}.",
-                "Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.",
+                "The generated package expects ${JSON.stringify(bundledPrebuild.packageRelativePath)} at ${JSON.stringify(resolvedLibraryPath)}.",
                 "let bindingCore =",
                 "const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);",
             ],

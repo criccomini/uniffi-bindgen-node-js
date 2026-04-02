@@ -157,12 +157,7 @@ pub fn generate_fixture_package(
     let staged_library_package_relative_path =
         read_staged_library_package_relative_path(&out_dir, &built_fixture.namespace)?;
     let staged_library_path = out_dir.join(&staged_library_package_relative_path);
-    if !staged_library_path.is_file() {
-        bail!(
-            "generated package staged native library '{}' is missing",
-            staged_library_path
-        );
-    }
+    copy_fixture_cdylib_into_package(&built_fixture.library_path, &staged_library_path)?;
 
     if install_npm {
         npm_install(&out_dir)?;
@@ -180,6 +175,22 @@ pub fn remove_dir_all(path: &Utf8PathBuf) -> Result<()> {
         fs::remove_dir_all(path.as_std_path())
             .with_context(|| format!("failed to remove directory {path}"))?;
     }
+    Ok(())
+}
+
+fn copy_fixture_cdylib_into_package(
+    source_path: &Utf8PathBuf,
+    target_path: &Utf8PathBuf,
+) -> Result<()> {
+    if let Some(parent) = target_path.parent() {
+        fs::create_dir_all(parent.as_std_path())
+            .with_context(|| format!("failed to create native library directory {parent}"))?;
+    }
+
+    fs::copy(source_path.as_std_path(), target_path.as_std_path()).with_context(|| {
+        format!("failed to copy fixture cdylib {source_path} into {target_path}")
+    })?;
+
     Ok(())
 }
 

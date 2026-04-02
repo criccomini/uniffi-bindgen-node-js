@@ -20,7 +20,7 @@ fn current_node_platform() -> Result<&'static str> {
         "aix" => Ok("aix"),
         "freebsd" => Ok("freebsd"),
         "openbsd" => Ok("openbsd"),
-        other => bail!("unsupported host OS for Node bundled-prebuild staging: {other}"),
+        other => bail!("unsupported host OS for Node bundled-prebuild resolution: {other}"),
     }
 }
 
@@ -34,7 +34,9 @@ fn current_node_arch() -> Result<&'static str> {
         "powerpc64" => Ok("ppc64"),
         "riscv64" => Ok("riscv64"),
         "s390x" => Ok("s390x"),
-        other => bail!("unsupported host architecture for Node bundled-prebuild staging: {other}"),
+        other => {
+            bail!("unsupported host architecture for Node bundled-prebuild resolution: {other}")
+        }
     }
 }
 
@@ -44,6 +46,6 @@ fn current_linux_libc() -> Result<&'static str> {
     } else if cfg!(target_env = "musl") {
         Ok("musl")
     } else {
-        bail!("unsupported Linux target environment for Node bundled-prebuild staging")
+        bail!("unsupported Linux target environment for Node bundled-prebuild resolution")
     }
 }

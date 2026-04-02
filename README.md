@@ -61,7 +61,17 @@ Use the built library file for your platform:
 - Linux: `libyour_crate.so`
 - Windows: `your_crate.dll`
 
-3. Install the generated package dependencies.
+3. Copy your built native library into the generated package.
+
+By default, place it next to the generated JavaScript files:
+
+```sh
+cp path/to/your/built/library ./generated/your-package/
+```
+
+If you generated with `--bundled-prebuilds`, copy it into the expected `prebuilds/<target>/` path instead.
+
+4. Install the generated package dependencies.
 
 ```sh
 cd ./generated/your-package
@@ -70,7 +80,7 @@ npm install
 
 You can then publish that directory as a package or install it into another app with `npm install ./generated/your-package`.
 
-4. Consume the generated package from Node.
+5. Consume the generated package from Node.
 
 ```js
 import { greet } from "./generated/your-package/index.js";
@@ -100,14 +110,14 @@ Optional Node package settings:
 
 - `--package-name <name>`: npm package name to write into `package.json`
 - `--node-engine <range>`: value written to `package.json` `engines.node`
-- `--bundled-prebuilds`: stage the input cdylib into `prebuilds/<host-target>/` and resolve that staged library by default
-- `--manual-load`: export explicit `load()` and `unload()` helpers instead of auto-loading on import; the generated package still includes the staged native library
+- `--bundled-prebuilds`: resolve the packaged native library from `prebuilds/<host-target>/` instead of the package root
+- `--manual-load`: export explicit `load()` and `unload()` helpers instead of auto-loading on import
 
 Generated packages are always ESM. The CLI does not offer CommonJS output or legacy native-library path overrides.
 
 ## Packaging Modes
 
-By default, the generator copies the input cdylib into the package root next to the generated JavaScript files, and the generated loader resolves that staged file by default:
+By default, the generated loader expects the native library at the package root next to the generated JavaScript files:
 
 ```text
 your-package/
@@ -117,7 +127,7 @@ your-package/
   libyour_crate.dylib
 ```
 
-If you pass `--bundled-prebuilds`, the generator stages the input cdylib into `prebuilds/<host-target>/` for the current host build, and the generated loader resolves platform-specific libraries from that layout:
+If you pass `--bundled-prebuilds`, the generated loader expects the native library under `prebuilds/<host-target>/` for the current host build and resolves platform-specific libraries from that layout:
 
 ```text
 your-package/
@@ -130,7 +140,7 @@ your-package/
     win32-x64/your_crate.dll
 ```
 
-Each invocation stages one host-target build. Building a package that contains multiple targets still requires running the generator separately for each built cdylib and assembling the output layout yourself.
+Each invocation describes one host-target build layout. Building a package that contains multiple targets still requires running the generator separately for each built cdylib and assembling the output layout yourself as part of your packaging process.
 
 Linux bundled targets include a libc suffix:
 
@@ -139,9 +149,9 @@ Linux bundled targets include a libc suffix:
 
 ## Manual Loading
 
-Without `--manual-load`, the generated package loads its staged native library during import.
+Without `--manual-load`, the generated package loads the native library at its default packaged path during import.
 
-With `--manual-load`, the top-level package still includes the staged native library, but it exports `load()` and `unload()` so you control when loading happens. Calling `load()` with no argument uses the staged package path; passing `load(path)` overrides it explicitly:
+With `--manual-load`, the package exports `load()` and `unload()` so you control when loading happens. Calling `load()` with no argument uses the default packaged path; passing `load(path)` overrides it explicitly:
 
 ```sh
 uniffi-bindgen-node-js generate \

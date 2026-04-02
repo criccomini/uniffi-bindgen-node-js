@@ -2,13 +2,14 @@ mod support;
 
 use self::support::{
     generate_fixture_package, install_fixture_package_dependencies_with_real_koffi, remove_dir_all,
-    run_node_script,
+    run_node_script, stage_fixture_package_native_library,
 };
 
 #[test]
 #[ignore = "requires npm registry access to install real koffi"]
 fn runs_real_koffi_callback_smoke_script_against_generated_callback_fixture_package() {
     let generated = generate_fixture_package("callbacks");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     install_fixture_package_dependencies_with_real_koffi(package_dir);

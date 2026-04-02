@@ -5,6 +5,7 @@ use std::fs;
 use self::support::{
     FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
     install_fixture_package_dependencies, remove_dir_all, run_node_script,
+    stage_fixture_package_native_library,
 };
 
 fn copy_directory_recursive(source: &std::path::Path, destination: &std::path::Path) {
@@ -79,6 +80,7 @@ export default koffi;
 fn runtime_object_factory_keeps_generic_pointer_handles_until_clone() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -198,15 +200,16 @@ fn generated_checksum_mismatch_diagnostic_mentions_the_staged_library_path() {
             manual_load: true,
         },
     );
+    stage_fixture_package_native_library(&generated);
     let output_dir = generated.package_dir.clone();
     let namespace = generated.built_fixture.namespace.clone();
     let staged_library_path = generated
         .sibling_library_path
         .clone()
-        .expect("manual-load packages should still stage the native library");
+        .expect("manual-load packages should still record the expected native library path");
     let package_relative_path = staged_library_path
         .strip_prefix(&output_dir)
-        .expect("staged library should live inside the generated package")
+        .expect("expected native library path should live inside the generated package")
         .as_str()
         .to_string();
 
@@ -252,7 +255,9 @@ assert.throws(
     assert(error.message.includes(JSON.stringify(packageRelativePath)));
     assert(error.message.includes("generated package expects"));
     assert(error.message.includes("loaded library reported"));
-    assert(error.message.includes("load the intended staged binary"));
+    assert(
+      error.message.includes("Copy the intended native library into the generated package"),
+    );
     assert.deepStrictEqual(error.details, {{
       libraryPath,
       packageRelativePath,
@@ -285,6 +290,7 @@ fn load_fails_when_runtime_checksum_validation_detects_staged_library_mismatch()
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     install_fixture_package_dependencies(package_dir);
@@ -333,15 +339,16 @@ fn generated_contract_mismatch_diagnostic_mentions_the_staged_library_path() {
             manual_load: true,
         },
     );
+    stage_fixture_package_native_library(&generated);
     let output_dir = generated.package_dir.clone();
     let namespace = generated.built_fixture.namespace.clone();
     let staged_library_path = generated
         .sibling_library_path
         .clone()
-        .expect("manual-load packages should still stage the native library");
+        .expect("manual-load packages should still record the expected native library path");
     let package_relative_path = staged_library_path
         .strip_prefix(&output_dir)
-        .expect("staged library should live inside the generated package")
+        .expect("expected native library path should live inside the generated package")
         .as_str()
         .to_string();
 
@@ -376,7 +383,9 @@ assert.throws(
     assert(error.message.includes(JSON.stringify(packageRelativePath)));
     assert(error.message.includes("generated package expects"));
     assert(error.message.includes("loaded library reported"));
-    assert(error.message.includes("load the intended staged binary"));
+    assert(
+      error.message.includes("Copy the intended native library into the generated package"),
+    );
     assert.deepStrictEqual(error.details, {{
       libraryPath,
       packageRelativePath,
@@ -409,6 +418,7 @@ fn load_fails_when_runtime_contract_validation_detects_staged_library_mismatch()
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     install_fixture_package_dependencies(package_dir);
@@ -452,6 +462,7 @@ assert.equal(isLoaded(), false);
 fn runtime_object_factory_keeps_raw_handles_for_follow_up_calls() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -574,6 +585,7 @@ assert.equal(resourceFactory.peekHandle(resource).__type?.name, "ForeignHandle")
 fn runtime_object_factory_decodes_numeric_handles_before_pointer_cast() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -668,6 +680,7 @@ assert.equal(typedHandle.__type?.name, "ResourceHandle");
 fn runtime_object_converter_marks_deserialized_handles_as_generic_abi() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -744,6 +757,7 @@ assert.equal(resourceFactory.cloneHandle(resource), 43n);
 fn runtime_object_factory_clone_and_free_can_use_raw_uniffi_handles() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -835,6 +849,7 @@ assert.deepEqual(freedHandles, [42n]);
 fn runtime_object_factory_keeps_raw_external_handles_for_follow_up_calls() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -977,6 +992,7 @@ assert.deepEqual(freedHandles, [42n, 84n]);
 fn runtime_object_factory_normalizes_raw_external_clones_for_uniffi_handle_calls() {
     let generated = generate_fixture_package("basic");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -1094,6 +1110,7 @@ assert.equal(resourceFactory.handle(resource).__pointer, adoptedHandle);
 fn runtime_callback_registry_clone_preserves_the_registered_implementation() {
     let generated = generate_fixture_package("callbacks");
     let output_dir = generated.package_dir.clone();
+    stage_fixture_package_native_library(&generated);
 
     fs::write(
         output_dir.join("package.json").as_std_path(),
@@ -1163,11 +1180,11 @@ assert.equal(registry.size, 0);
 #[test]
 fn runs_plain_js_smoke_script_against_generated_basic_fixture_package() {
     let generated = generate_fixture_package("basic");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
-    let expected_library_path = generated
-        .sibling_library_path
-        .as_ref()
-        .expect("basic fixture package should stage the native library at the package root");
+    let expected_library_path = generated.sibling_library_path.as_ref().expect(
+        "basic fixture package should report the expected package-root native library path",
+    );
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -1211,6 +1228,7 @@ assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
 #[test]
 fn generated_basic_fixture_throws_typed_generated_errors() {
     let generated = generate_fixture_package("basic");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     install_fixture_package_dependencies(package_dir);
@@ -1277,6 +1295,7 @@ await assert.rejects(new ReaderBuilder(false).build(), (error) => {
 #[test]
 fn runs_plain_js_smoke_script_against_generated_callback_fixture_package() {
     let generated = generate_fixture_package("callbacks");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     install_fixture_package_dependencies(package_dir);
@@ -1331,11 +1350,12 @@ fn runs_plain_js_smoke_script_against_generated_bundled_basic_fixture_package() 
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let expected_library_path = generated
         .bundled_prebuild_path
         .as_ref()
-        .expect("bundled-mode fixture package should record the staged prebuild path");
+        .expect("bundled-mode fixture package should report the expected prebuild path");
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -1386,14 +1406,15 @@ fn manual_load_without_explicit_path_uses_staged_root_library() {
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let staged_library_path = generated
         .sibling_library_path
         .as_ref()
-        .expect("manual-load root-staged package should record the staged package-root library");
+        .expect("manual-load root package should report the expected package-root library path");
     let expected_relative_path = staged_library_path
         .strip_prefix(package_dir)
-        .expect("staged root library should live inside the generated package")
+        .expect("expected package-root library path should live inside the generated package")
         .as_str()
         .to_string();
 
@@ -1461,14 +1482,15 @@ fn manual_load_without_explicit_path_uses_staged_bundled_prebuild() {
             manual_load: true,
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let staged_prebuild_path = generated
         .bundled_prebuild_path
         .as_ref()
-        .expect("bundled manual-load package should record the staged prebuild path");
+        .expect("bundled manual-load package should report the expected prebuild path");
     let expected_relative_path = staged_prebuild_path
         .strip_prefix(package_dir)
-        .expect("staged bundled prebuild should live inside the generated package")
+        .expect("expected bundled prebuild path should live inside the generated package")
         .as_str()
         .to_string();
 
@@ -1536,9 +1558,10 @@ fn manual_load_unload_is_idempotent_across_repeated_cycles() {
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let staged_library_path = generated.sibling_library_path.as_ref().expect(
-        "manual-load idempotence package should stage the native library at the package root",
+        "manual-load idempotence package should report the expected package-root library path",
     );
 
     install_fixture_package_dependencies(package_dir);
@@ -1612,11 +1635,12 @@ fn manual_load_explicit_path_overrides_missing_bundled_prebuild_and_is_idempoten
             manual_load: true,
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let staged_prebuild_path = generated
         .bundled_prebuild_path
         .as_ref()
-        .expect("bundled manual-load fixture should stage a bundled prebuild");
+        .expect("bundled manual-load fixture should report the expected bundled prebuild path");
     fs::remove_file(staged_prebuild_path.as_std_path())
         .expect("bundled manual-load regression fixture should allow removing the staged prebuild");
     let expected_library_path = &generated.built_fixture.library_path;
@@ -1753,14 +1777,12 @@ fn default_mode_import_reports_missing_staged_root_library() {
     let staged_library_path = generated
         .sibling_library_path
         .as_ref()
-        .expect("default-mode fixture should report the staged root library");
+        .expect("default-mode fixture should report the expected package-root library path");
     let expected_relative_path = staged_library_path
         .strip_prefix(package_dir)
-        .expect("staged root library should live inside the package")
+        .expect("expected package-root library path should live inside the package")
         .as_str()
         .to_string();
-    fs::remove_file(staged_library_path.as_std_path())
-        .expect("negative root-staged fixture should allow removing the staged library");
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -1772,11 +1794,11 @@ import assert from "node:assert/strict";
 
 try {{
   await import("./index.js");
-  assert.fail("expected import to fail without the staged root library");
+  assert.fail("expected import to fail without the packaged root library");
 }} catch (error) {{
   const message = String(error);
   assert.ok(
-    message.includes("No staged UniFFI library was found at"),
+    message.includes("No packaged UniFFI library was found at"),
     `unexpected error message: ${{message}}`,
   );
   assert.ok(message.includes({}), `missing package path in error: ${{message}}`);
@@ -1803,10 +1825,11 @@ fn callback_manual_load_unload_clears_pending_foreign_futures_and_callback_regis
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let namespace = &generated.built_fixture.namespace;
     let staged_library_path = generated.sibling_library_path.as_ref().expect(
-        "manual-load callbacks package should stage the native library at the package root",
+        "manual-load callbacks package should report the expected package-root library path",
     );
 
     install_fixture_package_dependencies(package_dir);
@@ -1888,12 +1911,13 @@ fn object_handles_block_calls_while_unloaded_and_can_be_disposed_after_reloading
             ..FixturePackageOptions::default()
         },
     );
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
     let namespace = &generated.built_fixture.namespace;
     let staged_library_path = generated
         .sibling_library_path
         .as_ref()
-        .expect("manual-load basic package should stage the native library at the package root");
+        .expect("manual-load basic package should report the expected package-root library path");
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(
@@ -1978,9 +2002,7 @@ fn bundled_mode_import_reports_missing_host_prebuild() {
     let staged_prebuild_path = generated
         .bundled_prebuild_path
         .as_ref()
-        .expect("bundled fixture should report the staged prebuild path");
-    fs::remove_file(staged_prebuild_path.as_std_path())
-        .expect("negative bundled fixture should allow removing the staged prebuild");
+        .expect("bundled fixture should report the expected prebuild path");
 
     assert!(
         generated.sibling_library_path.is_none(),
@@ -1997,7 +2019,7 @@ import assert from "node:assert/strict";
 
 try {{
   await import("./index.js");
-  assert.fail("expected bundled import to fail without a matching staged prebuild");
+  assert.fail("expected bundled import to fail without a matching packaged prebuild");
 }} catch (error) {{
   const message = String(error);
   assert.ok(

@@ -41,6 +41,13 @@ pub struct GeneratedFixturePackage {
     pub bundled_prebuild_path: Option<Utf8PathBuf>,
 }
 
+impl GeneratedFixturePackage {
+    pub fn expected_native_library_path(&self) -> Utf8PathBuf {
+        self.package_dir
+            .join(&self.staged_library_package_relative_path)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FixturePackageOptions {
     pub bundled_prebuilds: bool,
@@ -445,6 +452,26 @@ pub fn generate_fixture_package_with_options(
         bundled_prebuild_target,
         bundled_prebuild_path,
     }
+}
+
+pub fn stage_fixture_package_native_library(generated: &GeneratedFixturePackage) {
+    let target_path = generated.expected_native_library_path();
+    if let Some(parent) = target_path.parent() {
+        fs::create_dir_all(parent.as_std_path()).unwrap_or_else(|error| {
+            panic!("failed to create native library parent directory {parent}: {error}")
+        });
+    }
+
+    fs::copy(
+        generated.built_fixture.library_path.as_std_path(),
+        target_path.as_std_path(),
+    )
+    .unwrap_or_else(|error| {
+        panic!(
+            "failed to copy fixture cdylib {} into generated package path {}: {error}",
+            generated.built_fixture.library_path, target_path
+        )
+    });
 }
 
 pub fn load_fixture_component_interface(fixture: &BuiltFixtureCdylib) -> ComponentInterface {

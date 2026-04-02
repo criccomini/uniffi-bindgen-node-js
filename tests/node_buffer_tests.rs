@@ -1,12 +1,14 @@
 mod support;
 
 use self::support::{
-    generate_fixture_package, install_fixture_package_dependencies, remove_dir_all, run_node_script,
+    generate_fixture_package, install_fixture_package_dependencies, remove_dir_all,
+    run_node_script, stage_fixture_package_native_library,
 };
 
 #[test]
 fn accepts_node_buffer_values_for_uint8array_parameters() {
     let generated = generate_fixture_package("basic");
+    stage_fixture_package_native_library(&generated);
     let package_dir = &generated.package_dir;
 
     install_fixture_package_dependencies(package_dir);

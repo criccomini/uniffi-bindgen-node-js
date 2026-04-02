@@ -138,7 +138,7 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
         "return loadedBindings;".to_string(),
         "Call unload() before loading a different library path.".to_string(),
         "if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {".to_string(),
-        "No staged UniFFI library was found at".to_string(),
+        "No packaged UniFFI library was found at".to_string(),
         "let bindingCore =".to_string(),
         "cachedLibraryPath === canonicalLibraryPath".to_string(),
         "cachedBindingCore.library.unload();".to_string(),

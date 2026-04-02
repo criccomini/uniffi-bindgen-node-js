@@ -2352,12 +2352,12 @@ export function load(libraryPath = undefined) {
   if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {
     if (bundledPrebuild !== null) {
       throw new Error(
-        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.`,
+        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. The generated package expects ${JSON.stringify(bundledPrebuild.packageRelativePath)} at ${JSON.stringify(resolvedLibraryPath)}.`,
       );
     }
 
     throw new Error(
-      `No staged UniFFI library was found at ${JSON.stringify(packageRelativePath)} inside the generated package. Expected ${JSON.stringify(resolvedLibraryPath)}.`,
+      `No packaged UniFFI library was found at ${JSON.stringify(packageRelativePath)}. The generated package expects ${JSON.stringify(resolvedLibraryPath)}.`,
     );
   }
 
@@ -5107,9 +5107,9 @@ function stagedBinaryGuidance(details = {}) {
       ? details.packageRelativePath
       : undefined;
   if (packageRelativePath == null) {
-    return "Regenerate the package from this library or load the intended staged binary.";
+    return "Copy the intended native library into the generated package or call load(path).";
   }
-  return `Regenerate the package from this library or load the intended staged binary at ${JSON.stringify(packageRelativePath)} inside the generated package.`;
+  return `Copy the intended native library into the generated package at ${JSON.stringify(packageRelativePath)} or call load(path).`;
 }
 
 export class UniffiError extends Error {

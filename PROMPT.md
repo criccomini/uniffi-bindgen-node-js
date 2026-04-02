@@ -279,7 +279,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for callback interfaces under the new UniFFI ABI.
 - [x] Add coverage for async callbacks under the new UniFFI ABI.
 - [x] Add coverage for object clone/free semantics under the new ABI.
-- [ ] Add coverage for checksum validation under UniFFI 0.31.
+- [x] Add coverage for checksum validation under UniFFI 0.31.
 - [ ] Add coverage for contract-version validation under UniFFI 0.31.
 - [ ] Add coverage for error-class generation and throwing behavior after the refactor.
 - [ ] Add coverage for TypeScript output after any naming or surface changes.

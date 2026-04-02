@@ -7,6 +7,77 @@ use self::support::{
     install_fixture_package_dependencies, remove_dir_all, run_node_script, FixturePackageOptions,
 };
 
+fn copy_directory_recursive(source: &std::path::Path, destination: &std::path::Path) {
+    fs::create_dir_all(destination).expect("destination directory should be creatable");
+
+    for entry in fs::read_dir(source).expect("source directory should be readable") {
+        let entry = entry.expect("directory entry should be readable");
+        let entry_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let file_type = entry.file_type().expect("entry type should be readable");
+
+        if file_type.is_dir() {
+            copy_directory_recursive(&entry_path, &destination_path);
+        } else {
+            fs::copy(&entry_path, &destination_path)
+                .expect("fixture file should copy into the generated package");
+        }
+    }
+}
+
+fn override_installed_koffi_load(
+    package_dir: &camino::Utf8PathBuf,
+    load_override_js: &str,
+) {
+    let koffi_dir = package_dir.join("node_modules").join("koffi");
+    let koffi_metadata = fs::symlink_metadata(koffi_dir.as_std_path())
+        .expect("installed koffi fixture path should exist");
+    if koffi_metadata.file_type().is_symlink() {
+        let source_dir = fs::canonicalize(koffi_dir.as_std_path())
+            .expect("installed koffi symlink should resolve to a real fixture directory");
+        fs::remove_file(koffi_dir.as_std_path())
+            .expect("installed koffi symlink should be removable before wrapping");
+        copy_directory_recursive(&source_dir, koffi_dir.as_std_path());
+    }
+
+    let original_index_path = koffi_dir.join("index.js");
+    let wrapped_index_path = koffi_dir.join("base.js");
+
+    fs::rename(
+        original_index_path.as_std_path(),
+        wrapped_index_path.as_std_path(),
+    )
+    .expect("installed koffi fixture should allow wrapping its load() implementation");
+    fs::write(
+        original_index_path.as_std_path(),
+        format!(
+            r#"import baseKoffi from "./base.js";
+
+const koffi = {{
+  ...baseKoffi,
+  load(libraryPath) {{
+    const library = baseKoffi.load(libraryPath);
+    return {{
+      ...library,
+      func(name, returnType, argumentTypes = []) {{
+        const original = library.func(name, returnType, argumentTypes);
+        {load_override_js}
+        return original;
+      }},
+      unload() {{
+        return library.unload();
+      }},
+    }};
+  }},
+}};
+
+export default koffi;
+"#,
+        ),
+    )
+    .expect("installed koffi fixture wrapper should be writable");
+}
+
 #[test]
 fn runtime_object_factory_keeps_generic_pointer_handles_until_clone() {
     let generated = generate_fixture_package("basic");
@@ -206,6 +277,54 @@ assert.throws(
 
     remove_dir_all(&output_dir);
     remove_dir_all(&generated.built_fixture.workspace_dir);
+}
+
+#[test]
+fn load_fails_when_runtime_checksum_validation_detects_staged_library_mismatch() {
+    let generated = generate_fixture_package_with_options(
+        "basic",
+        FixturePackageOptions {
+            manual_load: true,
+            ..FixturePackageOptions::default()
+        },
+    );
+    let package_dir = &generated.package_dir;
+
+    install_fixture_package_dependencies(package_dir);
+    override_installed_koffi_load(
+        package_dir,
+        r#"
+if (name.includes("_checksum_")) {
+  return (...args) => Number(original(...args)) + 1;
+}
+"#,
+    );
+    run_node_script(
+        package_dir,
+        "checksum-validation-on-load-smoke.mjs",
+        r#"
+import assert from "node:assert/strict";
+import { load } from "./index.js";
+import { isLoaded } from "./fixture-ffi.js";
+import { ChecksumMismatchError } from "./runtime/errors.js";
+
+assert.equal(isLoaded(), false);
+assert.throws(
+  () => load(),
+  (error) => {
+    assert(error instanceof ChecksumMismatchError);
+    assert.match(error.details?.kind, /_checksum_/);
+    assert.equal(typeof error.details?.libraryPath, "string");
+    assert.equal(typeof error.details?.packageRelativePath, "string");
+    return true;
+  },
+);
+assert.equal(isLoaded(), false);
+"#,
+    );
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
 }
 
 #[test]

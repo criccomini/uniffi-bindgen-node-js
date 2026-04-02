@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use uniffi_bindgen::interface::{
     AsType, Callable, CallbackInterface, ComponentInterface, Constructor, Enum, Field, Function,
     Method, Object, Type, Variant,
-    ffi::{FfiCallbackFunction, FfiDefinition, FfiStruct, FfiType},
+    ffi::{FfiArgument, FfiCallbackFunction, FfiDefinition, FfiStruct, FfiType},
 };
 
 use super::{
@@ -43,37 +43,9 @@ impl ComponentModel {
     pub(crate) fn from_ci(ci: &ComponentInterface) -> Result<Self> {
         validate_supported_features(ci)?;
 
-        let mut flat_enums = Vec::new();
-        let mut tagged_enums = Vec::new();
-        let mut errors = Vec::new();
-
-        for enum_def in ci.enum_definitions() {
-            if ci.is_name_used_as_error(enum_def.name()) {
-                errors.push(ErrorModel::from_enum(enum_def));
-            } else if enum_def.is_flat() {
-                flat_enums.push(EnumModel::from_enum(enum_def));
-            } else {
-                tagged_enums.push(EnumModel::from_enum(enum_def));
-            }
-        }
-
-        let callback_interfaces = ci
-            .callback_interface_definitions()
-            .iter()
-            .map(|callback_interface| {
-                CallbackInterfaceModel::from_callback_interface(callback_interface, ci)
-            })
-            .chain(
-                ci.object_definitions()
-                    .iter()
-                    .filter(|object| object.has_callback_interface())
-                    .map(|object| CallbackInterfaceModel::from_object(object, ci)),
-            )
-            .collect::<Result<Vec<_>>>()?;
-        let callback_interface_names = callback_interfaces
-            .iter()
-            .map(|callback_interface| callback_interface.name.clone())
-            .collect::<BTreeSet<_>>();
+        let (flat_enums, tagged_enums, errors) = classify_enum_models(ci);
+        let callback_interfaces = collect_callback_interfaces(ci)?;
+        let callback_interface_names = callback_interface_names(&callback_interfaces);
 
         let model = Self {
             namespace_docstring: ci.namespace_docstring().map(str::to_owned),
@@ -91,15 +63,7 @@ impl ComponentModel {
             tagged_enums,
             errors,
             callback_interfaces,
-            objects: ci
-                .object_definitions()
-                .iter()
-                .filter(|object| {
-                    !callback_interface_names.contains(object.name())
-                        && !object.has_callback_interface()
-                })
-                .map(|object| ObjectModel::from_object(object, ci))
-                .collect(),
+            objects: collect_object_models(ci, &callback_interface_names),
             ffi_rustbuffer_from_bytes_identifier: ffi_symbol_identifier(
                 ci.ffi_rustbuffer_from_bytes().name(),
             ),
@@ -108,6 +72,61 @@ impl ComponentModel {
         model.validate_renderable_types()?;
         Ok(model)
     }
+}
+
+fn classify_enum_models(
+    ci: &ComponentInterface,
+) -> (Vec<EnumModel>, Vec<EnumModel>, Vec<ErrorModel>) {
+    let mut flat_enums = Vec::new();
+    let mut tagged_enums = Vec::new();
+    let mut errors = Vec::new();
+
+    for enum_def in ci.enum_definitions() {
+        if ci.is_name_used_as_error(enum_def.name()) {
+            errors.push(ErrorModel::from_enum(enum_def));
+        } else if enum_def.is_flat() {
+            flat_enums.push(EnumModel::from_enum(enum_def));
+        } else {
+            tagged_enums.push(EnumModel::from_enum(enum_def));
+        }
+    }
+
+    (flat_enums, tagged_enums, errors)
+}
+
+fn collect_callback_interfaces(ci: &ComponentInterface) -> Result<Vec<CallbackInterfaceModel>> {
+    ci.callback_interface_definitions()
+        .iter()
+        .map(|callback_interface| {
+            CallbackInterfaceModel::from_callback_interface(callback_interface, ci)
+        })
+        .chain(
+            ci.object_definitions()
+                .iter()
+                .filter(|object| object.has_callback_interface())
+                .map(|object| CallbackInterfaceModel::from_object(object, ci)),
+        )
+        .collect()
+}
+
+fn callback_interface_names(callback_interfaces: &[CallbackInterfaceModel]) -> BTreeSet<String> {
+    callback_interfaces
+        .iter()
+        .map(|callback_interface| callback_interface.name.clone())
+        .collect()
+}
+
+fn collect_object_models(
+    ci: &ComponentInterface,
+    callback_interface_names: &BTreeSet<String>,
+) -> Vec<ObjectModel> {
+    ci.object_definitions()
+        .iter()
+        .filter(|object| {
+            !callback_interface_names.contains(object.name()) && !object.has_callback_interface()
+        })
+        .map(|object| ObjectModel::from_object(object, ci))
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -466,46 +485,20 @@ fn resolve_async_callback_abi(
     ffi_callback: &FfiCallbackFunction,
     ci: &ComponentInterface,
 ) -> Result<AsyncCallbackAbi> {
-    let arguments = ffi_callback.arguments();
-    let trailing = arguments
-        .get(arguments.len().saturating_sub(3)..)
-        .filter(|trailing| trailing.len() == 3)
-        .with_context(|| {
-            format!(
-                "async callback interface method {} is missing the expected ForeignFuture ABI arguments",
-                method.name()
-            )
-        })?;
-
-    let complete_callback_name = match trailing[0].type_() {
-        FfiType::Callback(name) => name,
-        other => bail!(
-            "async callback interface method {} uses an unexpected completion callback type: {other:?}",
-            method.name()
-        ),
-    };
-
-    match trailing[1].type_() {
-        FfiType::UInt64 => {}
-        other => bail!(
-            "async callback interface method {} uses an unexpected callback data type: {other:?}",
-            method.name()
-        ),
-    }
-
-    let dropped_callback_struct_name = match trailing[2].type_() {
-        FfiType::MutReference(inner) => match inner.as_ref() {
-            FfiType::Struct(name) => name.clone(),
-            other => bail!(
-                "async callback interface method {} uses an unexpected dropped-callback struct type: {other:?}",
-                method.name()
-            ),
-        },
-        other => bail!(
-            "async callback interface method {} uses an unexpected dropped-callback pointer type: {other:?}",
-            method.name()
-        ),
-    };
+    let [
+        complete_callback_arg,
+        callback_data_arg,
+        dropped_callback_arg,
+    ] = async_callback_trailing_arguments(method.name(), ffi_callback)?;
+    let complete_callback_name =
+        callback_name_from_argument(method.name(), complete_callback_arg, "completion callback")?;
+    expect_uint64_argument(method.name(), callback_data_arg, "callback data")?;
+    let dropped_callback_struct_name = mut_referenced_struct_name(
+        method.name(),
+        dropped_callback_arg,
+        "dropped-callback pointer",
+        "dropped-callback struct",
+    )?;
 
     let result_struct_name =
         lookup_completion_result_struct(ci, &complete_callback_name, method.name())?;
@@ -518,13 +511,79 @@ fn resolve_async_callback_abi(
     Ok(AsyncCallbackAbi {
         complete_callback_name,
         result_struct_name,
-        result_struct_has_return_value: result_struct
-            .fields()
-            .iter()
-            .any(|field| field.name() == "return_value"),
+        result_struct_has_return_value: result_struct_has_return_value(&result_struct),
         dropped_callback_struct_name,
         dropped_callback_name,
     })
+}
+
+fn async_callback_trailing_arguments<'a>(
+    method_name: &str,
+    ffi_callback: &'a FfiCallbackFunction,
+) -> Result<[&'a FfiArgument; 3]> {
+    let arguments = ffi_callback.arguments();
+    let trailing = arguments
+        .get(arguments.len().saturating_sub(3)..)
+        .filter(|trailing| trailing.len() == 3)
+        .with_context(|| {
+            format!(
+                "async callback interface method {method_name} is missing the expected ForeignFuture ABI arguments"
+            )
+        })?;
+
+    Ok([trailing[0], trailing[1], trailing[2]])
+}
+
+fn callback_name_from_argument(
+    method_name: &str,
+    argument: &FfiArgument,
+    argument_label: &str,
+) -> Result<String> {
+    match argument.type_() {
+        FfiType::Callback(name) => Ok(name),
+        other => bail!(
+            "async callback interface method {method_name} uses an unexpected {argument_label} type: {other:?}"
+        ),
+    }
+}
+
+fn expect_uint64_argument(
+    method_name: &str,
+    argument: &FfiArgument,
+    argument_label: &str,
+) -> Result<()> {
+    match argument.type_() {
+        FfiType::UInt64 => Ok(()),
+        other => bail!(
+            "async callback interface method {method_name} uses an unexpected {argument_label} type: {other:?}"
+        ),
+    }
+}
+
+fn mut_referenced_struct_name(
+    method_name: &str,
+    argument: &FfiArgument,
+    pointer_label: &str,
+    struct_label: &str,
+) -> Result<String> {
+    match argument.type_() {
+        FfiType::MutReference(inner) => match inner.as_ref() {
+            FfiType::Struct(name) => Ok(name.clone()),
+            other => bail!(
+                "async callback interface method {method_name} uses an unexpected {struct_label} type: {other:?}"
+            ),
+        },
+        other => bail!(
+            "async callback interface method {method_name} uses an unexpected {pointer_label} type: {other:?}"
+        ),
+    }
+}
+
+fn result_struct_has_return_value(struct_: &FfiStruct) -> bool {
+    struct_
+        .fields()
+        .iter()
+        .any(|field| field.name() == "return_value")
 }
 
 fn lookup_completion_result_struct(
@@ -532,28 +591,13 @@ fn lookup_completion_result_struct(
     complete_callback_name: &str,
     method_name: &str,
 ) -> Result<String> {
-    let callback = ci
-        .ffi_definitions()
-        .find_map(|definition| match definition {
-            FfiDefinition::CallbackFunction(callback) if callback.name() == complete_callback_name => {
-                Some(callback)
-            }
-            _ => None,
-        })
-        .with_context(|| {
-            format!(
-                "async callback interface method {method_name} could not resolve completion callback {complete_callback_name}"
-            )
-        })?;
-
+    let callback = lookup_ffi_callback(ci, complete_callback_name, method_name)?;
     let callback_arguments = callback.arguments();
-    let result_argument = callback_arguments
-        .get(1)
-        .with_context(|| {
-            format!(
-                "async callback interface method {method_name} completion callback {complete_callback_name} is missing its result argument"
-            )
-        })?;
+    let result_argument = callback_arguments.get(1).with_context(|| {
+        format!(
+            "async callback interface method {method_name} completion callback {complete_callback_name} is missing its result argument"
+        )
+    })?;
 
     match result_argument.type_() {
         FfiType::Struct(name) => Ok(name),
@@ -561,6 +605,25 @@ fn lookup_completion_result_struct(
             "async callback interface method {method_name} completion callback {complete_callback_name} uses an unexpected result argument type: {other:?}"
         ),
     }
+}
+
+fn lookup_ffi_callback(
+    ci: &ComponentInterface,
+    callback_name: &str,
+    method_name: &str,
+) -> Result<FfiCallbackFunction> {
+    ci.ffi_definitions()
+        .find_map(|definition| match definition {
+            FfiDefinition::CallbackFunction(callback) if callback.name() == callback_name => {
+                Some(callback)
+            }
+            _ => None,
+        })
+        .with_context(|| {
+            format!(
+                "async callback interface method {method_name} could not resolve completion callback {callback_name}"
+            )
+        })
 }
 
 fn lookup_ffi_struct(
@@ -581,24 +644,33 @@ fn lookup_ffi_struct(
 }
 
 fn lookup_dropped_callback_name(struct_: &FfiStruct, method_name: &str) -> Result<String> {
-    struct_
-        .fields()
-        .iter()
-        .find_map(|field| match field.type_() {
-            FfiType::Callback(name) if field.name() == "free" => Some(name),
-            _ => None,
-        })
-        .or_else(|| {
-            struct_.fields().iter().find_map(|field| match field.type_() {
-                FfiType::Callback(name) => Some(name),
-                _ => None,
-            })
-        })
+    named_callback_field(struct_, "free")
+        .or_else(|| first_callback_field(struct_))
         .with_context(|| {
             format!(
                 "async callback interface method {method_name} could not resolve a dropped-callback function from FFI struct {}",
                 struct_.name()
             )
+        })
+}
+
+fn named_callback_field(struct_: &FfiStruct, field_name: &str) -> Option<String> {
+    struct_
+        .fields()
+        .iter()
+        .find_map(|field| match field.type_() {
+            FfiType::Callback(name) if field.name() == field_name => Some(name),
+            _ => None,
+        })
+}
+
+fn first_callback_field(struct_: &FfiStruct) -> Option<String> {
+    struct_
+        .fields()
+        .iter()
+        .find_map(|field| match field.type_() {
+            FfiType::Callback(name) => Some(name),
+            _ => None,
         })
 }
 

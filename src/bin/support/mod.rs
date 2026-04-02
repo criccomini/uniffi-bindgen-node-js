@@ -142,9 +142,48 @@ pub fn generate_fixture_package(
     ensure_output_dir_is_empty(&out_dir)?;
 
     let built_fixture = build_fixture_cdylib(kind)?;
-    let spec = fixture_spec(kind);
+    let staged_library_path =
+        populate_fixture_package(kind, &out_dir, &built_fixture, manual_load)?;
+    maybe_install_fixture_dependencies(&out_dir, install_npm)?;
 
-    generate_node_package(GenerateNodePackageOptions {
+    Ok(GeneratedFixturePackage {
+        built_fixture,
+        package_dir: out_dir,
+        staged_library_path,
+    })
+}
+
+fn populate_fixture_package(
+    kind: FixtureKind,
+    out_dir: &Utf8PathBuf,
+    built_fixture: &BuiltFixtureCdylib,
+    manual_load: bool,
+) -> Result<Utf8PathBuf> {
+    generate_fixture_bindings(kind, out_dir, built_fixture, manual_load)?;
+    stage_fixture_cdylib(out_dir, built_fixture)
+}
+
+fn generate_fixture_bindings(
+    kind: FixtureKind,
+    out_dir: &Utf8PathBuf,
+    built_fixture: &BuiltFixtureCdylib,
+    manual_load: bool,
+) -> Result<()> {
+    let spec = fixture_spec(kind);
+    generate_node_package(fixture_generate_options(
+        out_dir,
+        built_fixture,
+        manual_load,
+    ))
+    .with_context(|| format!("failed to generate fixture package for {}", spec.dir_name))
+}
+
+fn fixture_generate_options(
+    out_dir: &Utf8PathBuf,
+    built_fixture: &BuiltFixtureCdylib,
+    manual_load: bool,
+) -> GenerateNodePackageOptions {
+    GenerateNodePackageOptions {
         lib_source: built_fixture.library_path.clone(),
         manifest_path: Some(built_fixture.manifest_path.clone()),
         crate_name: Some(built_fixture.crate_name.clone()),
@@ -153,23 +192,25 @@ pub fn generate_fixture_package(
         node_engine: None,
         bundled_prebuilds: false,
         manual_load,
-    })
-    .with_context(|| format!("failed to generate fixture package for {}", spec.dir_name))?;
+    }
+}
 
+fn stage_fixture_cdylib(
+    out_dir: &Utf8PathBuf,
+    built_fixture: &BuiltFixtureCdylib,
+) -> Result<Utf8PathBuf> {
     let staged_library_package_relative_path =
-        read_staged_library_package_relative_path(&out_dir, &built_fixture.namespace)?;
+        read_staged_library_package_relative_path(out_dir, &built_fixture.namespace)?;
     let staged_library_path = out_dir.join(&staged_library_package_relative_path);
     copy_fixture_cdylib_into_package(&built_fixture.library_path, &staged_library_path)?;
+    Ok(staged_library_path)
+}
 
+fn maybe_install_fixture_dependencies(out_dir: &Utf8PathBuf, install_npm: bool) -> Result<()> {
     if install_npm {
-        npm_install(&out_dir)?;
+        npm_install(out_dir)?;
     }
-
-    Ok(GeneratedFixturePackage {
-        built_fixture,
-        package_dir: out_dir,
-        staged_library_path,
-    })
+    Ok(())
 }
 
 pub fn remove_dir_all(path: &Utf8PathBuf) -> Result<()> {
@@ -258,23 +299,37 @@ fn copy_dir_all(src: &Utf8PathBuf, dst: &Utf8PathBuf) -> Result<()> {
     fs::create_dir_all(dst.as_std_path())
         .with_context(|| format!("failed to create directory {dst}"))?;
 
-    for entry in fs::read_dir(src.as_std_path())
-        .with_context(|| format!("failed to read directory {src}"))?
-    {
+    for entry in read_dir_entries(src)? {
         let entry = entry.with_context(|| format!("failed to read entry in {src}"))?;
-        let entry_path = Utf8PathBuf::from_path_buf(entry.path())
-            .unwrap_or_else(|path| panic!("fixture path should be utf-8: {}", path.display()));
-        let target_path = dst.join(entry.file_name().to_string_lossy().as_ref());
-
-        if entry_path.is_dir() {
-            copy_dir_all(&entry_path, &target_path)?;
-        } else {
-            fs::copy(entry_path.as_std_path(), target_path.as_std_path()).with_context(|| {
-                format!("failed to copy fixture file {entry_path} to {target_path}")
-            })?;
-        }
+        copy_dir_entry(dst, entry)?;
     }
 
+    Ok(())
+}
+
+fn read_dir_entries(src: &Utf8PathBuf) -> Result<fs::ReadDir> {
+    fs::read_dir(src.as_std_path()).with_context(|| format!("failed to read directory {src}"))
+}
+
+fn copy_dir_entry(dst: &Utf8PathBuf, entry: fs::DirEntry) -> Result<()> {
+    let entry_path = utf8_entry_path(entry.path());
+    let target_path = dst.join(entry.file_name().to_string_lossy().as_ref());
+
+    if entry_path.is_dir() {
+        copy_dir_all(&entry_path, &target_path)
+    } else {
+        copy_file(&entry_path, &target_path)
+    }
+}
+
+fn utf8_entry_path(path: std::path::PathBuf) -> Utf8PathBuf {
+    Utf8PathBuf::from_path_buf(path)
+        .unwrap_or_else(|path| panic!("fixture path should be utf-8: {}", path.display()))
+}
+
+fn copy_file(source_path: &Utf8PathBuf, target_path: &Utf8PathBuf) -> Result<()> {
+    fs::copy(source_path.as_std_path(), target_path.as_std_path())
+        .with_context(|| format!("failed to copy fixture file {source_path} to {target_path}"))?;
     Ok(())
 }
 
@@ -331,36 +386,61 @@ fn find_cdylib_artifact(stdout: &[u8], crate_name: &str) -> Option<Utf8PathBuf> 
 
     String::from_utf8_lossy(stdout)
         .lines()
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .find_map(|message| {
-            let reason = message.get("reason")?.as_str()?;
-            if reason != "compiler-artifact" {
-                return None;
-            }
+        .filter_map(parse_cargo_build_message)
+        .find_map(|message| artifact_path_from_message(&message, crate_name, extension))
+}
 
-            let target = message.get("target")?;
-            let target_name = target.get("name")?.as_str()?;
-            if target_name != crate_name {
-                return None;
-            }
+fn parse_cargo_build_message(line: &str) -> Option<Value> {
+    serde_json::from_str::<Value>(line).ok()
+}
 
-            let crate_types = target.get("crate_types")?.as_array()?;
-            if !crate_types
-                .iter()
-                .filter_map(Value::as_str)
-                .any(|crate_type| crate_type == "cdylib")
-            {
-                return None;
-            }
+fn artifact_path_from_message(
+    message: &Value,
+    crate_name: &str,
+    extension: &str,
+) -> Option<Utf8PathBuf> {
+    let target = compiler_artifact_target(message)?;
+    if !target_matches_cdylib(target, crate_name) {
+        return None;
+    }
 
-            message
-                .get("filenames")?
-                .as_array()?
-                .iter()
-                .filter_map(Value::as_str)
-                .find(|filename| filename.ends_with(extension))
-                .and_then(|filename| Utf8PathBuf::from_path_buf(filename.into()).ok())
-        })
+    artifact_filename(message, extension)
+}
+
+fn compiler_artifact_target<'a>(message: &'a Value) -> Option<&'a Value> {
+    if message.get("reason")?.as_str()? != "compiler-artifact" {
+        return None;
+    }
+
+    message.get("target")
+}
+
+fn target_matches_cdylib(target: &Value, crate_name: &str) -> bool {
+    target_name(target) == Some(crate_name) && target_has_cdylib_type(target)
+}
+
+fn target_name(target: &Value) -> Option<&str> {
+    target.get("name")?.as_str()
+}
+
+fn target_has_cdylib_type(target: &Value) -> bool {
+    target
+        .get("crate_types")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .any(|crate_type| crate_type == "cdylib")
+}
+
+fn artifact_filename(message: &Value, extension: &str) -> Option<Utf8PathBuf> {
+    message
+        .get("filenames")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .find(|filename| filename.ends_with(extension))
+        .and_then(|filename| Utf8PathBuf::from_path_buf(filename.into()).ok())
 }
 
 fn read_staged_library_package_relative_path(

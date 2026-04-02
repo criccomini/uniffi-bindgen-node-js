@@ -44,7 +44,11 @@ pub struct GenerateArgs {
 
 pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
     validate_args(&args)?;
-    generate_node_package(GenerateNodePackageOptions {
+    generate_node_package(build_generate_options(args))
+}
+
+fn build_generate_options(args: GenerateArgs) -> GenerateNodePackageOptions {
+    GenerateNodePackageOptions {
         lib_source: args.lib_source,
         manifest_path: args.manifest_path,
         crate_name: args.crate_name,
@@ -53,36 +57,50 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
         node_engine: args.node_engine,
         bundled_prebuilds: args.bundled_prebuilds,
         manual_load: args.manual_load,
-    })
+    }
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
-    if let Some(crate_name) = args.crate_name.as_deref()
+    validate_crate_name_arg(args.crate_name.as_deref())?;
+    validate_out_dir_arg(&args.out_dir)?;
+    validate_lib_source_arg(&args.lib_source)
+}
+
+fn validate_crate_name_arg(crate_name: Option<&str>) -> anyhow::Result<()> {
+    if let Some(crate_name) = crate_name
         && crate_name.trim().is_empty()
     {
         bail!(
             "--crate-name cannot be empty; omit it to infer the only UniFFI component in the library"
         );
     }
-    if args.out_dir.as_str().trim().is_empty() {
+    Ok(())
+}
+
+fn validate_out_dir_arg(out_dir: &Utf8PathBuf) -> anyhow::Result<()> {
+    if out_dir.as_str().trim().is_empty() {
         bail!("--out-dir cannot be empty");
     }
-    if args.out_dir.exists() && !args.out_dir.is_dir() {
-        bail!("--out-dir '{}' exists but is not a directory", args.out_dir);
+    if out_dir.exists() && !out_dir.is_dir() {
+        bail!("--out-dir '{}' exists but is not a directory", out_dir);
     }
-    if args.lib_source.as_str().trim().is_empty() {
+    Ok(())
+}
+
+fn validate_lib_source_arg(lib_source: &Utf8PathBuf) -> anyhow::Result<()> {
+    if lib_source.as_str().trim().is_empty() {
         bail!("<LIB_SOURCE> cannot be empty");
     }
-    if !args.lib_source.exists() {
-        bail!("built UniFFI cdylib '{}' does not exist", args.lib_source);
+    if !lib_source.exists() {
+        bail!("built UniFFI cdylib '{}' does not exist", lib_source);
     }
-    if !args.lib_source.is_file() {
-        bail!("built UniFFI cdylib '{}' is not a file", args.lib_source);
+    if !lib_source.is_file() {
+        bail!("built UniFFI cdylib '{}' is not a file", lib_source);
     }
-    if !uniffi_bindgen::is_cdylib(&args.lib_source) {
+    if !uniffi_bindgen::is_cdylib(lib_source) {
         bail!(
             "built UniFFI cdylib '{}' must end in .so, .dylib, or .dll",
-            args.lib_source
+            lib_source
         );
     }
 

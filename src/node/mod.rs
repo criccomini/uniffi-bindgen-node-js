@@ -43,8 +43,7 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
         library_name,
         components,
     } = load_node_package_inputs(&options)?;
-    let mut component = select_configured_component(components, &options, &cli_overrides)?;
-    derive_component_ffi(&mut component)?;
+    let component = prepare_selected_component(components, &options, &cli_overrides)?;
     let package_spec = build_package_spec(&component, &library_name)?;
 
     write_selected_component_package(&options, &component, &package_spec)
@@ -62,10 +61,31 @@ fn build_cli_overrides(options: &GenerateNodePackageOptions) -> Result<NodePacka
 fn load_node_package_inputs(
     options: &GenerateNodePackageOptions,
 ) -> Result<LoadedNodePackageInputs> {
+    Ok(LoadedNodePackageInputs {
+        library_name: resolve_library_name(options)?,
+        components: load_node_components(options)?,
+    })
+}
+
+fn prepare_selected_component(
+    components: Vec<NodeComponent>,
+    options: &GenerateNodePackageOptions,
+    cli_overrides: &NodePackageCliOverrides,
+) -> Result<NodeComponent> {
+    let mut component = select_configured_component(components, options, cli_overrides)?;
+    derive_component_ffi(&mut component)?;
+    Ok(component)
+}
+
+fn build_bindgen_loader(options: &GenerateNodePackageOptions) -> Result<BindgenLoader> {
     let paths = build_bindgen_paths(options.manifest_path.as_deref())
         .context("failed to build BindgenPaths for node package generation")?;
-    let loader = BindgenLoader::new(paths);
-    let library_name = loader
+    Ok(BindgenLoader::new(paths))
+}
+
+fn resolve_library_name(options: &GenerateNodePackageOptions) -> Result<String> {
+    let loader = build_bindgen_loader(options)?;
+    loader
         .library_name(&options.lib_source)
         .map(str::to_string)
         .ok_or_else(|| {
@@ -73,32 +93,34 @@ fn load_node_package_inputs(
                 "failed to determine the native library name from '{}'",
                 options.lib_source
             )
-        })?;
+        })
+}
+
+fn load_node_components(options: &GenerateNodePackageOptions) -> Result<Vec<NodeComponent>> {
+    let loader = build_bindgen_loader(options)?;
     let metadata = loader.load_metadata(&options.lib_source).with_context(|| {
         format!(
             "failed to load UniFFI metadata from '{}'",
             options.lib_source
         )
     })?;
-    let cis = loader.load_cis(metadata).with_context(|| {
+    let component_interfaces = loader.load_cis(metadata).with_context(|| {
         format!(
             "failed to load UniFFI component interfaces from '{}'",
             options.lib_source
         )
     })?;
-    let components = loader
-        .load_components(cis, |_, root_toml| parse_node_package_config(&root_toml))
+
+    loader
+        .load_components(component_interfaces, |_, root_toml| {
+            parse_node_package_config(&root_toml)
+        })
         .with_context(|| {
             format!(
                 "failed to load UniFFI component configs from '{}'",
                 options.lib_source
             )
-        })?;
-
-    Ok(LoadedNodePackageInputs {
-        library_name,
-        components,
-    })
+        })
 }
 
 fn select_configured_component(

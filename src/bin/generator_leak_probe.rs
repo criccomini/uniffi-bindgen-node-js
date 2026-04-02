@@ -5,7 +5,7 @@ use std::fs;
 
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
-use uniffi_bindgen_node_js::subcommands::generate::{self, GenerateArgs};
+use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 use self::support::{
     FixtureKind, build_fixture_cdylib, enter_repo_root, fixture_spec, pause_for_enter,
@@ -63,7 +63,7 @@ fn main() -> Result<()> {
             let out_dir = output_root.join(format!("{}-{}", built_fixture.crate_name, iteration));
             let spec = fixture_spec(fixture_kind_for_crate(&built_fixture.crate_name));
 
-            generate::run(GenerateArgs {
+            generate_node_package(GenerateNodePackageOptions {
                 lib_source: built_fixture.library_path.clone(),
                 manifest_path: Some(built_fixture.manifest_path.clone()),
                 crate_name: Some(built_fixture.crate_name.clone()),

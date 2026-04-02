@@ -306,7 +306,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update fixture crates if UniFFI 0.31 requires source-level changes.
 - [x] Add a fixture or test case for multi-component libraries if none exists today.
 - [x] Add a fixture or test case for UDL-backed library generation through the new loader path if needed.
-- [ ] Update leak helper binaries to call the new v2 entrypoint.
+- [x] Update leak helper binaries to call the new v2 entrypoint.
 - [ ] Update leak helper binaries to rely on generator-owned staging rather than local copy logic.
 - [ ] Revalidate leak probes after the refactor.
 - [ ] Revalidate ignored real-koffi tests after the refactor.

@@ -12,7 +12,7 @@ use anyhow::{Context, Result, bail};
 use camino::Utf8PathBuf;
 use clap::ValueEnum;
 use serde_json::Value;
-use uniffi_bindgen_node_js::subcommands::generate::{self, GenerateArgs};
+use uniffi_bindgen_node_js::{GenerateNodePackageOptions, generate_node_package};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum FixtureKind {
@@ -142,7 +142,7 @@ pub fn generate_fixture_package(
     let built_fixture = build_fixture_cdylib(kind)?;
     let spec = fixture_spec(kind);
 
-    generate::run(GenerateArgs {
+    generate_node_package(GenerateNodePackageOptions {
         lib_source: built_fixture.library_path.clone(),
         manifest_path: Some(built_fixture.manifest_path.clone()),
         crate_name: Some(built_fixture.crate_name.clone()),

@@ -446,6 +446,58 @@ fn generated_callback_vtables_include_uniffi_clone_and_free_slots_before_methods
 }
 
 #[test]
+fn generated_async_callback_prototypes_match_uniffi_031_foreign_future_layout() {
+    let generated = generate_fixture_package("callbacks");
+    let ffi_js =
+        read_generated_component_ffi_js(&generated.package_dir, &generated.built_fixture.namespace);
+
+    for (method_name, expected_slots) in [
+        (
+            "CallbackInterfaceAsyncLogSinkMethod0",
+            &[
+                "\"CallbackInterfaceAsyncLogSinkMethod0\"",
+                "\"uint64_t\"",
+                "ffiTypes.RustBuffer",
+                "koffi.pointer(ffiCallbacks.ForeignFutureCompleteRustBuffer)",
+                "\"uint64_t\"",
+                "koffi.pointer(ffiStructs.ForeignFutureDroppedCallbackStruct)",
+            ][..],
+        ),
+        (
+            "CallbackInterfaceAsyncLogSinkMethod1",
+            &[
+                "\"CallbackInterfaceAsyncLogSinkMethod1\"",
+                "\"uint64_t\"",
+                "ffiTypes.RustBuffer",
+                "koffi.pointer(ffiCallbacks.ForeignFutureCompleteRustBuffer)",
+                "\"uint64_t\"",
+                "koffi.pointer(ffiStructs.ForeignFutureDroppedCallbackStruct)",
+            ][..],
+        ),
+        (
+            "CallbackInterfaceAsyncLogSinkMethod2",
+            &[
+                "\"CallbackInterfaceAsyncLogSinkMethod2\"",
+                "\"uint64_t\"",
+                "koffi.pointer(ffiCallbacks.ForeignFutureCompleteVoid)",
+                "\"uint64_t\"",
+                "koffi.pointer(ffiStructs.ForeignFutureDroppedCallbackStruct)",
+            ][..],
+        ),
+    ] {
+        let block = extract_generated_block(
+            &ffi_js,
+            &format!("ffiCallbacks.{method_name} = defineCallbackPrototype("),
+            "]);",
+        );
+        assert_substrings_in_order(block, expected_slots);
+    }
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(&generated.package_dir);
+}
+
+#[test]
 fn defaults_package_name_to_the_selected_component_namespace() {
     let built_fixture = build_fixture_cdylib("basic");
     let package_dir = temp_dir_path("default-package-name");

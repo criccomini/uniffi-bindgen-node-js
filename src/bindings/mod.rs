@@ -147,10 +147,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_creates_output_package_directory() {
+    fn write_generated_package_creates_output_package_directory() {
         let output_dir = temp_dir_path("package-root");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         assert!(output_dir.is_dir(), "expected {output_dir} to be created");
 
@@ -158,10 +158,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_package_and_component_files() {
+    fn write_generated_package_emits_package_and_component_files() {
         let output_dir = temp_dir_path("package-files");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         for expected in [
             "package.json",
@@ -316,10 +316,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_stages_native_library_in_package_root_by_default() {
+    fn write_generated_package_stages_native_library_in_package_root_by_default() {
         let output_dir = temp_dir_path("staged-root-library");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let staged_library_path = output_dir.join(test_library_filename());
         assert!(
@@ -336,7 +336,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_overwrites_an_existing_staged_native_library_file() {
+    fn write_generated_package_overwrites_an_existing_staged_native_library_file() {
         let output_dir = temp_dir_path("overwrite-staged-root-library");
         let staged_library_path = output_dir.join(test_library_filename());
 
@@ -345,7 +345,7 @@ mod tests {
             .expect("seed stale staged library");
 
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should overwrite the staged library");
+            .expect("write_generated_package should overwrite the staged library");
 
         assert_eq!(
             fs::read(staged_library_path.as_std_path()).expect("staged library should be readable"),
@@ -357,10 +357,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_root_staging_does_not_emit_prebuild_directories() {
+    fn write_generated_package_root_staging_does_not_emit_prebuild_directories() {
         let output_dir = temp_dir_path("staged-root-without-prebuilds");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let prebuilds_dir = output_dir.join("prebuilds");
         assert!(
@@ -372,10 +372,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_manual_load_still_stages_the_native_library() {
+    fn write_generated_package_manual_load_still_stages_the_native_library() {
         let output_dir = temp_dir_path("manual-load-staged-library");
         write_test_package(&output_dir, &component_with_manual_load("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let staged_library_path = output_dir.join(test_library_filename());
         assert!(
@@ -387,12 +387,12 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_stages_native_library_in_host_prebuild_directory() {
+    fn write_generated_package_stages_native_library_in_host_prebuild_directory() {
         let output_dir = temp_dir_path("staged-bundled-library");
         let mut component = component_with_namespace("example");
         component.config.bundled_prebuilds = true;
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let root_library_path = output_dir.join(test_library_filename());
         assert!(
@@ -427,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_stages_the_input_filename_instead_of_cdylib_name() {
+    fn write_generated_package_stages_the_input_filename_instead_of_cdylib_name() {
         let output_dir = temp_dir_path("staged-input-filename");
         let mut component = component_with_namespace("example");
         component.config.cdylib_name = Some("ffi_symbol_name".to_string());
@@ -439,7 +439,7 @@ mod tests {
         ));
 
         write_test_package_with_library_filename(&output_dir, &component, &input_library_filename)
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let staged_library_path = output_dir.join(&input_library_filename);
         assert!(
@@ -455,14 +455,14 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_preserves_windows_style_filenames_in_bundled_prebuilds() {
+    fn write_generated_package_preserves_windows_style_filenames_in_bundled_prebuilds() {
         let output_dir = temp_dir_path("staged-windows-filename");
         let mut component = component_with_namespace("example");
         component.config.bundled_prebuilds = true;
         let input_library_filename = "fixture.dll";
 
         write_test_package_with_library_filename(&output_dir, &component, input_library_filename)
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let bundled_target_path = fs::read_dir(output_dir.join("prebuilds").as_std_path())
             .expect("prebuilds directory should be readable")
@@ -486,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_koffi_callback_and_function_declarations() {
+    fn write_generated_package_emits_koffi_callback_and_function_declarations() {
         let output_dir = temp_dir_path("ffi-bindings");
         let component = component_from_webidl(
             r#"
@@ -501,7 +501,7 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -602,7 +602,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_generic_abi_object_handle_round_trip_support() {
+    fn write_generated_package_emits_generic_abi_object_handle_round_trip_support() {
         let output_dir = temp_dir_path("object-handle-round-trip");
         let component = component_from_webidl(
             r#"
@@ -615,7 +615,7 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -668,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_slatedb_callback_interface_paths() {
+    fn write_generated_package_emits_slatedb_callback_interface_paths() {
         let output_dir = temp_dir_path("slatedb-callbacks");
         let component = component_from_webidl(
             r#"
@@ -708,7 +708,7 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -770,7 +770,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_slatedb_async_api_paths() {
+    fn write_generated_package_emits_slatedb_async_api_paths() {
         let output_dir = temp_dir_path("slatedb-async-apis");
         let component = component_from_webidl(
             r#"
@@ -876,7 +876,7 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1041,10 +1041,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_makes_ffi_load_idempotent() {
+    fn write_generated_package_makes_ffi_load_idempotent() {
         let output_dir = temp_dir_path("ffi-idempotent-load");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1065,10 +1065,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_validates_contract_version_during_load() {
+    fn write_generated_package_validates_contract_version_during_load() {
         let output_dir = temp_dir_path("ffi-contract-version");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1101,7 +1101,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_validates_checksums_during_load() {
+    fn write_generated_package_validates_checksums_during_load() {
         let output_dir = temp_dir_path("ffi-checksums");
         let component = component_from_webidl(
             r#"
@@ -1111,7 +1111,7 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1146,7 +1146,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_snapshot_ffi_initialization_contract() {
+    fn write_generated_package_snapshot_ffi_initialization_contract() {
         let output_dir = temp_dir_path("ffi-initialization");
         let component = component_from_webidl(
             r#"
@@ -1156,7 +1156,7 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1558,7 +1558,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_emits_bundled_resolution_contract() {
+    fn write_generated_package_emits_bundled_resolution_contract() {
         let output_dir = temp_dir_path("ffi-bundled-initialization");
         let mut component = component_from_webidl(
             r#"
@@ -1569,7 +1569,7 @@ mod tests {
         );
         component.config.bundled_prebuilds = true;
 
-        write_test_package(&output_dir, &component).expect("write_bindings should succeed");
+        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1665,7 +1665,7 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_reports_all_unsupported_uniffi_features() {
+    fn write_generated_package_reports_all_unsupported_uniffi_features() {
         let output_dir = temp_dir_path("unsupported-uniffi-features");
         let component = component_from_webidl(
             r#"
@@ -1701,10 +1701,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_resolves_sibling_and_literal_library_paths() {
+    fn write_generated_package_resolves_sibling_and_literal_library_paths() {
         let output_dir = temp_dir_path("ffi-library-paths");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1755,10 +1755,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_auto_loads_by_default() {
+    fn write_generated_package_auto_loads_by_default() {
         let output_dir = temp_dir_path("ffi-auto-load");
         write_test_package(&output_dir, &component_with_namespace("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let index_js = fs::read_to_string(output_dir.join("index.js").as_std_path())
             .expect("index JS should be readable");
@@ -1782,10 +1782,10 @@ mod tests {
     }
 
     #[test]
-    fn write_bindings_exports_manual_load_helpers() {
+    fn write_generated_package_exports_manual_load_helpers() {
         let output_dir = temp_dir_path("manual-load-exports");
         write_test_package(&output_dir, &component_with_manual_load("example"))
-            .expect("write_bindings should succeed");
+            .expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");

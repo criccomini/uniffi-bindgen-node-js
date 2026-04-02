@@ -292,7 +292,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update tests/support/mod.rs to stop copying native libraries after generation.
 - [x] Move any remaining staging helpers that are still needed into production code or delete them.
 - [x] Update tests/node_package_generation.rs for generator-owned staging.
-- [ ] Update tests/node_smoke_tests.rs for new runtime/ABI expectations.
+- [x] Update tests/node_smoke_tests.rs for new runtime/ABI expectations.
 - [ ] Update tests/node_async_runtime_tests.rs for any async symbol/name/layout changes.
 - [ ] Update tests/node_buffer_tests.rs for any ABI or converter changes.
 - [ ] Update tests/node_typescript_tests.rs for any public-surface changes.

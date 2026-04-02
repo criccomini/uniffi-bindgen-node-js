@@ -304,7 +304,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Update tests/npm-fixtures/koffi/index.js so the fake koffi behavior matches UniFFI 0.30/0.31 handle/callback semantics.
 - [x] Update snapshot files for the new generated output.
 - [x] Update fixture crates if UniFFI 0.31 requires source-level changes.
-- [ ] Add a fixture or test case for multi-component libraries if none exists today.
+- [x] Add a fixture or test case for multi-component libraries if none exists today.
 - [ ] Add a fixture or test case for UDL-backed library generation through the new loader path if needed.
 - [ ] Update leak helper binaries to call the new v2 entrypoint.
 - [ ] Update leak helper binaries to rely on generator-owned staging rather than local copy logic.

@@ -1037,8 +1037,7 @@ mod tests {
     use uniffi_bindgen::interface::ComponentInterface;
     use uniffi_meta::{
         EnumMetadata, EnumShape, Metadata, MetadataGroup, MethodMetadata, NamespaceMetadata,
-        ObjectImpl, ObjectMetadata, RecordMetadata, UniffiTraitMetadata,
-        VariantMetadata,
+        ObjectImpl, ObjectMetadata, RecordMetadata, UniffiTraitMetadata, VariantMetadata,
     };
 
     use super::{render_doc_comment, validate_supported_features};
@@ -1261,6 +1260,39 @@ mod tests {
             concat!(
                 "unsupported UniFFI features for generated Node bindings:\n",
                 "- enum APIs: keep enums variant-only and exhaustive in Node v2.\n",
+                "  - non-exhaustive enums are not supported in generated Node bindings: Flavor\n",
+                "- object helper APIs: object constructors and methods are supported, but UniFFI trait helpers are not surfaced in Node v2.\n",
+                "  - object UniFFI trait methods are not supported in generated Node bindings: Store (Display)",
+            )
+        );
+    }
+
+    #[test]
+    fn validate_supported_features_reports_grouped_v2_diagnostics() {
+        let ci = component_interface_from_metadata([
+            record_metadata("Profile"),
+            enum_metadata_with_non_exhaustive("Flavor", true),
+            object_metadata("Store"),
+            method_metadata("Profile", "display_name"),
+            method_metadata("Flavor", "label"),
+            debug_trait_metadata("Profile"),
+            display_trait_metadata("Flavor"),
+            display_trait_metadata("Store"),
+        ]);
+
+        let error = validate_supported_features(&ci)
+            .expect_err("all grouped Node v2 unsupported-surface diagnostics should be reported");
+
+        assert_eq!(
+            error.to_string(),
+            concat!(
+                "unsupported UniFFI features for generated Node bindings:\n",
+                "- record APIs: keep records field-only in Node v2.\n",
+                "  - record methods are not supported in generated Node bindings: Profile.display_name\n",
+                "  - record UniFFI trait methods are not supported in generated Node bindings: Profile (Debug)\n",
+                "- enum APIs: keep enums variant-only and exhaustive in Node v2.\n",
+                "  - enum methods are not supported in generated Node bindings: Flavor.label\n",
+                "  - enum UniFFI trait methods are not supported in generated Node bindings: Flavor (Display)\n",
                 "  - non-exhaustive enums are not supported in generated Node bindings: Flavor\n",
                 "- object helper APIs: object constructors and methods are supported, but UniFFI trait helpers are not surfaced in Node v2.\n",
                 "  - object UniFFI trait methods are not supported in generated Node bindings: Store (Display)",

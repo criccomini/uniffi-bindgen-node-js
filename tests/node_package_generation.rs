@@ -498,6 +498,71 @@ fn generated_async_callback_prototypes_match_uniffi_031_foreign_future_layout() 
 }
 
 #[test]
+fn generated_object_factories_include_new_abi_clone_and_free_paths() {
+    let generated = generate_fixture_package("basic");
+    let component_js = fs::read_to_string(
+        generated
+            .package_dir
+            .join(format!("{}.js", generated.built_fixture.namespace))
+            .as_std_path(),
+    )
+    .expect("component js should be readable");
+
+    for (type_name, clone_symbol, free_symbol) in [
+        (
+            "Config",
+            "uniffi_fixture_basic_fn_clone_config",
+            "uniffi_fixture_basic_fn_free_config",
+        ),
+        (
+            "Reader",
+            "uniffi_fixture_basic_fn_clone_reader",
+            "uniffi_fixture_basic_fn_free_reader",
+        ),
+        (
+            "ReaderBuilder",
+            "uniffi_fixture_basic_fn_clone_readerbuilder",
+            "uniffi_fixture_basic_fn_free_readerbuilder",
+        ),
+        (
+            "Store",
+            "uniffi_fixture_basic_fn_clone_store",
+            "uniffi_fixture_basic_fn_free_store",
+        ),
+    ] {
+        let block = extract_generated_block(
+            &component_js,
+            &format!("const uniffi{type_name}ObjectFactory = createObjectFactory({{"),
+            "\n});",
+        );
+
+        assert_substrings_in_order(
+            block,
+            &[
+                "cloneFreeUsesUniffiHandle: true,",
+                "cloneHandleGeneric(handle) {",
+                &format!("ffiFunctions.{clone_symbol}_generic_abi(handle, status)"),
+                "cloneHandleRawExternal(handle) {",
+                &format!("\"{clone_symbol}:raw-external\""),
+                &format!("\"{clone_symbol}\""),
+                "cloneHandle(handle) {",
+                &format!("ffiFunctions.{clone_symbol}(handle, status)"),
+                "freeHandleGeneric(handle) {",
+                &format!("ffiFunctions.{free_symbol}_generic_abi(handle, status)"),
+                "freeHandleRawExternal(handle) {",
+                &format!("\"{free_symbol}:raw-external\""),
+                &format!("\"{free_symbol}\""),
+                "freeHandle(handle) {",
+                &format!("ffiFunctions.{free_symbol}(handle, status)"),
+            ],
+        );
+    }
+
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(&generated.package_dir);
+}
+
+#[test]
 fn defaults_package_name_to_the_selected_component_namespace() {
     let built_fixture = build_fixture_cdylib("basic");
     let package_dir = temp_dir_path("default-package-name");

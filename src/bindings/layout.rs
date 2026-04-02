@@ -2,11 +2,9 @@ use std::fs;
 
 use anyhow::{Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
-use uniffi_bindgen::Component;
+use uniffi_bindgen::interface::ComponentInterface;
 
-use crate::node_v2::config::NodeBindingGeneratorConfig;
-
-use super::target::current_host_prebuild_target;
+use super::{spec::NodePackageSpec, target::current_host_prebuild_target};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GeneratedPackageLayout {
@@ -54,23 +52,21 @@ pub(crate) struct StagedNativeLibraryLayout {
 }
 
 impl GeneratedPackageLayout {
-    pub(crate) fn from_component(
+    pub(crate) fn from_parts(
         out_dir: &Utf8Path,
         lib_source: &Utf8Path,
-        component: &Component<NodeBindingGeneratorConfig>,
+        ci: &ComponentInterface,
+        package_spec: &NodePackageSpec,
     ) -> Result<Self> {
-        let namespace = component.ci.namespace().trim();
+        let namespace = ci.namespace().trim();
         if namespace.is_empty() {
             bail!("node bindings generation requires a non-empty UniFFI namespace");
         }
 
-        let package_name = component
-            .config
-            .package_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| anyhow!("node bindings generation requires a package_name"))?;
+        let package_name = package_spec.package_name.trim();
+        if package_name.is_empty() {
+            return Err(anyhow!("node bindings generation requires a package_name"));
+        }
 
         let metadata = PackageMetadataLayout {
             package_json: out_dir.join("package.json"),
@@ -91,7 +87,7 @@ impl GeneratedPackageLayout {
         let native_library = StagedNativeLibraryLayout::from_source(
             out_dir,
             lib_source,
-            component.config.bundled_prebuilds,
+            package_spec.bundled_prebuilds,
         )?;
 
         Ok(Self {
@@ -210,17 +206,24 @@ mod tests {
     // Layout tests stay synthetic because they only validate package path derivation. The
     // integration suite covers loader-driven package generation end to end.
 
-    fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
-        Component {
+    struct TestLayoutInput {
+        ci: ComponentInterface,
+        spec: NodePackageSpec,
+    }
+
+    fn component_with_namespace(namespace: &str) -> TestLayoutInput {
+        TestLayoutInput {
             ci: ComponentInterface::from_webidl(
                 &format!("namespace {namespace} {{}};"),
                 "fixture_crate",
             )
             .expect("valid test UDL"),
-            config: NodeBindingGeneratorConfig {
-                package_name: Some(format!("{namespace}-package")),
-                cdylib_name: Some("fixture".to_string()),
-                ..NodeBindingGeneratorConfig::default()
+            spec: NodePackageSpec {
+                package_name: format!("{namespace}-package"),
+                library_name: "fixture".to_string(),
+                node_engine: ">=16".to_string(),
+                bundled_prebuilds: false,
+                manual_load: false,
             },
         }
     }
@@ -235,8 +238,13 @@ mod tests {
         let lib_source = fixture_library_path("libexample.dylib");
         let component = component_with_namespace("example");
 
-        let layout = GeneratedPackageLayout::from_component(&out_dir, &lib_source, &component)
-            .expect("layout");
+        let layout = GeneratedPackageLayout::from_parts(
+            &out_dir,
+            &lib_source,
+            &component.ci,
+            &component.spec,
+        )
+        .expect("layout");
 
         assert_eq!(layout.root_dir, out_dir);
         assert_eq!(
@@ -348,8 +356,13 @@ mod tests {
         let lib_source = fixture_library_path("fixture.dll");
         let component = component_with_namespace("example");
 
-        let layout = GeneratedPackageLayout::from_component(&out_dir, &lib_source, &component)
-            .expect("layout");
+        let layout = GeneratedPackageLayout::from_parts(
+            &out_dir,
+            &lib_source,
+            &component.ci,
+            &component.spec,
+        )
+        .expect("layout");
 
         assert_eq!(layout.native_library.file_name, "fixture.dll");
         assert_eq!(
@@ -368,10 +381,15 @@ mod tests {
         let out_dir = Utf8PathBuf::from("/tmp/uniffi-bindgen-node-js-layout");
         let lib_source = fixture_library_path("libexample.so");
         let mut component = component_with_namespace("example");
-        component.config.bundled_prebuilds = true;
+        component.spec.bundled_prebuilds = true;
 
-        let layout = GeneratedPackageLayout::from_component(&out_dir, &lib_source, &component)
-            .expect("layout");
+        let layout = GeneratedPackageLayout::from_parts(
+            &out_dir,
+            &lib_source,
+            &component.ci,
+            &component.spec,
+        )
+        .expect("layout");
 
         let target = current_host_prebuild_target().expect("host target");
         assert_eq!(layout.native_library.file_name, "libexample.so");
@@ -399,9 +417,14 @@ mod tests {
         let out_dir = Utf8PathBuf::from("/tmp/uniffi-bindgen-node-js-layout-created-dirs");
         let lib_source = fixture_library_path("libexample.so");
         let mut component = component_with_namespace("example");
-        component.config.bundled_prebuilds = true;
-        let layout = GeneratedPackageLayout::from_component(&out_dir, &lib_source, &component)
-            .expect("layout");
+        component.spec.bundled_prebuilds = true;
+        let layout = GeneratedPackageLayout::from_parts(
+            &out_dir,
+            &lib_source,
+            &component.ci,
+            &component.spec,
+        )
+        .expect("layout");
 
         if out_dir.exists() {
             fs::remove_dir_all(out_dir.as_std_path()).expect("cleanup pre-existing temp dir");

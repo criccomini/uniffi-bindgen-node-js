@@ -37,15 +37,15 @@ fn extract_generated_block<'a>(contents: &'a str, start_marker: &str, end_marker
     &contents[start..end]
 }
 
-fn assert_substrings_in_order<'a>(
-    haystack: &str,
-    expected: impl IntoIterator<Item = &'a str>,
-) {
+fn assert_substrings_in_order<'a>(haystack: &str, expected: impl IntoIterator<Item = &'a str>) {
     let mut offset = 0;
     for needle in expected {
-        let relative_index = haystack[offset..]
-            .find(needle)
-            .unwrap_or_else(|| panic!("expected to find {needle:?} after:\n{}", &haystack[..offset]));
+        let relative_index = haystack[offset..].find(needle).unwrap_or_else(|| {
+            panic!(
+                "expected to find {needle:?} after:\n{}",
+                &haystack[..offset]
+            )
+        });
         offset += relative_index + needle.len();
     }
 }
@@ -54,10 +54,8 @@ fn assert_substrings_in_order<'a>(
 fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
     let generated = generate_fixture_package("basic");
     let component_interface = load_fixture_component_interface(&generated.built_fixture);
-    let ffi_js = read_generated_component_ffi_js(
-        &generated.package_dir,
-        &generated.built_fixture.namespace,
-    );
+    let ffi_js =
+        read_generated_component_ffi_js(&generated.package_dir, &generated.built_fixture.namespace);
     let staged_library_file_name = generated
         .built_fixture
         .library_path
@@ -168,11 +166,24 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
         "export function getContractVersion(bindings = getFfiBindings()) {".to_string(),
         "export function validateContractVersion(bindings = getFfiBindings()) {".to_string(),
         "export function getChecksums(bindings = getFfiBindings()) {".to_string(),
-        format!("{}: bindings.ffiFunctions.{}()", json_string(&checksum_symbol), checksum_symbol),
+        format!(
+            "{}: bindings.ffiFunctions.{}()",
+            json_string(&checksum_symbol),
+            checksum_symbol
+        ),
         "export function validateChecksums(bindings = getFfiBindings()) {".to_string(),
-        format!("const expected = ffiIntegrity.checksums[{}];", json_string(&checksum_symbol)),
-        format!("const actual = actualChecksums[{}];", json_string(&checksum_symbol)),
-        format!("throw new ChecksumMismatchError({}, expected, actual, {{", json_string(&checksum_symbol)),
+        format!(
+            "const expected = ffiIntegrity.checksums[{}];",
+            json_string(&checksum_symbol)
+        ),
+        format!(
+            "const actual = actualChecksums[{}];",
+            json_string(&checksum_symbol)
+        ),
+        format!(
+            "throw new ChecksumMismatchError({}, expected, actual, {{",
+            json_string(&checksum_symbol)
+        ),
     ];
     assert_substrings_in_order(
         lifecycle_block,

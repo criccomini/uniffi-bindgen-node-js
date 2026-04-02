@@ -22,7 +22,7 @@ pub(crate) fn build_public_api_ir(ci: &ComponentInterface) -> Result<ComponentMo
 /// reusable conversion boundary between UniFFI metadata loading and codegen.
 ///
 /// The input `ComponentInterface` is expected to already have passed through
-/// `derive_ffi_funcs()`, matching the v2 loader pipeline. UniFFI 0.31 only
+/// `derive_ffi_funcs()`, matching the loader-based pipeline. UniFFI 0.31 only
 /// materializes some callback-trait object FFI metadata, such as
 /// `ffi_init_callback()`, during that step.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -2,10 +2,10 @@
 
 pub mod bindings;
 mod cli;
-pub(crate) mod node_v2;
+pub(crate) mod node;
 pub mod subcommands;
 
-pub use node_v2::{GenerateNodePackageOptions, generate_node_package};
+pub use node::{GenerateNodePackageOptions, generate_node_package};
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 

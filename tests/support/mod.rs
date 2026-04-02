@@ -111,11 +111,7 @@ pub fn build_proc_macro_multi_component_cdylib() -> BuiltMultiComponentFixtureCd
     let manifest_path = workspace_dir.join("megazord").join("Cargo.toml");
     let target_dir = workspace_dir.join("target");
 
-    for relative_dir in [
-        "component-alpha/src",
-        "component-beta/src",
-        "megazord/src",
-    ] {
+    for relative_dir in ["component-alpha/src", "component-beta/src", "megazord/src"] {
         let path = workspace_dir.join(relative_dir);
         fs::create_dir_all(path.as_std_path())
             .unwrap_or_else(|error| panic!("failed to create temp fixture dir {path}: {error}"));
@@ -146,7 +142,10 @@ uniffi = { version = "=0.31.0" }
 "#,
     );
     write_temp_fixture_file(
-        &workspace_dir.join("component-alpha").join("src").join("lib.rs"),
+        &workspace_dir
+            .join("component-alpha")
+            .join("src")
+            .join("lib.rs"),
         r#"
 #[uniffi::export]
 pub fn alpha_value() -> u32 {
@@ -173,7 +172,10 @@ uniffi = { version = "=0.31.0" }
 "#,
     );
     write_temp_fixture_file(
-        &workspace_dir.join("component-beta").join("src").join("lib.rs"),
+        &workspace_dir
+            .join("component-beta")
+            .join("src")
+            .join("lib.rs"),
         r#"
 #[uniffi::export]
 pub fn beta_value() -> u32 {

@@ -3,18 +3,18 @@ pub(crate) mod config;
 mod paths;
 mod validation;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use camino::Utf8PathBuf;
 use uniffi_bindgen::{BindgenLoader, Component};
 
 use self::component_selection::{normalize_crate_name_selector, select_component};
 use self::config::{
-    NodeBindingCliOverrides, NodeBindingGeneratorConfig, apply_component_renames,
-    finalize_node_binding_config, parse_node_binding_config,
+    NodePackageCliOverrides, NodePackageConfig, apply_component_renames,
+    finalize_node_package_config, parse_node_package_config,
 };
 use self::paths::build_bindgen_paths;
 use self::validation::validate_generate_options;
-use crate::bindings::write_generated_package;
+use crate::bindings::{NodePackageSpec, write_generated_package};
 
 #[derive(Debug, Clone)]
 pub struct GenerateNodePackageOptions {
@@ -31,7 +31,7 @@ pub struct GenerateNodePackageOptions {
 pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
     validate_generate_options(&options)?;
 
-    let cli_overrides = NodeBindingCliOverrides::from_parts(
+    let cli_overrides = NodePackageCliOverrides::from_parts(
         options.package_name.clone(),
         options.node_engine.clone(),
         options.bundled_prebuilds,
@@ -41,6 +41,15 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
         .context("failed to build BindgenPaths for node package generation")?;
 
     let loader = BindgenLoader::new(paths);
+    let library_name = loader
+        .library_name(&options.lib_source)
+        .map(str::to_string)
+        .ok_or_else(|| {
+            anyhow!(
+                "failed to determine the native library name from '{}'",
+                options.lib_source
+            )
+        })?;
     let metadata = loader.load_metadata(&options.lib_source).with_context(|| {
         format!(
             "failed to load UniFFI metadata from '{}'",
@@ -54,7 +63,7 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
         )
     })?;
     let mut components = loader
-        .load_components(cis, |_, root_toml| parse_node_binding_config(&root_toml))
+        .load_components(cis, |_, root_toml| parse_node_package_config(&root_toml))
         .with_context(|| {
             format!(
                 "failed to load UniFFI component configs from '{}'",
@@ -62,11 +71,7 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
             )
         })?;
 
-    finalize_component_configs(
-        &mut components,
-        loader.library_name(&options.lib_source),
-        &cli_overrides,
-    )?;
+    finalize_component_configs(&mut components, &cli_overrides)?;
     apply_component_renames(&mut components);
 
     let normalized_crate_name = options
@@ -80,8 +85,15 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
             component.ci.crate_name()
         )
     })?;
+    let package_spec = build_package_spec(&component, &library_name)?;
 
-    write_generated_package(&options.out_dir, &options.lib_source, &component).with_context(|| {
+    write_generated_package(
+        &options.out_dir,
+        &options.lib_source,
+        &component.ci,
+        &package_spec,
+    )
+    .with_context(|| {
         format!(
             "failed to generate Node bindings for crate '{}' from '{}'",
             component.ci.crate_name(),
@@ -91,17 +103,31 @@ pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> 
 }
 
 fn finalize_component_configs(
-    components: &mut [Component<NodeBindingGeneratorConfig>],
-    cdylib_name: Option<&str>,
-    cli_overrides: &NodeBindingCliOverrides,
+    components: &mut [Component<NodePackageConfig>],
+    cli_overrides: &NodePackageCliOverrides,
 ) -> Result<()> {
     for component in components {
-        finalize_node_binding_config(
-            &component.ci,
-            &mut component.config,
-            cdylib_name,
-            cli_overrides,
-        )?;
+        finalize_node_package_config(&component.ci, &mut component.config, cli_overrides)?;
     }
     Ok(())
+}
+
+fn build_package_spec(
+    component: &Component<NodePackageConfig>,
+    library_name: &str,
+) -> Result<NodePackageSpec> {
+    let package_name = component.config.package_name.clone().ok_or_else(|| {
+        anyhow!(
+            "node package generation requires a resolved package name for crate '{}'",
+            component.ci.crate_name()
+        )
+    })?;
+
+    Ok(NodePackageSpec {
+        package_name,
+        library_name: library_name.to_string(),
+        node_engine: component.config.node_engine.clone(),
+        bundled_prebuilds: component.config.bundled_prebuilds,
+        manual_load: component.config.manual_load,
+    })
 }

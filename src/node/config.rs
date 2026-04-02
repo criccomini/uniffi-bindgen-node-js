@@ -15,31 +15,31 @@ const REMOVED_NODE_CONFIG_KEYS: &[RemovedNodeConfigKey] = &[
     },
     RemovedNodeConfigKey {
         key: "module_format",
-        guidance: "generated Node packages are ESM-only in v2, so delete this setting instead of selecting a module format",
+        guidance: "generated Node packages are ESM-only, so delete this setting instead of selecting a module format",
     },
     RemovedNodeConfigKey {
         key: "module-format",
-        guidance: "generated Node packages are ESM-only in v2, so delete this setting instead of selecting a module format",
+        guidance: "generated Node packages are ESM-only, so delete this setting instead of selecting a module format",
     },
     RemovedNodeConfigKey {
         key: "commonjs",
-        guidance: "generated Node packages are ESM-only in v2, so delete this setting instead of requesting CommonJS output",
+        guidance: "generated Node packages are ESM-only, so delete this setting instead of requesting CommonJS output",
     },
     RemovedNodeConfigKey {
         key: "lib_path_module",
-        guidance: "native library path modules are no longer configurable in v2, so delete this setting",
+        guidance: "native library path modules are no longer configurable, so delete this setting",
     },
     RemovedNodeConfigKey {
         key: "lib_path_modules",
-        guidance: "native library path modules are no longer configurable in v2, so delete this setting",
+        guidance: "native library path modules are no longer configurable, so delete this setting",
     },
     RemovedNodeConfigKey {
         key: "out_lib_path_module",
-        guidance: "native library path modules are no longer configurable in v2, so delete this setting",
+        guidance: "native library path modules are no longer configurable, so delete this setting",
     },
     RemovedNodeConfigKey {
         key: "out_lib_path_modules",
-        guidance: "native library path modules are no longer configurable in v2, so delete this setting",
+        guidance: "native library path modules are no longer configurable, so delete this setting",
     },
 ];
 
@@ -50,14 +50,14 @@ struct RemovedNodeConfigKey {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct NodeBindingCliOverrides {
+pub(crate) struct NodePackageCliOverrides {
     package_name: Option<String>,
     node_engine: Option<String>,
     bundled_prebuilds: bool,
     manual_load: bool,
 }
 
-impl NodeBindingCliOverrides {
+impl NodePackageCliOverrides {
     pub fn from_parts(
         package_name: Option<String>,
         node_engine: Option<String>,
@@ -72,7 +72,7 @@ impl NodeBindingCliOverrides {
         })
     }
 
-    pub(crate) fn apply_to(&self, config: &mut NodeBindingGeneratorConfig) {
+    pub(crate) fn apply_to(&self, config: &mut NodePackageConfig) {
         apply_optional_string_override(&mut config.package_name, self.package_name.as_ref());
         apply_optional_value_override(&mut config.node_engine, self.node_engine.as_ref());
         enable_override(&mut config.bundled_prebuilds, self.bundled_prebuilds);
@@ -112,10 +112,8 @@ fn enable_override(target: &mut bool, enabled: bool) {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub(crate) struct NodeBindingGeneratorConfig {
+pub(crate) struct NodePackageConfig {
     pub package_name: Option<String>,
-    #[serde(skip)]
-    pub cdylib_name: Option<String>,
     pub node_engine: String,
     pub bundled_prebuilds: bool,
     pub manual_load: bool,
@@ -123,11 +121,10 @@ pub(crate) struct NodeBindingGeneratorConfig {
     pub rename: toml::Table,
 }
 
-impl Default for NodeBindingGeneratorConfig {
+impl Default for NodePackageConfig {
     fn default() -> Self {
         Self {
             package_name: None,
-            cdylib_name: None,
             node_engine: ">=16".to_string(),
             bundled_prebuilds: false,
             manual_load: false,
@@ -136,14 +133,13 @@ impl Default for NodeBindingGeneratorConfig {
     }
 }
 
-impl NodeBindingGeneratorConfig {
+impl NodePackageConfig {
     pub(crate) fn validate(&self) -> Result<()> {
         self.validate_required_fields()
     }
 
     fn validate_required_fields(&self) -> Result<()> {
         validate_optional_non_empty("package_name", self.package_name.as_deref())?;
-        validate_optional_non_empty("cdylib_name", self.cdylib_name.as_deref())?;
         validate_non_empty("node_engine", &self.node_engine)
     }
 }
@@ -173,7 +169,7 @@ fn reject_removed_node_config_keys(node_toml: &toml::Value) -> Result<()> {
         .filter(|removed_key| node_table.contains_key(removed_key.key))
         .map(|removed_key| {
             format!(
-                "- bindings.node.{} was removed in v2; {}",
+                "- bindings.node.{} is no longer supported; {}",
                 removed_key.key, removed_key.guidance
             )
         })
@@ -189,31 +185,25 @@ fn reject_removed_node_config_keys(node_toml: &toml::Value) -> Result<()> {
     );
 }
 
-pub(crate) fn parse_node_binding_config(
-    root_toml: &toml::Value,
-) -> Result<NodeBindingGeneratorConfig> {
+pub(crate) fn parse_node_package_config(root_toml: &toml::Value) -> Result<NodePackageConfig> {
     let Some(node_toml) = root_toml
         .get("bindings")
         .and_then(|bindings| bindings.get("node"))
     else {
-        return Ok(NodeBindingGeneratorConfig::default());
+        return Ok(NodePackageConfig::default());
     };
 
     reject_removed_node_config_keys(node_toml)?;
     Ok(node_toml.clone().try_into()?)
 }
 
-pub(crate) fn finalize_node_binding_config(
+pub(crate) fn finalize_node_package_config(
     ci: &ComponentInterface,
-    config: &mut NodeBindingGeneratorConfig,
-    cdylib_name: Option<&str>,
-    cli_overrides: &NodeBindingCliOverrides,
+    config: &mut NodePackageConfig,
+    cli_overrides: &NodePackageCliOverrides,
 ) -> Result<()> {
     if config.package_name.is_none() {
         config.package_name = Some(default_package_name(ci)?);
-    }
-    if config.cdylib_name.is_none() {
-        config.cdylib_name = cdylib_name.map(str::to_string);
     }
     cli_overrides.apply_to(config);
     config.validate()
@@ -228,7 +218,7 @@ fn default_package_name(ci: &ComponentInterface) -> Result<String> {
     Ok(namespace.to_string())
 }
 
-pub(crate) fn apply_component_renames(components: &mut [Component<NodeBindingGeneratorConfig>]) {
+pub(crate) fn apply_component_renames(components: &mut [Component<NodePackageConfig>]) {
     let mut module_renames = HashMap::new();
     for component in components.iter() {
         if !component.config.rename.is_empty() {
@@ -254,13 +244,13 @@ mod tests {
     use uniffi_bindgen::Component;
 
     use super::{
-        NodeBindingCliOverrides, NodeBindingGeneratorConfig, apply_component_renames,
-        finalize_node_binding_config, parse_node_binding_config,
+        NodePackageCliOverrides, NodePackageConfig, apply_component_renames,
+        finalize_node_package_config, parse_node_package_config,
     };
 
-    fn parse_node_config(source: &str) -> NodeBindingGeneratorConfig {
+    fn parse_node_config(source: &str) -> NodePackageConfig {
         let root = toml::from_str::<toml::Value>(source).expect("test TOML should deserialize");
-        parse_node_binding_config(&root).expect("node config should deserialize")
+        parse_node_package_config(&root).expect("node config should deserialize")
     }
 
     #[test]
@@ -302,29 +292,6 @@ mod tests {
     }
 
     #[test]
-    fn finalize_config_defaults_cdylib_name_from_loaded_library_name() -> Result<()> {
-        let ci = uniffi_bindgen::ComponentInterface::from_webidl(
-            r#"
-            namespace example {
-                u32 add(u32 lhs, u32 rhs);
-            };
-            "#,
-            "fixture_crate",
-        )?;
-        let mut config = NodeBindingGeneratorConfig::default();
-
-        finalize_node_binding_config(
-            &ci,
-            &mut config,
-            Some("fixture_from_loader"),
-            &NodeBindingCliOverrides::default(),
-        )?;
-
-        assert_eq!(config.cdylib_name.as_deref(), Some("fixture_from_loader"));
-        Ok(())
-    }
-
-    #[test]
     fn finalize_config_defaults_package_name_from_component_namespace() -> Result<()> {
         let ci = uniffi_bindgen::ComponentInterface::from_webidl(
             r#"
@@ -334,21 +301,16 @@ mod tests {
             "#,
             "fixture_crate",
         )?;
-        let mut config = NodeBindingGeneratorConfig::default();
+        let mut config = NodePackageConfig::default();
 
-        finalize_node_binding_config(
-            &ci,
-            &mut config,
-            Some("fixture_from_loader"),
-            &NodeBindingCliOverrides::default(),
-        )?;
+        finalize_node_package_config(&ci, &mut config, &NodePackageCliOverrides::default())?;
 
         assert_eq!(config.package_name.as_deref(), Some("example"));
         Ok(())
     }
 
     #[test]
-    fn parse_config_rejects_removed_legacy_keys_with_v2_diagnostics() {
+    fn parse_config_rejects_removed_legacy_keys_with_current_diagnostics() {
         let error = toml::from_str::<toml::Value>(
             r#"
             [bindings.node]
@@ -358,9 +320,9 @@ mod tests {
             commonjs = true
             "#,
         )
-        .map(|root| parse_node_binding_config(&root))
+        .map(|root| parse_node_package_config(&root))
         .expect("test TOML should deserialize")
-        .expect_err("legacy config keys should be rejected in v2");
+        .expect_err("legacy config keys should be rejected");
 
         let message = error.to_string();
         assert!(
@@ -368,23 +330,23 @@ mod tests {
             "unexpected error: {error}"
         );
         assert!(
-            message.contains("bindings.node.cdylib_name was removed in v2"),
+            message.contains("bindings.node.cdylib_name is no longer supported"),
             "unexpected error: {error}"
         );
         assert!(
-            message.contains("bindings.node.lib_path_literal was removed in v2"),
+            message.contains("bindings.node.lib_path_literal is no longer supported"),
             "unexpected error: {error}"
         );
         assert!(
-            message.contains("bindings.node.module_format was removed in v2"),
+            message.contains("bindings.node.module_format is no longer supported"),
             "unexpected error: {error}"
         );
         assert!(
-            message.contains("generated Node packages are ESM-only in v2"),
+            message.contains("generated Node packages are ESM-only"),
             "unexpected error: {error}"
         );
         assert!(
-            message.contains("bindings.node.commonjs was removed in v2"),
+            message.contains("bindings.node.commonjs is no longer supported"),
             "unexpected error: {error}"
         );
         assert!(

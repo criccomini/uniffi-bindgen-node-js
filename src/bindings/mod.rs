@@ -4,17 +4,19 @@ mod ffi_ir;
 mod layout;
 mod package_writer;
 mod runtime;
+mod spec;
 mod target;
 mod templates;
 
-pub(crate) use self::package_writer::write_generated_package;
 #[cfg(test)]
 pub(crate) use self::package_writer::ComponentJsImports;
+pub(crate) use self::package_writer::write_generated_package;
+pub(crate) use self::spec::NodePackageSpec;
 
 // GENERATED CODE
 #[cfg(test)]
 mod tests {
-    use super::write_generated_package;
+    use super::{NodePackageSpec, write_generated_package};
     use std::{
         env, fs, process,
         time::{SystemTime, UNIX_EPOCH},
@@ -22,41 +24,50 @@ mod tests {
 
     use anyhow::Result;
     use camino::{Utf8Path, Utf8PathBuf};
-    use uniffi_bindgen::{interface::ComponentInterface, Component};
+    use uniffi_bindgen::interface::ComponentInterface;
 
-    use crate::node_v2::config::{parse_node_binding_config, NodeBindingGeneratorConfig};
+    use crate::node::config::{NodePackageConfig, parse_node_package_config};
 
     // These unit tests intentionally build synthetic components so renderer and package-writer
     // behavior can be asserted in isolation. Loader-path coverage belongs in integration tests.
 
-    fn component_with_namespace(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
-        Component {
+    struct TestPackageInput {
+        ci: ComponentInterface,
+        spec: NodePackageSpec,
+    }
+
+    fn component_with_namespace(namespace: &str) -> TestPackageInput {
+        TestPackageInput {
             ci: ComponentInterface::from_webidl(
                 &format!("namespace {namespace} {{}};"),
                 "fixture_crate",
             )
             .expect("valid test UDL"),
-            config: NodeBindingGeneratorConfig {
-                package_name: Some(format!("{namespace}-package")),
-                cdylib_name: Some("fixture".to_string()),
-                ..NodeBindingGeneratorConfig::default()
+            spec: NodePackageSpec {
+                package_name: format!("{namespace}-package"),
+                library_name: "fixture".to_string(),
+                node_engine: ">=16".to_string(),
+                bundled_prebuilds: false,
+                manual_load: false,
             },
         }
     }
 
-    fn component_with_manual_load(namespace: &str) -> Component<NodeBindingGeneratorConfig> {
+    fn component_with_manual_load(namespace: &str) -> TestPackageInput {
         let mut component = component_with_namespace(namespace);
-        component.config.manual_load = true;
+        component.spec.manual_load = true;
         component
     }
 
-    fn component_from_webidl(source: &str) -> Component<NodeBindingGeneratorConfig> {
-        Component {
+    fn component_from_webidl(source: &str) -> TestPackageInput {
+        TestPackageInput {
             ci: ComponentInterface::from_webidl(source, "fixture_crate").expect("valid test UDL"),
-            config: NodeBindingGeneratorConfig {
-                package_name: Some("fixture-package".to_string()),
-                cdylib_name: Some("fixture".to_string()),
-                ..NodeBindingGeneratorConfig::default()
+            spec: NodePackageSpec {
+                package_name: "fixture-package".to_string(),
+                library_name: "fixture".to_string(),
+                node_engine: ">=16".to_string(),
+                bundled_prebuilds: false,
+                manual_load: false,
             },
         }
     }
@@ -73,21 +84,18 @@ mod tests {
         .expect("temp dir path should be utf-8")
     }
 
-    fn parse_node_config(source: &str) -> NodeBindingGeneratorConfig {
+    fn parse_node_config(source: &str) -> NodePackageConfig {
         let root = toml::from_str::<toml::Value>(source).expect("test TOML should deserialize");
-        parse_node_binding_config(&root).expect("node config should deserialize")
+        parse_node_package_config(&root).expect("node config should deserialize")
     }
 
-    fn write_test_package(
-        output_dir: &Utf8Path,
-        component: &Component<NodeBindingGeneratorConfig>,
-    ) -> Result<()> {
+    fn write_test_package(output_dir: &Utf8Path, component: &TestPackageInput) -> Result<()> {
         write_test_package_with_library_filename(output_dir, component, &test_library_filename())
     }
 
     fn write_test_package_with_library_filename(
         output_dir: &Utf8Path,
-        component: &Component<NodeBindingGeneratorConfig>,
+        component: &TestPackageInput,
         library_filename: &str,
     ) -> Result<()> {
         let lib_source = output_dir.join("input").join(library_filename);
@@ -98,7 +106,7 @@ mod tests {
                 .as_std_path(),
         )?;
         fs::write(lib_source.as_std_path(), b"fixture-native-library")?;
-        write_generated_package(output_dir, &lib_source, component)
+        write_generated_package(output_dir, &lib_source, &component.ci, &component.spec)
     }
 
     fn test_library_filename() -> String {
@@ -393,9 +401,10 @@ mod tests {
     fn write_generated_package_stages_native_library_in_host_prebuild_directory() {
         let output_dir = temp_dir_path("staged-bundled-library");
         let mut component = component_with_namespace("example");
-        component.config.bundled_prebuilds = true;
+        component.spec.bundled_prebuilds = true;
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let root_library_path = output_dir.join(test_library_filename());
         assert!(
@@ -430,12 +439,12 @@ mod tests {
     }
 
     #[test]
-    fn write_generated_package_stages_the_input_filename_instead_of_cdylib_name() {
+    fn write_generated_package_stages_the_input_filename_instead_of_library_name() {
         let output_dir = temp_dir_path("staged-input-filename");
         let mut component = component_with_namespace("example");
-        component.config.cdylib_name = Some("ffi_symbol_name".to_string());
+        component.spec.library_name = "ffi_symbol_name".to_string();
         let input_library_filename = format!("host-artifact.{}", std::env::consts::DLL_EXTENSION);
-        let cdylib_named_path = output_dir.join(format!(
+        let library_named_path = output_dir.join(format!(
             "{}ffi_symbol_name.{}",
             std::env::consts::DLL_PREFIX,
             std::env::consts::DLL_EXTENSION
@@ -450,8 +459,8 @@ mod tests {
             "expected staged native library at {staged_library_path}"
         );
         assert!(
-            !cdylib_named_path.exists(),
-            "staged library path should come from the input filename, not cdylib_name: {cdylib_named_path}"
+            !library_named_path.exists(),
+            "staged library path should come from the input filename, not library_name: {library_named_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
@@ -461,7 +470,7 @@ mod tests {
     fn write_generated_package_preserves_windows_style_filenames_in_bundled_prebuilds() {
         let output_dir = temp_dir_path("staged-windows-filename");
         let mut component = component_with_namespace("example");
-        component.config.bundled_prebuilds = true;
+        component.spec.bundled_prebuilds = true;
         let input_library_filename = "fixture.dll";
 
         write_test_package_with_library_filename(&output_dir, &component, input_library_filename)
@@ -504,7 +513,8 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -618,7 +628,8 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -711,7 +722,8 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -879,7 +891,8 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1114,7 +1127,8 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let component_ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1159,7 +1173,8 @@ mod tests {
             "#,
         );
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let ffi_js = fs::read_to_string(output_dir.join("example-ffi.js").as_std_path())
             .expect("component FFI JS should be readable");
@@ -1557,9 +1572,10 @@ mod tests {
             };
             "#,
         );
-        component.config.bundled_prebuilds = true;
+        component.spec.bundled_prebuilds = true;
 
-        write_test_package(&output_dir, &component).expect("write_generated_package should succeed");
+        write_test_package(&output_dir, &component)
+            .expect("write_generated_package should succeed");
 
         let component_js = fs::read_to_string(output_dir.join("example.js").as_std_path())
             .expect("component JS should be readable");
@@ -1803,12 +1819,12 @@ mod tests {
         )
         .expect("test TOML should deserialize");
         let error =
-            parse_node_binding_config(&root).expect_err("legacy CommonJS settings should error");
+            parse_node_package_config(&root).expect_err("legacy CommonJS settings should error");
 
         assert!(
             error
                 .to_string()
-                .contains("generated Node packages are ESM-only in v2"),
+                .contains("generated Node packages are ESM-only"),
             "unexpected error: {error}"
         );
     }
@@ -1829,12 +1845,12 @@ mod tests {
             );
             let root =
                 toml::from_str::<toml::Value>(&source).expect("test TOML should deserialize");
-            let error = parse_node_binding_config(&root).unwrap_err();
+            let error = parse_node_package_config(&root).unwrap_err();
 
             assert!(
                 error
                     .to_string()
-                    .contains(&format!("bindings.node.{key} was removed in v2")),
+                    .contains(&format!("bindings.node.{key} is no longer supported")),
                 "unexpected error for {key}: {error}"
             );
         }
@@ -1853,7 +1869,6 @@ mod tests {
         );
 
         assert_eq!(explicit.package_name.as_deref(), Some("fixture-package"));
-        assert_eq!(explicit.cdylib_name, None);
         assert_eq!(explicit.node_engine, ">=20");
         assert!(!explicit.bundled_prebuilds);
         assert!(explicit.manual_load);
@@ -1865,7 +1880,6 @@ mod tests {
         );
 
         assert_eq!(defaulted.package_name, None);
-        assert_eq!(defaulted.cdylib_name, None);
         assert_eq!(defaulted.node_engine, ">=16");
         assert!(!defaulted.bundled_prebuilds);
         assert!(!defaulted.manual_load);
@@ -1894,12 +1908,12 @@ mod tests {
         )
         .expect("test TOML should deserialize");
         let error =
-            parse_node_binding_config(&root).expect_err("lib_path_literal should be rejected");
+            parse_node_package_config(&root).expect_err("lib_path_literal should be rejected");
 
         assert!(
             error
                 .to_string()
-                .contains("bindings.node.lib_path_literal was removed in v2"),
+                .contains("bindings.node.lib_path_literal is no longer supported"),
             "unexpected error: {error}"
         );
     }

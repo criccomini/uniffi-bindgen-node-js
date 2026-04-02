@@ -56,7 +56,7 @@ pub(crate) struct ComponentJsTemplate {
     pub(crate) namespace_doc_comment: String,
     pub(crate) namespace_json: String,
     pub(crate) package_name_json: String,
-    pub(crate) cdylib_name_json: String,
+    pub(crate) library_name_json: String,
     pub(crate) node_engine_json: String,
     pub(crate) bundled_prebuilds: bool,
     pub(crate) manual_load: bool,

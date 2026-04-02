@@ -3,8 +3,8 @@ mod support;
 use std::fs;
 
 use self::support::{
-    generate_fixture_package, generate_fixture_package_with_options,
-    install_fixture_package_dependencies, remove_dir_all, run_node_script, FixturePackageOptions,
+    FixturePackageOptions, generate_fixture_package, generate_fixture_package_with_options,
+    install_fixture_package_dependencies, remove_dir_all, run_node_script,
 };
 
 fn copy_directory_recursive(source: &std::path::Path, destination: &std::path::Path) {
@@ -25,10 +25,7 @@ fn copy_directory_recursive(source: &std::path::Path, destination: &std::path::P
     }
 }
 
-fn override_installed_koffi_load(
-    package_dir: &camino::Utf8PathBuf,
-    load_override_js: &str,
-) {
+fn override_installed_koffi_load(package_dir: &camino::Utf8PathBuf, load_override_js: &str) {
     let koffi_dir = package_dir.join("node_modules").join("koffi");
     let koffi_metadata = fs::symlink_metadata(koffi_dir.as_std_path())
         .expect("installed koffi fixture path should exist");
@@ -1540,10 +1537,9 @@ fn manual_load_unload_is_idempotent_across_repeated_cycles() {
         },
     );
     let package_dir = &generated.package_dir;
-    let staged_library_path = generated
-        .sibling_library_path
-        .as_ref()
-        .expect("manual-load idempotence package should stage the native library at the package root");
+    let staged_library_path = generated.sibling_library_path.as_ref().expect(
+        "manual-load idempotence package should stage the native library at the package root",
+    );
 
     install_fixture_package_dependencies(package_dir);
     run_node_script(

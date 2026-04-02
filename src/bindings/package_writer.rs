@@ -1,64 +1,52 @@
 use std::collections::BTreeSet;
 use std::fs;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use askama::Template;
 use camino::{Utf8Path, Utf8PathBuf};
-use uniffi_bindgen::Component;
+use uniffi_bindgen::interface::ComponentInterface;
 
 use super::{
     api::{RenderedComponentApi, build_public_api_ir, render_public_api},
     ffi::{RenderedComponentFfi, render_component_ffi},
     layout::GeneratedPackageLayout,
     runtime::emit_runtime_files,
+    spec::NodePackageSpec,
     templates::{
         ComponentDtsTemplate, ComponentJsTemplate, PackageIndexDtsTemplate, PackageIndexJsTemplate,
         PackageJsonTemplate, StringTemplate, json_string, rendered_file, write_files,
     },
 };
-use crate::node_v2::config::NodeBindingGeneratorConfig;
 
 #[derive(Debug, Clone)]
 struct GeneratedPackage {
     layout: GeneratedPackageLayout,
-    cdylib_name: String,
-    node_engine: String,
-    bundled_prebuilds: bool,
-    manual_load: bool,
+    spec: NodePackageSpec,
     public_api: RenderedComponentApi,
     ffi_api: RenderedComponentFfi,
 }
 
 impl GeneratedPackage {
-    fn from_component(
+    fn from_parts(
         out_dir: &Utf8Path,
         lib_source: &Utf8Path,
-        component: &Component<NodeBindingGeneratorConfig>,
+        ci: &ComponentInterface,
+        package_spec: &NodePackageSpec,
     ) -> Result<Self> {
-        let public_api = render_public_api(&build_public_api_ir(&component.ci)?)?;
-        let layout = GeneratedPackageLayout::from_component(out_dir, lib_source, component)?;
-        let cdylib_name = component
-            .config
-            .cdylib_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| anyhow!("node bindings generation requires a cdylib_name"))?;
+        let public_api = render_public_api(&build_public_api_ir(ci)?)?;
+        let layout = GeneratedPackageLayout::from_parts(out_dir, lib_source, ci, package_spec)?;
         let ffi_api = render_component_ffi(
-            &component.ci,
-            cdylib_name,
+            ci,
+            &package_spec.library_name,
             &layout.native_library.file_name,
             layout.native_library.package_relative_path.as_str(),
-            component.config.bundled_prebuilds,
-            component.config.manual_load,
+            package_spec.bundled_prebuilds,
+            package_spec.manual_load,
         )?;
 
         Ok(Self {
             layout,
-            cdylib_name: cdylib_name.to_string(),
-            node_engine: component.config.node_engine.trim().to_string(),
-            bundled_prebuilds: component.config.bundled_prebuilds,
-            manual_load: component.config.manual_load,
+            spec: package_spec.clone(),
             public_api,
             ffi_api,
         })
@@ -101,7 +89,7 @@ impl GeneratedPackage {
                 self.layout.index_js_path(),
                 PackageIndexJsTemplate {
                     namespace: self.layout.namespace.clone(),
-                    manual_load: self.manual_load,
+                    manual_load: self.spec.manual_load,
                 }
                 .render(),
             )?,
@@ -129,10 +117,10 @@ impl GeneratedPackage {
                     namespace_doc_comment: self.public_api.namespace_doc_comment.clone(),
                     namespace_json: template_context.namespace_json.clone(),
                     package_name_json: template_context.package_name_json.clone(),
-                    cdylib_name_json: template_context.cdylib_name_json.clone(),
+                    library_name_json: template_context.library_name_json.clone(),
                     node_engine_json: template_context.node_engine_json.clone(),
                     bundled_prebuilds: template_context.bundled_prebuilds,
-                    manual_load: self.manual_load,
+                    manual_load: self.spec.manual_load,
                     needs_koffi: component_js_imports.needs_koffi,
                     ffi_imports: component_js_imports.ffi_imports,
                     ffi_types_imports: component_js_imports.ffi_types_imports,
@@ -151,7 +139,7 @@ impl GeneratedPackage {
                 ComponentDtsTemplate {
                     namespace: self.layout.namespace.clone(),
                     namespace_doc_comment: self.public_api.namespace_doc_comment.clone(),
-                    manual_load: self.manual_load,
+                    manual_load: self.spec.manual_load,
                     needs_uniffi_object_base: component_dts_imports.needs_uniffi_object_base,
                     public_api_dts: self.public_api.dts.clone(),
                 }
@@ -274,9 +262,10 @@ fn existing_staged_library_matches_source(
 pub(crate) fn write_generated_package(
     out_dir: &Utf8Path,
     lib_source: &Utf8Path,
-    component: &Component<NodeBindingGeneratorConfig>,
+    ci: &ComponentInterface,
+    package_spec: &NodePackageSpec,
 ) -> Result<()> {
-    let package = GeneratedPackage::from_component(out_dir, lib_source, component)?;
+    let package = GeneratedPackage::from_parts(out_dir, lib_source, ci, package_spec)?;
     package.ensure_output_dirs()?;
     package.write_package_files()
 }
@@ -390,7 +379,7 @@ fn collect_used_js_imports(source: &str, identifiers: &[&str]) -> Vec<String> {
 struct TemplateContext {
     namespace_json: String,
     package_name_json: String,
-    cdylib_name_json: String,
+    library_name_json: String,
     node_engine_json: String,
     bundled_prebuilds: bool,
 }
@@ -400,9 +389,9 @@ impl TemplateContext {
         Ok(Self {
             namespace_json: json_string(&package.layout.namespace)?,
             package_name_json: json_string(&package.layout.package_name)?,
-            cdylib_name_json: json_string(&package.cdylib_name)?,
-            node_engine_json: json_string(&package.node_engine)?,
-            bundled_prebuilds: package.bundled_prebuilds,
+            library_name_json: json_string(&package.spec.library_name)?,
+            node_engine_json: json_string(&package.spec.node_engine)?,
+            bundled_prebuilds: package.spec.bundled_prebuilds,
         })
     }
 }

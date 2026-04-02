@@ -1,12 +1,12 @@
 use anyhow::{Result, bail};
 use uniffi_bindgen::Component;
 
-use crate::node_v2::config::NodeBindingGeneratorConfig;
+use crate::node::config::NodePackageConfig;
 
 pub(crate) fn select_component(
-    components: Vec<Component<NodeBindingGeneratorConfig>>,
+    components: Vec<Component<NodePackageConfig>>,
     crate_name: Option<&str>,
-) -> Result<Component<NodeBindingGeneratorConfig>> {
+) -> Result<Component<NodePackageConfig>> {
     let available_crate_names = components
         .iter()
         .map(|component| component.ci.crate_name().to_string())
@@ -59,14 +59,14 @@ mod tests {
     // Component-selection tests remain synthetic because they exercise selector behavior only.
     // Multi-component loader coverage lives in the integration tests.
 
-    fn test_component(crate_name: &str, namespace: &str) -> Component<NodeBindingGeneratorConfig> {
+    fn test_component(crate_name: &str, namespace: &str) -> Component<NodePackageConfig> {
         Component {
             ci: ComponentInterface::from_webidl(
                 &format!("namespace {namespace} {{}};"),
                 crate_name,
             )
             .expect("valid test UDL"),
-            config: NodeBindingGeneratorConfig::default(),
+            config: NodePackageConfig::default(),
         }
     }
 

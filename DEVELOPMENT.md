@@ -22,7 +22,7 @@ Inspect the generator subcommand:
 cargo run -- generate --help
 ```
 
-Run the v2 generator against a built cdylib:
+Run the generator against a built cdylib:
 
 ```sh
 cargo run -- generate path/to/libyour_fixture.dylib \
@@ -59,16 +59,16 @@ cargo test --locked --test node_real_koffi_tests -- --ignored
 
 ## Architecture
 
-The crate now routes generation through a loader-based v2 pipeline instead of the old bindgen-orchestration path.
+The crate now routes generation through a loader-based pipeline instead of the old bindgen-orchestration path.
 
 The high-level flow is:
 
 1. `src/subcommands/generate.rs` parses CLI arguments and validates the user-facing surface.
-2. `src/node_v2/mod.rs` builds `BindgenPaths`, constructs `BindgenLoader`, loads metadata and component interfaces from the built cdylib, loads per-component config, applies Node defaults and CLI overrides, applies rename config, selects one component, and calls `derive_ffi_funcs()`.
+2. `src/node/mod.rs` builds `BindgenPaths`, constructs `BindgenLoader`, loads metadata and component interfaces from the built cdylib, loads per-component config, applies Node defaults and CLI overrides, applies rename config, selects one component, and calls `derive_ffi_funcs()`.
 3. `src/bindings/package_writer.rs` turns the selected `ComponentInterface` into package files and delegates path decisions to `src/bindings/layout.rs`.
 4. `src/bindings/api/`, `src/bindings/ffi.rs`, and `src/bindings/runtime.rs` render the package contents and shared runtime helpers.
 
-Keep loader and config orchestration in `src/node_v2/`. Keep rendering code centered on `ComponentInterface` and the package writer. If a change mixes those responsibilities, split it before adding more behavior.
+Keep loader and config orchestration in `src/node/`. Keep rendering code centered on `ComponentInterface` and the package writer. If a change mixes those responsibilities, split it before adding more behavior.
 
 ## Complexity
 
@@ -240,7 +240,7 @@ Some real-runtime Node tests are intentionally ignored because they require regi
 ## Repository Layout
 
 - `src/subcommands/generate.rs`: CLI arguments and command execution
-- `src/node_v2/`: loader-based generation orchestration, config normalization, component selection, path resolution, and validation
+- `src/node/`: loader-based generation orchestration, config normalization, component selection, path resolution, and validation
 - `src/bindings/package_writer.rs`: package assembly and file emission orchestration
 - `src/bindings/layout.rs`: generated package path layout decisions
 - `src/bindings/api/`: high-level JavaScript and declaration emission

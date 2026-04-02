@@ -32,7 +32,7 @@ mod tests {
     use super::Cli;
 
     #[test]
-    fn generate_cli_help_describes_v2_surface() {
+    fn generate_cli_help_describes_current_surface() {
         let mut command = Cli::command();
         let generate = command
             .find_subcommand_mut("generate")

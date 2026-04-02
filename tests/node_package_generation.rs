@@ -47,9 +47,12 @@ fn extract_generated_block<'a>(contents: &'a str, start_marker: &str, end_marker
 fn assert_substrings_in_order(haystack: &str, expected: &[&str]) {
     let mut offset = 0;
     for needle in expected {
-        let relative_index = haystack[offset..]
-            .find(needle)
-            .unwrap_or_else(|| panic!("expected to find {needle:?} after:\n{}", &haystack[..offset]));
+        let relative_index = haystack[offset..].find(needle).unwrap_or_else(|| {
+            panic!(
+                "expected to find {needle:?} after:\n{}",
+                &haystack[..offset]
+            )
+        });
         offset += relative_index + needle.len();
     }
 }
@@ -665,7 +668,9 @@ fn reports_available_crate_names_when_a_library_contains_multiple_components() {
     .expect_err("multi-component libraries should require an explicit crate selector");
 
     assert!(
-        error.to_string().contains("the library contains multiple UniFFI components"),
+        error
+            .to_string()
+            .contains("the library contains multiple UniFFI components"),
         "unexpected error: {error:#}"
     );
     assert!(
@@ -1344,7 +1349,7 @@ fn rejects_missing_library_source_from_programmatic_entrypoint() {
         bundled_prebuilds: false,
         manual_load: false,
     })
-    .expect_err("missing library path should be rejected by the v2 entrypoint");
+    .expect_err("missing library path should be rejected by the package-generation entrypoint");
 
     assert!(
         error.to_string().contains(&format!(
@@ -1374,7 +1379,7 @@ fn rejects_file_out_dir_from_programmatic_entrypoint() {
         bundled_prebuilds: false,
         manual_load: false,
     })
-    .expect_err("file-backed out-dir should be rejected by the v2 entrypoint");
+    .expect_err("file-backed out-dir should be rejected by the package-generation entrypoint");
 
     assert!(
         error.to_string().contains(&format!(
@@ -1404,7 +1409,7 @@ fn rejects_directory_manifest_path_from_programmatic_entrypoint() {
         bundled_prebuilds: false,
         manual_load: false,
     })
-    .expect_err("directory manifest path should be rejected by the v2 entrypoint");
+    .expect_err("directory manifest path should be rejected by the package-generation entrypoint");
 
     assert!(
         error.to_string().contains(&format!(
@@ -1422,7 +1427,10 @@ fn rejects_directory_manifest_path_from_programmatic_entrypoint() {
 fn rejects_missing_manifest_path_from_programmatic_entrypoint() {
     let built_fixture = build_fixture_cdylib("callbacks");
     let package_dir = temp_dir_path("missing-manifest-path-package");
-    let missing_manifest_path = built_fixture.workspace_dir.join("missing").join("Cargo.toml");
+    let missing_manifest_path = built_fixture
+        .workspace_dir
+        .join("missing")
+        .join("Cargo.toml");
 
     let error = generate_node_package(GenerateNodePackageOptions {
         lib_source: built_fixture.library_path.clone(),
@@ -1434,12 +1442,13 @@ fn rejects_missing_manifest_path_from_programmatic_entrypoint() {
         bundled_prebuilds: false,
         manual_load: false,
     })
-    .expect_err("missing manifest path should be rejected by the v2 entrypoint");
+    .expect_err("missing manifest path should be rejected by the package-generation entrypoint");
 
     assert!(
-        error
-            .to_string()
-            .contains(&format!("manifest path '{}' does not exist", missing_manifest_path)),
+        error.to_string().contains(&format!(
+            "manifest path '{}' does not exist",
+            missing_manifest_path
+        )),
         "unexpected error: {error:#}"
     );
 

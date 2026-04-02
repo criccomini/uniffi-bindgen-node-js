@@ -103,7 +103,7 @@ Optional Node package settings:
 - `--bundled-prebuilds`: stage the input cdylib into `prebuilds/<host-target>/` and resolve that staged library by default
 - `--manual-load`: export explicit `load()` and `unload()` helpers instead of auto-loading on import; the generated package still includes the staged native library
 
-Generated packages are always ESM. The v2 CLI does not offer CommonJS output or legacy native-library path overrides.
+Generated packages are always ESM. The CLI does not offer CommonJS output or legacy native-library path overrides.
 
 ## Packaging Modes
 
@@ -180,7 +180,7 @@ Defaults:
 
 CLI flags apply after config-file settings.
 
-Generated packages are always ESM. v2 rejects legacy `[bindings.node]` keys such as `cdylib_name`, `lib_path_literal`, `module_format`, and `commonjs` with explicit diagnostics.
+Generated packages are always ESM. The generator rejects legacy `[bindings.node]` keys such as `cdylib_name`, `lib_path_literal`, `module_format`, and `commonjs` with explicit diagnostics.
 
 ## Compatibility
 
@@ -190,7 +190,7 @@ Generated packages are always ESM. v2 rejects legacy `[bindings.node]` keys such
 
 ## Supported UniFFI Surface
 
-The v2 generator currently supports:
+The generator currently supports:
 
 - top-level functions
 - objects, constructors, and synchronous methods

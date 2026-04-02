@@ -308,7 +308,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add a fixture or test case for UDL-backed library generation through the new loader path if needed.
 - [x] Update leak helper binaries to call the new v2 entrypoint.
 - [x] Update leak helper binaries to rely on generator-owned staging rather than local copy logic.
-- [ ] Revalidate leak probes after the refactor.
+- [x] Revalidate leak probes after the refactor.
 - [ ] Revalidate ignored real-koffi tests after the refactor.
 - [ ] Run cargo test --locked.
 - [ ] Run ignored Rust tests that are part of the existing acceptance bar.

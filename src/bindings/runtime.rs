@@ -120,7 +120,13 @@ const RUNTIME_MODULE_TEMPLATES: &[RuntimeModuleTemplateSet] = &[
     },
     RuntimeModuleTemplateSet {
         stem: "async-rust-call",
-        dependencies: &["errors", "ffi-types", "ffi-converters", "handle-map", "rust-call"],
+        dependencies: &[
+            "errors",
+            "ffi-types",
+            "ffi-converters",
+            "handle-map",
+            "rust-call",
+        ],
         js: render_runtime_async_rust_call_js,
         dts: render_runtime_async_rust_call_dts,
     },

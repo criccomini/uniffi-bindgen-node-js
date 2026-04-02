@@ -29,10 +29,6 @@ pub(crate) fn json_string(value: &str) -> Result<String> {
     Ok(serde_json::to_string(value)?)
 }
 
-pub(crate) fn json_optional_string(value: Option<&str>) -> Result<String> {
-    Ok(serde_json::to_string(&value)?)
-}
-
 #[derive(Template)]
 #[template(path = "package/package.json.j2", escape = "none")]
 pub(crate) struct PackageJsonTemplate {
@@ -62,7 +58,6 @@ pub(crate) struct ComponentJsTemplate {
     pub(crate) package_name_json: String,
     pub(crate) cdylib_name_json: String,
     pub(crate) node_engine_json: String,
-    pub(crate) lib_path_literal_json: String,
     pub(crate) bundled_prebuilds: bool,
     pub(crate) manual_load: bool,
     pub(crate) needs_koffi: bool,

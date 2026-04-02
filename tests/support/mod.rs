@@ -41,19 +41,10 @@ pub struct GeneratedFixturePackage {
     pub bundled_prebuild_path: Option<Utf8PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FixturePackageOptions {
     pub bundled_prebuilds: bool,
     pub manual_load: bool,
-}
-
-impl Default for FixturePackageOptions {
-    fn default() -> Self {
-        Self {
-            bundled_prebuilds: false,
-            manual_load: false,
-        }
-    }
 }
 
 pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {

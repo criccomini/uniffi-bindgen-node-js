@@ -57,12 +57,12 @@ pub fn run(args: GenerateArgs) -> anyhow::Result<()> {
 }
 
 fn validate_args(args: &GenerateArgs) -> anyhow::Result<()> {
-    if let Some(crate_name) = args.crate_name.as_deref() {
-        if crate_name.trim().is_empty() {
-            bail!(
-                "--crate-name cannot be empty; omit it to infer the only UniFFI component in the library"
-            );
-        }
+    if let Some(crate_name) = args.crate_name.as_deref()
+        && crate_name.trim().is_empty()
+    {
+        bail!(
+            "--crate-name cannot be empty; omit it to infer the only UniFFI component in the library"
+        );
     }
     if args.out_dir.as_str().trim().is_empty() {
         bail!("--out-dir cannot be empty");

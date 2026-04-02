@@ -1192,7 +1192,6 @@ mod tests {
           cdylibName: "fixture",
           stagedLibraryFileName: "libfixture.dylib",
           stagedLibraryPackageRelativePath: "libfixture.dylib",
-          libPathLiteral: null,
           bundledPrebuilds: false,
           manualLoad: false,
         });
@@ -1289,17 +1288,6 @@ mod tests {
               libraryPath: isAbsolute(libraryPath)
                 ? libraryPath
                 : join(moduleDirectory, libraryPath),
-              packageRelativePath: null,
-              bundledPrebuild: null,
-            });
-          }
-
-          const rawLibraryPath = ffiMetadata.libPathLiteral;
-          if (rawLibraryPath != null) {
-            return Object.freeze({
-              libraryPath: isAbsolute(rawLibraryPath)
-                ? rawLibraryPath
-                : join(moduleDirectory, rawLibraryPath),
               packageRelativePath: null,
               bundledPrebuild: null,
             });
@@ -1512,7 +1500,6 @@ mod tests {
           cdylibName: string;
           stagedLibraryFileName: string;
           stagedLibraryPackageRelativePath: string;
-          libPathLiteral: string | null;
           bundledPrebuilds: boolean;
           manualLoad: boolean;
         }
@@ -1646,8 +1633,6 @@ mod tests {
             &metadata_and_resolution,
             &[
                 "if (libraryPath != null) {",
-                "const rawLibraryPath = ffiMetadata.libPathLiteral;",
-                "if (rawLibraryPath != null) {",
                 "if (ffiMetadata.bundledPrebuilds) {",
                 "libraryPath: defaultSiblingLibraryPath(),",
             ],
@@ -1704,7 +1689,7 @@ mod tests {
     }
 
     #[test]
-    fn write_generated_package_resolves_sibling_and_literal_library_paths() {
+    fn write_generated_package_resolves_staged_library_paths() {
         let output_dir = temp_dir_path("ffi-library-paths");
         write_test_package(&output_dir, &component_with_namespace("example"))
             .expect("write_generated_package should succeed");
@@ -1738,15 +1723,7 @@ mod tests {
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
-            component_ffi_js.contains("const rawLibraryPath = ffiMetadata.libPathLiteral;"),
-            "unexpected component FFI JS contents: {component_ffi_js}"
-        );
-        assert!(
             component_ffi_js.contains("function canonicalizeExistingLibraryPath(libraryPath)"),
-            "unexpected component FFI JS contents: {component_ffi_js}"
-        );
-        assert!(
-            component_ffi_js.contains("libraryPath: isAbsolute(rawLibraryPath)"),
             "unexpected component FFI JS contents: {component_ffi_js}"
         );
         assert!(
@@ -1878,7 +1855,6 @@ mod tests {
         assert_eq!(explicit.package_name.as_deref(), Some("fixture-package"));
         assert_eq!(explicit.cdylib_name, None);
         assert_eq!(explicit.node_engine, ">=20");
-        assert_eq!(explicit.lib_path_literal, None);
         assert!(!explicit.bundled_prebuilds);
         assert!(explicit.manual_load);
 
@@ -1891,7 +1867,6 @@ mod tests {
         assert_eq!(defaulted.package_name, None);
         assert_eq!(defaulted.cdylib_name, None);
         assert_eq!(defaulted.node_engine, ">=16");
-        assert_eq!(defaulted.lib_path_literal, None);
         assert!(!defaulted.bundled_prebuilds);
         assert!(!defaulted.manual_load);
     }

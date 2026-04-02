@@ -28,7 +28,6 @@ export const ffiMetadata = Object.freeze({
   cdylibName: {{ context.cdylib_name_json }},
   stagedLibraryFileName: {{ context.staged_library_file_name_json }},
   stagedLibraryPackageRelativePath: {{ context.staged_library_package_relative_path_json }},
-  libPathLiteral: {{ context.lib_path_literal_json }},
   bundledPrebuilds: {{ context.bundled_prebuilds }},
   manualLoad: {{ context.manual_load }},
 });
@@ -125,17 +124,6 @@ function resolveLibraryPath(libraryPath = undefined) {
       libraryPath: isAbsolute(libraryPath)
         ? libraryPath
         : join(moduleDirectory, libraryPath),
-      packageRelativePath: null,
-      bundledPrebuild: null,
-    });
-  }
-
-  const rawLibraryPath = ffiMetadata.libPathLiteral;
-  if (rawLibraryPath != null) {
-    return Object.freeze({
-      libraryPath: isAbsolute(rawLibraryPath)
-        ? rawLibraryPath
-        : join(moduleDirectory, rawLibraryPath),
       packageRelativePath: null,
       bundledPrebuild: null,
     });

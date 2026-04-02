@@ -97,7 +97,6 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
             "  stagedLibraryPackageRelativePath: {},",
             json_string(generated.staged_library_package_relative_path.as_str())
         ),
-        "  libPathLiteral: null,".to_string(),
         "  bundledPrebuilds: false,".to_string(),
         "  manualLoad: false,".to_string(),
         "export const ffiIntegrity = Object.freeze({".to_string(),
@@ -121,7 +120,6 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
         "function defaultSiblingLibraryPath() {".to_string(),
         "return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);".to_string(),
         "function resolveLibraryPath(libraryPath = undefined) {".to_string(),
-        "const rawLibraryPath = ffiMetadata.libPathLiteral;".to_string(),
         "if (ffiMetadata.bundledPrebuilds) {".to_string(),
         "packageRelativePath: ffiMetadata.stagedLibraryPackageRelativePath,".to_string(),
         "function canonicalizeExistingLibraryPath(libraryPath) {".to_string(),
@@ -203,7 +201,6 @@ fn basic_fixture_ffi_typescript_contract_matches_the_v2_lifecycle_surface() {
         "cdylibName: string;",
         "stagedLibraryFileName: string;",
         "stagedLibraryPackageRelativePath: string;",
-        "libPathLiteral: string | null;",
         "bundledPrebuilds: boolean;",
         "manualLoad: boolean;",
         "export interface FfiBindings {",

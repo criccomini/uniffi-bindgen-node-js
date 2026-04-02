@@ -13,8 +13,7 @@ use super::{
     runtime::emit_runtime_files,
     templates::{
         ComponentDtsTemplate, ComponentJsTemplate, PackageIndexDtsTemplate, PackageIndexJsTemplate,
-        PackageJsonTemplate, StringTemplate, json_optional_string, json_string, rendered_file,
-        write_files,
+        PackageJsonTemplate, StringTemplate, json_string, rendered_file, write_files,
     },
 };
 use crate::node_v2::config::NodeBindingGeneratorConfig;
@@ -24,7 +23,6 @@ struct GeneratedPackage {
     layout: GeneratedPackageLayout,
     cdylib_name: String,
     node_engine: String,
-    lib_path_literal: Option<String>,
     bundled_prebuilds: bool,
     manual_load: bool,
     public_api: RenderedComponentApi,
@@ -51,7 +49,6 @@ impl GeneratedPackage {
             cdylib_name,
             &layout.native_library.file_name,
             layout.native_library.package_relative_path.as_str(),
-            component.config.lib_path_literal.as_deref(),
             component.config.bundled_prebuilds,
             component.config.manual_load,
         )?;
@@ -60,7 +57,6 @@ impl GeneratedPackage {
             layout,
             cdylib_name: cdylib_name.to_string(),
             node_engine: component.config.node_engine.trim().to_string(),
-            lib_path_literal: component.config.lib_path_literal.clone(),
             bundled_prebuilds: component.config.bundled_prebuilds,
             manual_load: component.config.manual_load,
             public_api,
@@ -135,7 +131,6 @@ impl GeneratedPackage {
                     package_name_json: template_context.package_name_json.clone(),
                     cdylib_name_json: template_context.cdylib_name_json.clone(),
                     node_engine_json: template_context.node_engine_json.clone(),
-                    lib_path_literal_json: template_context.lib_path_literal_json.clone(),
                     bundled_prebuilds: template_context.bundled_prebuilds,
                     manual_load: self.manual_load,
                     needs_koffi: component_js_imports.needs_koffi,
@@ -397,7 +392,6 @@ struct TemplateContext {
     package_name_json: String,
     cdylib_name_json: String,
     node_engine_json: String,
-    lib_path_literal_json: String,
     bundled_prebuilds: bool,
 }
 
@@ -408,7 +402,6 @@ impl TemplateContext {
             package_name_json: json_string(&package.layout.package_name)?,
             cdylib_name_json: json_string(&package.cdylib_name)?,
             node_engine_json: json_string(&package.node_engine)?,
-            lib_path_literal_json: json_optional_string(package.lib_path_literal.as_deref())?,
             bundled_prebuilds: package.bundled_prebuilds,
         })
     }

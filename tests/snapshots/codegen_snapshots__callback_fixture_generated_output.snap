@@ -138,7 +138,6 @@ export const componentMetadata = Object.freeze({
   packageName: "callbacks_fixture-package",
   cdylibName: "fixture_callbacks",
   nodeEngine: ">=16",
-  libPathLiteral: null,
   bundledPrebuilds: false,
   manualLoad: false,
 });
@@ -1352,7 +1351,6 @@ export interface ComponentMetadata {
   packageName: string;
   cdylibName: string;
   nodeEngine: string;
-  libPathLiteral: string | null;
   bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
@@ -1465,7 +1463,6 @@ export const ffiMetadata = Object.freeze({
   cdylibName: "fixture_callbacks",
   stagedLibraryFileName: "libfixture_callbacks.dylib",
   stagedLibraryPackageRelativePath: "libfixture_callbacks.dylib",
-  libPathLiteral: null,
   bundledPrebuilds: false,
   manualLoad: false,
 });
@@ -1600,17 +1597,6 @@ function resolveLibraryPath(libraryPath = undefined) {
       libraryPath: isAbsolute(libraryPath)
         ? libraryPath
         : join(moduleDirectory, libraryPath),
-      packageRelativePath: null,
-      bundledPrebuild: null,
-    });
-  }
-
-  const rawLibraryPath = ffiMetadata.libPathLiteral;
-  if (rawLibraryPath != null) {
-    return Object.freeze({
-      libraryPath: isAbsolute(rawLibraryPath)
-        ? rawLibraryPath
-        : join(moduleDirectory, rawLibraryPath),
       packageRelativePath: null,
       bundledPrebuild: null,
     });
@@ -4869,7 +4855,6 @@ export interface FfiMetadata {
   cdylibName: string;
   stagedLibraryFileName: string;
   stagedLibraryPackageRelativePath: string;
-  libPathLiteral: string | null;
   bundledPrebuilds: boolean;
   manualLoad: boolean;
 }
@@ -8591,11 +8576,17 @@ export class UniffiObjectFactory {
       cloneHandle(handle, value),
       `${this.typeName} cloned handle`,
     );
-    return genericAbi || this._cloneFreeUsesUniffiHandle
-      ? clonedHandle
-      : useRawExternal
-        ? this._coerceHandle(clonedHandle)
-        : clonedHandle;
+    if (genericAbi) {
+      return clonedHandle;
+    }
+
+    if (useRawExternal) {
+      return this._cloneFreeUsesUniffiHandle
+        ? pointerAddress(clonedHandle)
+        : this._coerceHandle(clonedHandle);
+    }
+
+    return clonedHandle;
   }
 
   destroy(value) {

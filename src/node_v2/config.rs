@@ -117,8 +117,6 @@ pub(crate) struct NodeBindingGeneratorConfig {
     #[serde(skip)]
     pub cdylib_name: Option<String>,
     pub node_engine: String,
-    #[serde(skip)]
-    pub lib_path_literal: Option<String>,
     pub bundled_prebuilds: bool,
     pub manual_load: bool,
     #[serde(default)]
@@ -131,7 +129,6 @@ impl Default for NodeBindingGeneratorConfig {
             package_name: None,
             cdylib_name: None,
             node_engine: ">=16".to_string(),
-            lib_path_literal: None,
             bundled_prebuilds: false,
             manual_load: false,
             rename: toml::Table::new(),
@@ -147,8 +144,7 @@ impl NodeBindingGeneratorConfig {
     fn validate_required_fields(&self) -> Result<()> {
         validate_optional_non_empty("package_name", self.package_name.as_deref())?;
         validate_optional_non_empty("cdylib_name", self.cdylib_name.as_deref())?;
-        validate_non_empty("node_engine", &self.node_engine)?;
-        validate_optional_non_empty("lib_path_literal", self.lib_path_literal.as_deref())
+        validate_non_empty("node_engine", &self.node_engine)
     }
 }
 

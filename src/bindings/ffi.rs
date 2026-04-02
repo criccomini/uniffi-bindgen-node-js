@@ -19,7 +19,6 @@ pub(crate) fn render_component_ffi(
     cdylib_name: &str,
     staged_library_file_name: &str,
     staged_library_package_relative_path: &str,
-    lib_path_literal: Option<&str>,
     bundled_prebuilds: bool,
     manual_load: bool,
 ) -> Result<RenderedComponentFfi> {
@@ -31,7 +30,6 @@ pub(crate) fn render_component_ffi(
         staged_library_package_relative_path_json: json_string(
             staged_library_package_relative_path,
         )?,
-        lib_path_literal_json: json_optional_string(lib_path_literal)?,
         bundled_prebuilds,
         manual_load,
         requires_runtime_hooks: component_requires_runtime_hooks(ci),
@@ -76,7 +74,6 @@ struct ComponentFfiTemplateContext {
     cdylib_name_json: String,
     staged_library_file_name_json: String,
     staged_library_package_relative_path_json: String,
-    lib_path_literal_json: String,
     bundled_prebuilds: bool,
     manual_load: bool,
     requires_runtime_hooks: bool,
@@ -90,10 +87,6 @@ struct ComponentFfiTemplateContext {
 
 fn json_string(value: &str) -> Result<String> {
     Ok(serde_json::to_string(value)?)
-}
-
-fn json_optional_string(value: Option<&str>) -> Result<String> {
-    Ok(serde_json::to_string(&value)?)
 }
 
 #[derive(Template)]

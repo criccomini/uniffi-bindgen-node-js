@@ -313,7 +313,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Run cargo test --locked.
 - [x] Run ignored Rust tests that are part of the existing acceptance bar.
 - [x] Run the generated-package smoke suites on supported platforms as available.
-- [ ] Run TypeScript declaration checks through the existing test harness.
+- [x] Run TypeScript declaration checks through the existing test harness.
 - [ ] Run the leak probes as a final regression pass.
 - [ ] Review the final crate for any dead code left behind by the v1 architecture removal.
 - [ ] Remove obsolete helper functions and tests tied only to v1 compatibility behavior.

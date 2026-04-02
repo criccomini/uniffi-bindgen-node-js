@@ -314,7 +314,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Run ignored Rust tests that are part of the existing acceptance bar.
 - [x] Run the generated-package smoke suites on supported platforms as available.
 - [x] Run TypeScript declaration checks through the existing test harness.
-- [ ] Run the leak probes as a final regression pass.
+- [x] Run the leak probes as a final regression pass.
 - [ ] Review the final crate for any dead code left behind by the v1 architecture removal.
 - [ ] Remove obsolete helper functions and tests tied only to v1 compatibility behavior.
 - [ ] Remove obsolete config parsing branches tied only to removed CLI/config knobs.

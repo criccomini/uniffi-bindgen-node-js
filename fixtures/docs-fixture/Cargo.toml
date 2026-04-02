@@ -1,0 +1,16 @@
+[package]
+name = "fixture-docs"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "fixture_docs"
+crate-type = ["cdylib"]
+
+[dependencies]
+thiserror = "1"
+uniffi = { version = "=0.31.0" }
+
+[build-dependencies]
+uniffi = { version = "=0.31.0", features = ["build"] }

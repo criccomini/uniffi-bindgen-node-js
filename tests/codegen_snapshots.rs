@@ -4,12 +4,12 @@ mod support;
 
 use self::support::{fixtures::fixture_spec, generate_fixture_package, remove_dir_all};
 
-fn snapshot_output_for_fixture(name: &str) -> String {
+fn snapshot_package_output_for_fixture(name: &str) -> String {
     let spec = fixture_spec(name);
     let generated = generate_fixture_package(name);
 
     let mut snapshot = String::new();
-    for relative_path in spec.generated_binding_relative_paths() {
+    for relative_path in spec.generated_package_relative_paths() {
         let contents = fs::read_to_string(generated.package_dir.join(&relative_path).as_std_path())
             .unwrap_or_else(|error| {
                 panic!(
@@ -31,7 +31,7 @@ fn snapshot_output_for_fixture(name: &str) -> String {
 fn snapshots_basic_fixture_generated_output() {
     insta::assert_snapshot!(
         "basic_fixture_generated_output",
-        snapshot_output_for_fixture("basic")
+        snapshot_package_output_for_fixture("basic")
     );
 }
 
@@ -39,7 +39,7 @@ fn snapshots_basic_fixture_generated_output() {
 fn snapshots_callback_fixture_generated_output() {
     insta::assert_snapshot!(
         "callback_fixture_generated_output",
-        snapshot_output_for_fixture("callbacks")
+        snapshot_package_output_for_fixture("callbacks")
     );
 }
 
@@ -47,6 +47,6 @@ fn snapshots_callback_fixture_generated_output() {
 fn snapshots_docs_fixture_generated_output() {
     insta::assert_snapshot!(
         "docs_fixture_generated_output",
-        snapshot_output_for_fixture("docs")
+        snapshot_package_output_for_fixture("docs")
     );
 }

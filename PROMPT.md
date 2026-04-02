@@ -283,7 +283,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for contract-version validation under UniFFI 0.31.
 - [x] Add coverage for error-class generation and throwing behavior after the refactor.
 - [x] Add coverage for TypeScript output after any naming or surface changes.
-- [ ] Add coverage for package generation snapshots using the loader-based flow.
+- [x] Add coverage for package generation snapshots using the loader-based flow.
 - [ ] Replace tests that currently depend on BindingGenerator::write_bindings.
 - [ ] Replace tests that currently depend on manual GenerationSettings construction where no longer appropriate.
 - [ ] Replace test helpers that manually construct Component<NodeBindingGeneratorConfig> where end-to-end loader coverage is required.
@@ -302,7 +302,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [ ] Update tests/node_real_koffi_tests.rs for any ABI/runtime changes.
 - [x] Add UniFFI 0.31 `ffi_fixture_basic_rust_future_*_u64` helpers to the koffi test shim.
 - [ ] Update tests/npm-fixtures/koffi/index.js so the fake koffi behavior matches UniFFI 0.30/0.31 handle/callback semantics.
-- [ ] Update snapshot files for the new generated output.
+- [x] Update snapshot files for the new generated output.
 - [ ] Update fixture crates if UniFFI 0.31 requires source-level changes.
 - [ ] Add a fixture or test case for multi-component libraries if none exists today.
 - [ ] Add a fixture or test case for UDL-backed library generation through the new loader path if needed.

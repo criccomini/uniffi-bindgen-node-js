@@ -1,7 +1,28 @@
 ---
 source: tests/codegen_snapshots.rs
-expression: "snapshot_output_for_fixture(\"callbacks\")"
+expression: "snapshot_package_output_for_fixture(\"callbacks\")"
 ---
+=== package.json ===
+{
+  "name": "callbacks_fixture-package",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "koffi": "^2.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  }
+}
 === index.js ===
 
 import { load as loadFfi } from "./callbacks_fixture-ffi.js";
@@ -597,11 +618,11 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferen
     (uniffiFutureHandle) => {
       freePendingForeignFuture(uniffiFutureHandle);
     },
-    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureDroppedCallback),
   );
   registrations.push(writeFutureFree);
   const writeCallback = koffi.register(
-    (uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {
+    (uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutDroppedCallback) => {
       const uniffiFutureHandle = invokeAsyncCallbackMethod({
         registry: uniffiAsyncLogSinkRegistry,
         handle: uniffiHandle,
@@ -615,7 +636,7 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferen
         defaultReturnValue: EMPTY_RUST_BUFFER,
         lowerString: (value) => uniffiLowerString(value),
       });
-      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+      koffi.encode(uniffiOutDroppedCallback, bindings.ffiStructs.ForeignFutureDroppedCallbackStruct, {
         handle: uniffiFutureHandle,
         free: writeFutureFree,
       });
@@ -627,11 +648,11 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferen
     (uniffiFutureHandle) => {
       freePendingForeignFuture(uniffiFutureHandle);
     },
-    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureDroppedCallback),
   );
   registrations.push(write_fallibleFutureFree);
   const write_fallibleCallback = koffi.register(
-    (uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {
+    (uniffiHandle, message, uniffiFutureCallback, uniffiCallbackData, uniffiOutDroppedCallback) => {
       const uniffiFutureHandle = invokeAsyncCallbackMethod({
         registry: uniffiAsyncLogSinkRegistry,
         handle: uniffiHandle,
@@ -646,7 +667,7 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferen
         defaultReturnValue: EMPTY_RUST_BUFFER,
         lowerString: (value) => uniffiLowerString(value),
       });
-      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+      koffi.encode(uniffiOutDroppedCallback, bindings.ffiStructs.ForeignFutureDroppedCallbackStruct, {
         handle: uniffiFutureHandle,
         free: write_fallibleFutureFree,
       });
@@ -658,11 +679,11 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferen
     (uniffiFutureHandle) => {
       freePendingForeignFuture(uniffiFutureHandle);
     },
-    koffi.pointer(bindings.ffiCallbacks.ForeignFutureFree),
+    koffi.pointer(bindings.ffiCallbacks.ForeignFutureDroppedCallback),
   );
   registrations.push(flushFutureFree);
   const flushCallback = koffi.register(
-    (uniffiHandle, uniffiFutureCallback, uniffiCallbackData, uniffiOutReturn) => {
+    (uniffiHandle, uniffiFutureCallback, uniffiCallbackData, uniffiOutDroppedCallback) => {
       const uniffiFutureHandle = invokeAsyncCallbackMethod({
         registry: uniffiAsyncLogSinkRegistry,
         handle: uniffiHandle,
@@ -673,7 +694,7 @@ function uniffiRegisterAsyncLogSinkVtable(bindings, registrations, vtableReferen
         callbackData: uniffiCallbackData,
         lowerString: (value) => uniffiLowerString(value),
       });
-      koffi.encode(uniffiOutReturn, bindings.ffiStructs.ForeignFuture, {
+      koffi.encode(uniffiOutDroppedCallback, bindings.ffiStructs.ForeignFutureDroppedCallbackStruct, {
         handle: uniffiFutureHandle,
         free: flushFutureFree,
       });
@@ -1426,7 +1447,6 @@ import {
   UniffiHandle,
   VoidPointer,
   defineCallbackVtable,
-  defineOpaquePointer,
   defineStructType,
   normalizeHandle,
   normalizeInt64,
@@ -1443,6 +1463,8 @@ import {
 export const ffiMetadata = Object.freeze({
   namespace: "callbacks_fixture",
   cdylibName: "fixture_callbacks",
+  stagedLibraryFileName: "libfixture_callbacks.dylib",
+  stagedLibraryPackageRelativePath: "libfixture_callbacks.dylib",
   libPathLiteral: null,
   bundledPrebuilds: false,
   manualLoad: false,
@@ -1510,42 +1532,57 @@ const moduleDirectory = dirname(moduleFilename);
 const libraryNotLoadedMessage =
   "The native library is not loaded. Call load(libraryPath) first.";
 
-function defaultSiblingLibraryFilename() {
-  const extensionByPlatform = {
-    darwin: ".dylib",
-    linux: ".so",
-    win32: ".dll",
-  };
-  const extension = extensionByPlatform[process.platform] ?? ".so";
-
-  if (process.platform === "win32") {
-    return ffiMetadata.cdylibName.endsWith(extension)
-      ? ffiMetadata.cdylibName
-      : `${ffiMetadata.cdylibName}${extension}`;
+function bundledPrebuildPlatform() {
+  switch (process.platform) {
+    case "aix":
+    case "android":
+    case "darwin":
+    case "freebsd":
+    case "linux":
+    case "openbsd":
+    case "win32":
+      return process.platform;
+    default:
+      throw new Error(
+        `Unsupported Node platform ${JSON.stringify(process.platform)} for UniFFI bundled prebuild resolution.`,
+      );
   }
+}
 
-  const libraryBaseName = ffiMetadata.cdylibName.startsWith("lib")
-    ? ffiMetadata.cdylibName
-    : `lib${ffiMetadata.cdylibName}`;
-  return libraryBaseName.endsWith(extension)
-    ? libraryBaseName
-    : `${libraryBaseName}${extension}`;
+function bundledPrebuildArch() {
+  switch (process.arch) {
+    case "arm":
+    case "arm64":
+    case "ia32":
+    case "loong64":
+    case "ppc64":
+    case "riscv64":
+    case "s390x":
+    case "x64":
+      return process.arch;
+    default:
+      throw new Error(
+        `Unsupported Node architecture ${JSON.stringify(process.arch)} for UniFFI bundled prebuild resolution.`,
+      );
+  }
 }
 
 function defaultBundledTarget() {
-  if (process.platform !== "linux") {
-    return `${process.platform}-${process.arch}`;
+  const platform = bundledPrebuildPlatform();
+  const arch = bundledPrebuildArch();
+  if (platform !== "linux") {
+    return `${platform}-${arch}`;
   }
 
   const glibcVersionRuntime =
     process.report?.getReport?.().header?.glibcVersionRuntime;
   const linuxLibc = glibcVersionRuntime == null ? "musl" : "gnu";
-  return `${process.platform}-${process.arch}-${linuxLibc}`;
+  return `${platform}-${arch}-${linuxLibc}`;
 }
 
 function defaultBundledLibrary() {
   const target = defaultBundledTarget();
-  const filename = defaultSiblingLibraryFilename();
+  const filename = ffiMetadata.stagedLibraryFileName;
   return Object.freeze({
     target,
     packageRelativePath: `prebuilds/${target}/${filename}`,
@@ -1554,16 +1591,27 @@ function defaultBundledLibrary() {
 }
 
 function defaultSiblingLibraryPath() {
-  return join(moduleDirectory, defaultSiblingLibraryFilename());
+  return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);
 }
 
 function resolveLibraryPath(libraryPath = undefined) {
-  const rawLibraryPath = libraryPath ?? ffiMetadata.libPathLiteral;
+  if (libraryPath != null) {
+    return Object.freeze({
+      libraryPath: isAbsolute(libraryPath)
+        ? libraryPath
+        : join(moduleDirectory, libraryPath),
+      packageRelativePath: null,
+      bundledPrebuild: null,
+    });
+  }
+
+  const rawLibraryPath = ffiMetadata.libPathLiteral;
   if (rawLibraryPath != null) {
     return Object.freeze({
       libraryPath: isAbsolute(rawLibraryPath)
         ? rawLibraryPath
         : join(moduleDirectory, rawLibraryPath),
+      packageRelativePath: null,
       bundledPrebuild: null,
     });
   }
@@ -1572,12 +1620,14 @@ function resolveLibraryPath(libraryPath = undefined) {
     const bundledPrebuild = defaultBundledLibrary();
     return Object.freeze({
       libraryPath: bundledPrebuild.libraryPath,
+      packageRelativePath: bundledPrebuild.packageRelativePath,
       bundledPrebuild,
     });
   }
 
   return Object.freeze({
     libraryPath: defaultSiblingLibraryPath(),
+    packageRelativePath: ffiMetadata.stagedLibraryPackageRelativePath,
     bundledPrebuild: null,
   });
 }
@@ -1595,14 +1645,12 @@ function canonicalizeExistingLibraryPath(libraryPath) {
 function createBindingCore(libraryPath) {
   const library = koffi.load(libraryPath);
 
-
   const ffiTypes = Object.freeze({
     UniffiHandle,
     VoidPointer,
     RustBuffer,
     ForeignBytes,
     RustCallStatus,
-
   });
   const ffiCallbacks = {};
 
@@ -2267,10 +2315,12 @@ function createBindingCore(libraryPath) {
   });
 }
 
-function createBindings(libraryPath, bindingCore = undefined) {
+function createBindings(libraryPath, bindingCore = undefined, resolution = undefined) {
   const core = bindingCore ?? createBindingCore(libraryPath);
+  const packageRelativePath = resolution?.packageRelativePath ?? null;
   return Object.freeze({
     libraryPath,
+    packageRelativePath,
     library: core.library,
     ffiTypes: core.ffiTypes,
     ffiCallbacks: core.ffiCallbacks,
@@ -2299,6 +2349,7 @@ function clearBindingCoreCache() {
 export function load(libraryPath = undefined) {
   const resolution = resolveLibraryPath(libraryPath);
   const resolvedLibraryPath = resolution.libraryPath;
+  const packageRelativePath = resolution.packageRelativePath;
   const bundledPrebuild = resolution.bundledPrebuild;
   const canonicalLibraryPath = canonicalizeExistingLibraryPath(resolvedLibraryPath);
 
@@ -2312,9 +2363,15 @@ export function load(libraryPath = undefined) {
     );
   }
 
-  if (bundledPrebuild !== null && !existsSync(resolvedLibraryPath)) {
+  if (packageRelativePath !== null && !existsSync(resolvedLibraryPath)) {
+    if (bundledPrebuild !== null) {
+      throw new Error(
+        `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package at ${JSON.stringify(resolvedLibraryPath)}.`,
+      );
+    }
+
     throw new Error(
-      `No bundled UniFFI library was found for target ${JSON.stringify(bundledPrebuild.target)}. Expected ${JSON.stringify(bundledPrebuild.packageRelativePath)} inside the generated package.`,
+      `No staged UniFFI library was found at ${JSON.stringify(packageRelativePath)} inside the generated package. Expected ${JSON.stringify(resolvedLibraryPath)}.`,
     );
   }
 
@@ -2327,7 +2384,7 @@ export function load(libraryPath = undefined) {
     clearBindingCoreCache();
   }
 
-  const bindings = createBindings(canonicalLibraryPath, bindingCore);
+  const bindings = createBindings(canonicalLibraryPath, bindingCore, resolution);
   try {
     runtimeHooks.onLoad?.(bindings);
     if (bindingCore == null) {
@@ -2421,7 +2478,13 @@ export function validateContractVersion(bindings = getFfiBindings()) {
   const actual = getContractVersion(bindings);
   const expected = ffiIntegrity.expectedContractVersion;
   if (actual !== expected) {
-    throw new ContractVersionMismatchError(expected, actual);
+    throw new ContractVersionMismatchError(expected, actual, {
+      details: {
+        libraryPath: bindings.libraryPath,
+        packageRelativePath: bindings.packageRelativePath,
+        symbolName: ffiIntegrity.contractVersionFunction,
+      },
+    });
   }
   return actual;
 }
@@ -2479,7 +2542,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_cancel_emit_async"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_cancel_emit_async"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_cancel_emit_async", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_cancel_emit_async", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2487,7 +2555,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2495,7 +2568,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit_async"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit_async"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit_async", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit_async", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2503,7 +2581,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_emit_async_fallible"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_emit_async_fallible"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit_async_fallible", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_emit_async_fallible", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2511,7 +2594,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_flush_async"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_flush_async"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_flush_async", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_flush_async", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2519,7 +2607,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_init_logging"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_init_logging"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_init_logging", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_init_logging", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2527,7 +2620,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_func_last_message"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_func_last_message"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_last_message", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_func_last_message", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2535,7 +2633,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_settings_set"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_settings_set"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_settings_set", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_settings_set", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2543,7 +2646,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_settings_to_json_string"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_settings_to_json_string"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_settings_to_json_string", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_settings_to_json_string", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2551,7 +2659,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_writebatch_delete"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_writebatch_delete"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_writebatch_delete", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_writebatch_delete", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2559,7 +2672,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_writebatch_operation_count"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_writebatch_operation_count"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_writebatch_operation_count", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_writebatch_operation_count", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2567,7 +2685,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_writebatch_put"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_writebatch_put"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_writebatch_put", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_writebatch_put", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2575,7 +2698,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_constructor_settings_default"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_constructor_settings_default"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_constructor_settings_default", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_constructor_settings_default", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2583,7 +2711,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_constructor_writebatch_new"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_constructor_writebatch_new"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_constructor_writebatch_new", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_constructor_writebatch_new", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2591,7 +2724,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_write", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_write", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2599,7 +2737,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_write_fallible", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2607,7 +2750,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_flush"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_asynclogsink_flush"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_flush", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_asynclogsink_flush", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2615,7 +2763,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_logcollector_log"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_logcollector_log"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logcollector_log", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logcollector_log", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2623,7 +2776,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_logsink_write"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_logsink_write"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logsink_write", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logsink_write", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -2631,7 +2789,12 @@ export function validateChecksums(bindings = getFfiBindings()) {
     const expected = ffiIntegrity.checksums["uniffi_fixture_callbacks_checksum_method_logsink_latest"];
     const actual = actualChecksums["uniffi_fixture_callbacks_checksum_method_logsink_latest"];
     if (actual !== expected) {
-      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logsink_latest", expected, actual);
+      throw new ChecksumMismatchError("uniffi_fixture_callbacks_checksum_method_logsink_latest", expected, actual, {
+        details: {
+          libraryPath: bindings.libraryPath,
+          packageRelativePath: bindings.packageRelativePath,
+        },
+      });
     }
   }
 
@@ -4704,6 +4867,8 @@ export function ffi_fixture_callbacks_uniffi_contract_version(...args) {
 export interface FfiMetadata {
   namespace: string;
   cdylibName: string;
+  stagedLibraryFileName: string;
+  stagedLibraryPackageRelativePath: string;
   libPathLiteral: string | null;
   bundledPrebuilds: boolean;
   manualLoad: boolean;
@@ -4711,6 +4876,7 @@ export interface FfiMetadata {
 
 export interface FfiBindings {
   libraryPath: string;
+  packageRelativePath: string | null;
   library: unknown;
   ffiTypes: Readonly<Record<string, unknown>>;
   ffiCallbacks: Readonly<Record<string, unknown>>;
@@ -4950,6 +5116,17 @@ function assignErrorMetadata(error, options = {}) {
   return error;
 }
 
+function stagedBinaryGuidance(details = {}) {
+  const packageRelativePath =
+    details != null && typeof details === "object"
+      ? details.packageRelativePath
+      : undefined;
+  if (packageRelativePath == null) {
+    return "Regenerate the package from this library or load the intended staged binary.";
+  }
+  return `Regenerate the package from this library or load the intended staged binary at ${JSON.stringify(packageRelativePath)} inside the generated package.`;
+}
+
 export class UniffiError extends Error {
   constructor(message = "UniFFI error", options = {}) {
     const captureStack = options.captureStack !== false;
@@ -4993,11 +5170,25 @@ export class LibraryNotLoadedError extends UniffiRuntimeError {
 
 export class ContractVersionMismatchError extends UniffiRuntimeError {
   constructor(expected, actual, options = {}) {
+    const details =
+      options.details != null && typeof options.details === "object"
+        ? options.details
+        : {};
+    const libraryPath = details.libraryPath;
+    const symbolName = details.symbolName;
     super(
-      `UniFFI contract version mismatch: expected ${String(expected)}, got ${String(actual)}.`,
+      `UniFFI contract version mismatch${
+        symbolName == null ? "" : ` for ${String(symbolName)}`
+      }${
+        libraryPath == null ? "" : ` in ${JSON.stringify(libraryPath)}`
+      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. ${stagedBinaryGuidance(details)}`,
       {
         ...options,
-        details: { expected, actual },
+        details: {
+          ...details,
+          expected,
+          actual,
+        },
       },
     );
   }
@@ -5005,11 +5196,26 @@ export class ContractVersionMismatchError extends UniffiRuntimeError {
 
 export class ChecksumMismatchError extends UniffiRuntimeError {
   constructor(kind, expected, actual, options = {}) {
+    const libraryPath =
+      options.details != null && typeof options.details === "object"
+        ? options.details.libraryPath
+        : undefined;
     super(
-      `UniFFI checksum mismatch for ${kind}: expected ${String(expected)}, got ${String(actual)}.`,
+      `UniFFI checksum mismatch for ${String(kind)}${
+        libraryPath == null ? "" : ` in ${JSON.stringify(libraryPath)}`
+      }: generated package expects ${String(expected)}, loaded library reported ${String(actual)}. ${stagedBinaryGuidance(
+        options.details,
+      )}`,
       {
         ...options,
-        details: { kind, expected, actual },
+        details: {
+          ...(options.details != null && typeof options.details === "object"
+            ? options.details
+            : {}),
+          kind,
+          expected,
+          actual,
+        },
       },
     );
   }
@@ -8409,8 +8615,6 @@ export class UniffiObjectFactory {
       genericAbi,
       rawExternal: useRawExternal,
     });
-    this._unregisterFinalizer(value);
-    this._markDestroyed(value);
 
     const freeHandle =
       genericAbi
@@ -8421,6 +8625,8 @@ export class UniffiObjectFactory {
     if (typeof freeHandle === "function") {
       freeHandle(handle, value);
     }
+    this._unregisterFinalizer(value);
+    this._markDestroyed(value);
     return true;
   }
 

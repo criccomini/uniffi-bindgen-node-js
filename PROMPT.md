@@ -288,7 +288,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Replace tests that currently depend on manual GenerationSettings construction where no longer appropriate.
 - [x] Replace test helpers that manually construct Component<NodeBindingGeneratorConfig> where end-to-end loader coverage is required.
 - [x] Decide which unit tests should remain synthetic for speed and precision.
-- [ ] Keep fixture-based end-to-end tests for the critical path.
+- [x] Keep fixture-based end-to-end tests for the critical path.
 - [ ] Update tests/support/mod.rs to stop copying native libraries after generation.
 - [ ] Move any remaining staging helpers that are still needed into production code or delete them.
 - [ ] Update tests/node_package_generation.rs for generator-owned staging.

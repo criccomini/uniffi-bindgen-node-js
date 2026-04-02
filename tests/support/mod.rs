@@ -35,6 +35,7 @@ pub struct BuiltMultiComponentFixtureCdylib {
 pub struct GeneratedFixturePackage {
     pub built_fixture: BuiltFixtureCdylib,
     pub package_dir: Utf8PathBuf,
+    pub staged_library_package_relative_path: Utf8PathBuf,
     pub sibling_library_path: Option<Utf8PathBuf>,
     pub bundled_prebuild_target: Option<String>,
     pub bundled_prebuild_path: Option<Utf8PathBuf>,
@@ -414,16 +415,39 @@ pub fn generate_fixture_package_with_options(
             built_fixture.library_path
         )
     });
-    let sibling_library_path = package_dir.join(library_filename);
-    let sibling_library_path = sibling_library_path
-        .is_file()
-        .then_some(sibling_library_path);
-    let (bundled_prebuild_target, bundled_prebuild_path) =
-        discover_bundled_prebuild(&package_dir, library_filename);
+    let staged_library_package_relative_path =
+        read_staged_library_package_relative_path(&package_dir, &built_fixture.namespace);
+    let staged_library_path = package_dir.join(&staged_library_package_relative_path);
+    let staged_library_components = staged_library_package_relative_path
+        .components()
+        .map(|component| component.as_str())
+        .collect::<Vec<_>>();
+    let (sibling_library_path, bundled_prebuild_target, bundled_prebuild_path) =
+        match staged_library_components.as_slice() {
+            [file_name] => {
+                assert_eq!(
+                    *file_name, library_filename,
+                    "generated root-staged library should keep the input filename"
+                );
+                (Some(staged_library_path), None, None)
+            }
+            ["prebuilds", target, file_name] => {
+                assert_eq!(
+                    *file_name, library_filename,
+                    "generated bundled prebuild should keep the input filename"
+                );
+                (None, Some((*target).to_string()), Some(staged_library_path))
+            }
+            _ => panic!(
+                "unexpected generated staged library path {} in {}",
+                staged_library_package_relative_path, package_dir
+            ),
+        };
 
     GeneratedFixturePackage {
         built_fixture,
         package_dir,
+        staged_library_package_relative_path,
         sibling_library_path,
         bundled_prebuild_target,
         bundled_prebuild_path,
@@ -876,39 +900,31 @@ fn find_cdylib_artifact(stdout: &[u8], crate_name: &str) -> Option<Utf8PathBuf> 
         })
 }
 
-fn discover_bundled_prebuild(
+fn read_staged_library_package_relative_path(
     package_dir: &Utf8PathBuf,
-    library_filename: &str,
-) -> (Option<String>, Option<Utf8PathBuf>) {
-    let prebuilds_dir = package_dir.join("prebuilds");
-    if !prebuilds_dir.is_dir() {
-        return (None, None);
-    }
-
-    let mut matches = fs::read_dir(prebuilds_dir.as_std_path())
-        .unwrap_or_else(|error| {
-            panic!("failed to read bundled prebuild dir {prebuilds_dir}: {error}")
+    namespace: &str,
+) -> Utf8PathBuf {
+    let ffi_js_path = package_dir.join(format!("{namespace}-ffi.js"));
+    let ffi_js = fs::read_to_string(ffi_js_path.as_std_path())
+        .unwrap_or_else(|error| panic!("failed to read generated ffi file {ffi_js_path}: {error}"));
+    let raw_relative_path = ffi_js
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("stagedLibraryPackageRelativePath: ")
+                .map(|value| value.trim_end_matches(','))
         })
-        .filter_map(|entry| entry.ok())
-        .map(|entry| {
-            let target = entry.file_name().to_string_lossy().into_owned();
-            let path = package_dir
-                .join("prebuilds")
-                .join(&target)
-                .join(library_filename);
-            (target, path)
-        })
-        .filter(|(_, path)| path.is_file())
-        .collect::<Vec<_>>();
+        .unwrap_or_else(|| {
+            panic!(
+                "generated ffi file {} should include stagedLibraryPackageRelativePath metadata",
+                ffi_js_path
+            )
+        });
+    let relative_path: String = serde_json::from_str(raw_relative_path).unwrap_or_else(|error| {
+        panic!(
+            "generated ffi metadata in {ffi_js_path} should serialize stagedLibraryPackageRelativePath as JSON: {error}"
+        )
+    });
 
-    matches.sort_unstable_by(|left, right| left.0.cmp(&right.0));
-
-    match matches.as_slice() {
-        [] => (None, None),
-        [(target, path)] => (Some(target.clone()), Some(path.clone())),
-        _ => panic!(
-            "expected at most one staged bundled prebuild for {library_filename} in {prebuilds_dir}, found {}",
-            matches.len()
-        ),
-    }
+    Utf8PathBuf::from(relative_path)
 }

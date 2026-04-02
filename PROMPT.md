@@ -285,7 +285,7 @@ You are in a Ralph Wiggum loop. You are making progress on the plan defined abov
 - [x] Add coverage for TypeScript output after any naming or surface changes.
 - [x] Add coverage for package generation snapshots using the loader-based flow.
 - [x] Replace tests that currently depend on BindingGenerator::write_bindings.
-- [ ] Replace tests that currently depend on manual GenerationSettings construction where no longer appropriate.
+- [x] Replace tests that currently depend on manual GenerationSettings construction where no longer appropriate.
 - [ ] Replace test helpers that manually construct Component<NodeBindingGeneratorConfig> where end-to-end loader coverage is required.
 - [ ] Decide which unit tests should remain synthetic for speed and precision.
 - [ ] Keep fixture-based end-to-end tests for the critical path.

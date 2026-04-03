@@ -843,12 +843,23 @@ fn node_engine_override_is_written_to_package_json() {
         "unexpected package.json contents: {package_json:#}"
     );
     assert_eq!(
-        package_json.get("main").and_then(Value::as_str),
-        Some("./index.js"),
+        package_json.get("main"),
+        None,
         "unexpected package.json contents: {package_json:#}"
     );
     assert_eq!(
-        package_json.get("types").and_then(Value::as_str),
+        package_json.get("types"),
+        None,
+        "unexpected package.json contents: {package_json:#}"
+    );
+    assert_eq!(
+        package_json
+            .get("exports")
+            .and_then(Value::as_object)
+            .and_then(|exports| exports.get("."))
+            .and_then(Value::as_object)
+            .and_then(|root_export| root_export.get("types"))
+            .and_then(Value::as_str),
         Some("./index.d.ts"),
         "unexpected package.json contents: {package_json:#}"
     );
@@ -861,6 +872,16 @@ fn node_engine_override_is_written_to_package_json() {
             .and_then(|root_export| root_export.get("default"))
             .and_then(Value::as_str),
         Some("./index.js"),
+        "unexpected package.json contents: {package_json:#}"
+    );
+    assert_eq!(
+        package_json
+            .get("exports")
+            .and_then(Value::as_object)
+            .and_then(|exports| exports.get("."))
+            .and_then(Value::as_object)
+            .and_then(|root_export| root_export.get("import")),
+        None,
         "unexpected package.json contents: {package_json:#}"
     );
 

@@ -2,8 +2,6 @@
   "name": {{ package_name_json }},
   "version": "0.0.0",
   "type": "module",
-  "main": "./index.js",
-  "types": "./index.d.ts",
   "engines": {
     "node": {{ node_engine_json }}
   },
@@ -13,7 +11,6 @@
   "exports": {
     ".": {
       "types": "./index.d.ts",
-      "import": "./index.js",
       "default": "./index.js"
     }
   }

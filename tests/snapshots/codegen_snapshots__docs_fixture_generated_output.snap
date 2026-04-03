@@ -7,8 +7,6 @@ expression: "snapshot_package_output_for_fixture(\"docs\")"
   "name": "docs_fixture-package",
   "version": "0.0.0",
   "type": "module",
-  "main": "./index.js",
-  "types": "./index.d.ts",
   "engines": {
     "node": ">=16"
   },
@@ -18,7 +16,6 @@ expression: "snapshot_package_output_for_fixture(\"docs\")"
   "exports": {
     ".": {
       "types": "./index.d.ts",
-      "import": "./index.js",
       "default": "./index.js"
     }
   }

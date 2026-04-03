@@ -51,7 +51,7 @@ Run a single test target while iterating:
 cargo test --test node_package_generation
 ```
 
-Run the ignored real-Koffi callback smoke test locally with Node 22 active and npm registry access available:
+Run the ignored real-Koffi callback smoke test locally with npm registry access available and a Node runtime that can install and run `koffi@^2.15.3`:
 
 ```sh
 cargo test --locked --test node_real_koffi_tests -- --ignored
@@ -96,35 +96,35 @@ That helper binary builds the fixture cdylib in a temporary workspace, generates
 
 It prints both `package_dir` and `library_path`. Point `UNIFFI_LEAK_PACKAGE_DIR` at `package_dir`; `library_path` is the staged sibling library inside that generated package.
 
-Run the runtime probes with Node 22 and `--expose-gc`:
+Run the runtime probes with `node --expose-gc` on a runtime that can install and run `koffi@^2.15.3`:
 
 ```sh
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario bytes
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario objects
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario async
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-callback-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-callback-soak.mjs
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-manual-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-load-unload-soak.mjs
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-manual-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-load-unload-soak.mjs --case reader-build
 ```
 
@@ -138,31 +138,31 @@ For a smaller second-level bisect inside the basic probe:
 
 ```sh
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case echo-bytes
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case echo-record
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case echo-byte-map
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario bytes --case temporal
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario async --case store-fetch
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario async --case reader-build
 
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs --scenario async --case reader-label
 ```
 
@@ -171,7 +171,7 @@ For at-exit leak reports on macOS:
 ```sh
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
   leaks --atExit -- \
-  /tmp/node-v22.22.2-darwin-arm64/bin/node --expose-gc \
+  node --expose-gc \
   scripts/leaks/runtime-basic-soak.mjs
 ```
 
@@ -196,7 +196,7 @@ leaks --atExit -- cargo run -- generate \
 
 GitHub Actions runs the full suite on pull requests and on every push to `main`.
 
-The Linux workflow uses Node 22 because the callback benchmarks currently abort on newer Node releases, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
+The Linux workflow uses Node 24 to revalidate the Koffi sync-callback fix in `koffi@^2.15.3`, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
 
 ```sh
 cargo test --locked
@@ -251,16 +251,17 @@ Some real-runtime Node tests are intentionally ignored because they require regi
 - `tests/`: snapshot, smoke, packaging, and regression tests
 - `fixtures/`: UniFFI fixture crates used by tests
 
-## Koffi Caveat
+## Koffi Validation
 
-When running the real Koffi benchmark suites, use Node 22 or earlier for now. On Node versions newer than 22, the callback benchmarks can abort inside Koffi's synchronous callback path.
+Generated packages now declare `koffi@^2.15.3`.
 
-Upstream issue: <https://github.com/Koromix/koffi/issues/261>
+Run the real-Koffi callback smoke and benchmark suites with npm registry access available and a Node runtime that can install and execute `koffi@^2.15.3`. CI uses Node 24 for this coverage.
 
 Run locally with:
 
 ```sh
-PATH=/opt/homebrew/opt/node@22/bin:$PATH cargo test --test node_benchmarks -- --ignored --nocapture
+cargo test --locked --test node_real_koffi_tests -- --ignored
+cargo test --locked --test node_benchmarks -- --ignored --nocapture
 ```
 
 ## Coverage

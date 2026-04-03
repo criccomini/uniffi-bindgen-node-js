@@ -11,7 +11,7 @@ expression: "snapshot_package_output_for_fixture(\"docs\")"
     "node": ">=16"
   },
   "dependencies": {
-    "koffi": "^2.0.0"
+    "koffi": "^2.15.3"
   },
   "exports": {
     ".": {

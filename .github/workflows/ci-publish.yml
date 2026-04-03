@@ -52,8 +52,8 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v5
         with:
-          # The callback benchmarks currently abort on Node >22 in koffi.
-          node-version: 22
+          # Revalidate the Koffi sync-callback fix from koffi@^2.15.3 on Node 24.
+          node-version: 24
           # Keep setup-node v5 from enabling package-manager cache implicitly.
           package-manager-cache: false
 
@@ -94,8 +94,8 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v5
         with:
-          # The callback benchmarks currently abort on Node >22 in koffi.
-          node-version: 22
+          # Revalidate the Koffi sync-callback fix from koffi@^2.15.3 on Node 24.
+          node-version: 24
           # Keep setup-node v5 from enabling package-manager cache implicitly.
           package-manager-cache: false
 

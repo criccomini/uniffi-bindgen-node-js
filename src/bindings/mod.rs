@@ -231,7 +231,7 @@ mod tests {
                 .and_then(Value::as_object)
                 .and_then(|dependencies| dependencies.get("koffi"))
                 .and_then(Value::as_str)
-                .is_some_and(|version| version == "^2.0.0"),
+                .is_some_and(|version| version == "^2.15.3"),
             "unexpected package.json contents: {package_json}"
         );
         assert!(

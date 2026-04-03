@@ -1248,9 +1248,8 @@ assert.equal(
 {smoke_body}
 "#,
             path_helper = canonical_existing_path_js_helper(),
-            expected_library_path_json =
-                serde_json::to_string(expected_library_path.as_str())
-                    .expect("root-staged library path should serialize"),
+            expected_library_path_json = serde_json::to_string(expected_library_path.as_str())
+                .expect("root-staged library path should serialize"),
             smoke_body = basic_fixture_api_smoke_body(),
         ),
     );
@@ -1427,9 +1426,8 @@ assert.equal(
 {smoke_body}
 "#,
             path_helper = canonical_existing_path_js_helper(),
-            expected_library_path_json =
-                serde_json::to_string(expected_library_path.as_str())
-                    .expect("bundled prebuild path should serialize"),
+            expected_library_path_json = serde_json::to_string(expected_library_path.as_str())
+                .expect("bundled prebuild path should serialize"),
             smoke_body = basic_fixture_api_smoke_body(),
         ),
     );

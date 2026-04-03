@@ -1174,13 +1174,12 @@ mod tests {
             .expect("component FFI JS should be readable");
         let ffi_dts = fs::read_to_string(output_dir.join("example-ffi.d.ts").as_std_path())
             .expect("component FFI DTS should be readable");
-        let metadata_section = normalize_test_library_filename(&normalize_checksum_value(
-            &extract_section(
+        let metadata_section =
+            normalize_test_library_filename(&normalize_checksum_value(&extract_section(
                 &ffi_js,
                 "export const ffiMetadata = Object.freeze({",
                 "function createBindingCore(",
-            ),
-        ));
+            )));
         let lifecycle_section = extract_section(
             &ffi_js,
             "export function load(libraryPath = undefined) {",

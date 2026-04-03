@@ -92,27 +92,18 @@ pub fn build_fixture_cdylib(kind: FixtureKind) -> Result<BuiltFixtureCdylib> {
         &["generate-lockfile", "--offline"],
     )?;
 
-    let output = Command::new(env!("CARGO"))
-        .args([
+    let output = run_cargo_command(
+        spec.dir_name,
+        "build",
+        &manifest_path,
+        &target_dir,
+        &[
             "build",
             "--offline",
             "--locked",
-            "--manifest-path",
-            manifest_path.as_str(),
             "--message-format=json-render-diagnostics",
-        ])
-        .env("CARGO_TARGET_DIR", target_dir.as_str())
-        .output()
-        .with_context(|| format!("failed to run cargo build for fixture {}", spec.dir_name))?;
-
-    if !output.status.success() {
-        bail!(
-            "failed to build fixture {}\nstdout:\n{}\nstderr:\n{}",
-            spec.dir_name,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-    }
+        ],
+    )?;
 
     let library_path = find_cdylib_artifact(&output.stdout, spec.crate_name).ok_or_else(|| {
         anyhow::anyhow!(
@@ -361,24 +352,72 @@ fn run_cargo_command(
     manifest_path: &Utf8PathBuf,
     target_dir: &Utf8PathBuf,
     args: &[&str],
-) -> Result<()> {
-    let output = Command::new(env!("CARGO"))
+) -> Result<process::Output> {
+    let output = cargo_command_output(manifest_path, target_dir, args)
+        .with_context(|| format!("failed to run cargo {operation} for fixture {fixture_name}"))?;
+
+    if output.status.success() {
+        return Ok(output);
+    }
+
+    if should_retry_cargo_without_offline(args, &output.stderr) {
+        let retry_args = strip_offline_flag(args);
+        let retry_output = cargo_command_output(manifest_path, target_dir, &retry_args)
+            .with_context(|| {
+                format!(
+                    "failed to rerun cargo {operation} for fixture {fixture_name} without --offline"
+                )
+            })?;
+        if retry_output.status.success() {
+            return Ok(retry_output);
+        }
+
+        bail!(
+            "failed to run cargo {operation} for fixture {fixture_name}\n\
+offline stdout:\n{}\n\
+offline stderr:\n{}\n\
+online retry stdout:\n{}\n\
+online retry stderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&retry_output.stdout),
+            String::from_utf8_lossy(&retry_output.stderr),
+        );
+    }
+
+    bail!(
+        "failed to run cargo {operation} for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    )
+}
+
+fn cargo_command_output(
+    manifest_path: &Utf8PathBuf,
+    target_dir: &Utf8PathBuf,
+    args: &[&str],
+) -> io::Result<process::Output> {
+    Command::new(env!("CARGO"))
         .args(args)
         .arg("--manifest-path")
         .arg(manifest_path.as_str())
         .env("CARGO_TARGET_DIR", target_dir.as_str())
         .output()
-        .with_context(|| format!("failed to run cargo {operation} for fixture {fixture_name}"))?;
+}
 
-    if !output.status.success() {
-        bail!(
-            "failed to run cargo {operation} for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
+fn should_retry_cargo_without_offline(args: &[&str], stderr: &[u8]) -> bool {
+    args.contains(&"--offline") && {
+        let stderr = String::from_utf8_lossy(stderr);
+        stderr.contains("you're using offline mode (--offline)")
+            || stderr.contains("attempting to make an HTTP request, but --offline was specified")
     }
+}
 
-    Ok(())
+fn strip_offline_flag<'a>(args: &'a [&'a str]) -> Vec<&'a str> {
+    args.iter()
+        .copied()
+        .filter(|arg| *arg != "--offline")
+        .collect()
 }
 
 fn find_cdylib_artifact(stdout: &[u8], crate_name: &str) -> Option<Utf8PathBuf> {

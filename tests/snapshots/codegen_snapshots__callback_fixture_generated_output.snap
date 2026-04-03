@@ -1461,8 +1461,8 @@ import {
 export const ffiMetadata = Object.freeze({
   namespace: "callbacks_fixture",
   cdylibName: "fixture_callbacks",
-  stagedLibraryFileName: "libfixture_callbacks.dylib",
-  stagedLibraryPackageRelativePath: "libfixture_callbacks.dylib",
+  stagedLibraryFileName: "<STAGED_LIBRARY_FILE_NAME>",
+  stagedLibraryPackageRelativePath: "<STAGED_LIBRARY_FILE_NAME>",
   bundledPrebuilds: false,
   manualLoad: false,
 });

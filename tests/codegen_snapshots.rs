@@ -23,10 +23,20 @@ fn snapshot_package_output_for_fixture(name: &str) -> String {
         snapshot.push_str(&format!("=== {relative_path} ===\n{contents}\n"));
     }
 
+    let staged_library_file_name = generated
+        .staged_library_package_relative_path
+        .file_name()
+        .expect("generated fixture package should record a staged library filename");
+    let snapshot = normalize_snapshot_output(snapshot, staged_library_file_name);
+
     remove_dir_all(&generated.package_dir);
     remove_dir_all(&generated.built_fixture.workspace_dir);
 
     snapshot
+}
+
+fn normalize_snapshot_output(snapshot: String, staged_library_file_name: &str) -> String {
+    snapshot.replace(staged_library_file_name, "<STAGED_LIBRARY_FILE_NAME>")
 }
 
 #[test]

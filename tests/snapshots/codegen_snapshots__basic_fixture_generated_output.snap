@@ -1273,8 +1273,8 @@ import {
 export const ffiMetadata = Object.freeze({
   namespace: "fixture",
   cdylibName: "fixture_basic",
-  stagedLibraryFileName: "libfixture_basic.dylib",
-  stagedLibraryPackageRelativePath: "libfixture_basic.dylib",
+  stagedLibraryFileName: "<STAGED_LIBRARY_FILE_NAME>",
+  stagedLibraryPackageRelativePath: "<STAGED_LIBRARY_FILE_NAME>",
   bundledPrebuilds: false,
   manualLoad: false,
 });

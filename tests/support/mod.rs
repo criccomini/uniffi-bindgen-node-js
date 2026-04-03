@@ -74,26 +74,18 @@ pub fn build_fixture_cdylib(name: &str) -> BuiltFixtureCdylib {
         &["generate-lockfile", "--offline"],
     );
 
-    let output = Command::new(env!("CARGO"))
-        .args([
+    let output = run_cargo_command(
+        name,
+        "build",
+        &manifest_path,
+        &target_dir,
+        &[
             "build",
             "--offline",
             "--locked",
-            "--manifest-path",
-            manifest_path.as_str(),
             "--message-format=json-render-diagnostics",
-        ])
-        .env("CARGO_TARGET_DIR", target_dir.as_str())
-        .output()
-        .unwrap_or_else(|error| panic!("failed to run cargo build for fixture {name}: {error}"));
-
-    if !output.status.success() {
-        panic!(
-            "failed to build fixture {name}\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+        ],
+    );
 
     let library_path = find_cdylib_artifact(&output.stdout, spec.crate_name).unwrap_or_else(|| {
         panic!(
@@ -231,28 +223,18 @@ pub extern "C" fn megazord_fixture_ping() -> u32 {
         &["generate-lockfile", "--offline"],
     );
 
-    let output = Command::new(env!("CARGO"))
-        .args([
+    let output = run_cargo_command(
+        fixture_name,
+        "build",
+        &manifest_path,
+        &target_dir,
+        &[
             "build",
             "--offline",
             "--locked",
-            "--manifest-path",
-            manifest_path.as_str(),
             "--message-format=json-render-diagnostics",
-        ])
-        .env("CARGO_TARGET_DIR", target_dir.as_str())
-        .output()
-        .unwrap_or_else(|error| {
-            panic!("failed to run cargo build for fixture {fixture_name}: {error}")
-        });
-
-    if !output.status.success() {
-        panic!(
-            "failed to build fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+        ],
+    );
 
     let library_path =
         find_cdylib_artifact(&output.stdout, "megazord_fixture").unwrap_or_else(|| {
@@ -346,28 +328,18 @@ namespace {namespace} {{
         &["generate-lockfile", "--offline"],
     );
 
-    let output = Command::new(env!("CARGO"))
-        .args([
+    let output = run_cargo_command(
+        fixture_name,
+        "build",
+        &manifest_path,
+        &target_dir,
+        &[
             "build",
             "--offline",
             "--locked",
-            "--manifest-path",
-            manifest_path.as_str(),
             "--message-format=json-render-diagnostics",
-        ])
-        .env("CARGO_TARGET_DIR", target_dir.as_str())
-        .output()
-        .unwrap_or_else(|error| {
-            panic!("failed to run cargo build for fixture {fixture_name}: {error}")
-        });
-
-    if !output.status.success() {
-        panic!(
-            "failed to build fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+        ],
+    );
 
     let library_path = find_cdylib_artifact(&output.stdout, crate_name).unwrap_or_else(|| {
         panic!(
@@ -863,24 +835,73 @@ fn run_cargo_command(
     manifest_path: &Utf8PathBuf,
     target_dir: &Utf8PathBuf,
     args: &[&str],
-) {
-    let output = Command::new(env!("CARGO"))
+) -> process::Output {
+    let output = cargo_command_output(manifest_path, target_dir, args).unwrap_or_else(|error| {
+        panic!("failed to run cargo {operation} for fixture {fixture_name}: {error}")
+    });
+
+    if output.status.success() {
+        return output;
+    }
+
+    if should_retry_cargo_without_offline(args, &output.stderr) {
+        let retry_args = strip_offline_flag(args);
+        let retry_output =
+            cargo_command_output(manifest_path, target_dir, &retry_args).unwrap_or_else(|error| {
+                panic!(
+                    "failed to rerun cargo {operation} for fixture {fixture_name} without --offline: {error}"
+                )
+            });
+        if retry_output.status.success() {
+            return retry_output;
+        }
+
+        panic!(
+            "failed to run cargo {operation} for fixture {fixture_name}\n\
+offline stdout:\n{}\n\
+offline stderr:\n{}\n\
+online retry stdout:\n{}\n\
+online retry stderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&retry_output.stdout),
+            String::from_utf8_lossy(&retry_output.stderr)
+        );
+    }
+
+    panic!(
+        "failed to run cargo {operation} for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn cargo_command_output(
+    manifest_path: &Utf8PathBuf,
+    target_dir: &Utf8PathBuf,
+    args: &[&str],
+) -> std::io::Result<process::Output> {
+    Command::new(env!("CARGO"))
         .args(args)
         .arg("--manifest-path")
         .arg(manifest_path.as_str())
         .env("CARGO_TARGET_DIR", target_dir.as_str())
         .output()
-        .unwrap_or_else(|error| {
-            panic!("failed to run cargo {operation} for fixture {fixture_name}: {error}")
-        });
+}
 
-    if !output.status.success() {
-        panic!(
-            "failed to run cargo {operation} for fixture {fixture_name}\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+fn should_retry_cargo_without_offline(args: &[&str], stderr: &[u8]) -> bool {
+    args.contains(&"--offline") && {
+        let stderr = String::from_utf8_lossy(stderr);
+        stderr.contains("you're using offline mode (--offline)")
+            || stderr.contains("attempting to make an HTTP request, but --offline was specified")
     }
+}
+
+fn strip_offline_flag<'a>(args: &'a [&'a str]) -> Vec<&'a str> {
+    args.iter()
+        .copied()
+        .filter(|arg| *arg != "--offline")
+        .collect()
 }
 
 fn find_cdylib_artifact(stdout: &[u8], crate_name: &str) -> Option<Utf8PathBuf> {

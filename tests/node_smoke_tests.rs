@@ -76,6 +76,33 @@ export default koffi;
     .expect("installed koffi fixture wrapper should be writable");
 }
 
+fn canonical_existing_path_js_helper() -> &'static str {
+    r#"
+function canonicalExistingPath(path) {
+  return typeof realpathSync.native === "function"
+    ? realpathSync.native(path)
+    : realpathSync(path);
+}
+"#
+}
+
+fn path_message_assertion_js_helper() -> &'static str {
+    r#"
+function normalizePathForComparison(path) {
+  return process.platform === "win32"
+    ? path.replaceAll("\\", "/").toLowerCase()
+    : path;
+}
+
+function assertMessageIncludesPath(message, expectedPath, label) {
+  assert.ok(
+    normalizePathForComparison(message).includes(normalizePathForComparison(expectedPath)),
+    `${label}: ${message}`,
+  );
+}
+"#
+}
+
 #[test]
 fn runtime_object_factory_keeps_generic_pointer_handles_until_clone() {
     let generated = generate_fixture_package("basic");
@@ -1210,14 +1237,21 @@ import {{
 }} from "./index.js";
 import {{ getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
-assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
+{path_helper}
 
-{}
+assert.equal(isLoaded(), true);
+assert.equal(
+  canonicalExistingPath(getFfiBindings().libraryPath),
+  canonicalExistingPath({expected_library_path_json}),
+);
+
+{smoke_body}
 "#,
-            serde_json::to_string(expected_library_path.as_str())
-                .expect("root-staged library path should serialize"),
-            basic_fixture_api_smoke_body()
+            path_helper = canonical_existing_path_js_helper(),
+            expected_library_path_json =
+                serde_json::to_string(expected_library_path.as_str())
+                    .expect("root-staged library path should serialize"),
+            smoke_body = basic_fixture_api_smoke_body(),
         ),
     );
 
@@ -1381,15 +1415,22 @@ import {{
 }} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
+{path_helper}
+
 assert.equal(ffiMetadata.bundledPrebuilds, true);
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({}));
+assert.equal(
+  canonicalExistingPath(getFfiBindings().libraryPath),
+  canonicalExistingPath({expected_library_path_json}),
+);
 
-{}
+{smoke_body}
 "#,
-            serde_json::to_string(expected_library_path.as_str())
-                .expect("bundled prebuild path should serialize"),
-            basic_fixture_api_smoke_body()
+            path_helper = canonical_existing_path_js_helper(),
+            expected_library_path_json =
+                serde_json::to_string(expected_library_path.as_str())
+                    .expect("bundled prebuild path should serialize"),
+            smoke_body = basic_fixture_api_smoke_body(),
         ),
     );
 
@@ -1444,28 +1485,34 @@ import {{
 }} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
+{path_helper}
+
 assert.equal(ffiMetadata.bundledPrebuilds, false);
 assert.equal(ffiMetadata.manualLoad, true);
 assert.equal(isLoaded(), false);
 
 const firstBindings = load();
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
-assert.equal(getFfiBindings().packageRelativePath, {1});
+assert.equal(
+  canonicalExistingPath(getFfiBindings().libraryPath),
+  canonicalExistingPath({staged_library_path_json}),
+);
+assert.equal(getFfiBindings().packageRelativePath, {expected_relative_path_json});
 
 const secondBindings = load();
 assert.strictEqual(secondBindings, firstBindings);
 
-{2}
+{smoke_body}
 
 assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
 "#,
-            serde_json::to_string(staged_library_path.as_str())
+            path_helper = canonical_existing_path_js_helper(),
+            staged_library_path_json = serde_json::to_string(staged_library_path.as_str())
                 .expect("staged root library path should serialize"),
-            serde_json::to_string(&expected_relative_path)
+            expected_relative_path_json = serde_json::to_string(&expected_relative_path)
                 .expect("staged root package-relative path should serialize"),
-            basic_fixture_api_smoke_body()
+            smoke_body = basic_fixture_api_smoke_body(),
         ),
     );
 
@@ -1520,28 +1567,34 @@ import {{
 }} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
+{path_helper}
+
 assert.equal(ffiMetadata.bundledPrebuilds, true);
 assert.equal(ffiMetadata.manualLoad, true);
 assert.equal(isLoaded(), false);
 
 const firstBindings = load();
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync({0}));
-assert.equal(getFfiBindings().packageRelativePath, {1});
+assert.equal(
+  canonicalExistingPath(getFfiBindings().libraryPath),
+  canonicalExistingPath({staged_prebuild_path_json}),
+);
+assert.equal(getFfiBindings().packageRelativePath, {expected_relative_path_json});
 
 const secondBindings = load();
 assert.strictEqual(secondBindings, firstBindings);
 
-{2}
+{smoke_body}
 
 assert.equal(unload(), true);
 assert.equal(isLoaded(), false);
 "#,
-            serde_json::to_string(staged_prebuild_path.as_str())
+            path_helper = canonical_existing_path_js_helper(),
+            staged_prebuild_path_json = serde_json::to_string(staged_prebuild_path.as_str())
                 .expect("staged bundled prebuild path should serialize"),
-            serde_json::to_string(&expected_relative_path)
+            expected_relative_path_json = serde_json::to_string(&expected_relative_path)
                 .expect("staged bundled package-relative path should serialize"),
-            basic_fixture_api_smoke_body()
+            smoke_body = basic_fixture_api_smoke_body(),
         ),
     );
 
@@ -1677,6 +1730,8 @@ import {{
 }} from "./index.js";
 import {{ ffiMetadata, getFfiBindings, isLoaded }} from "./fixture-ffi.js";
 
+{path_helper}
+
 assert.equal(ffiMetadata.bundledPrebuilds, true);
 assert.equal(ffiMetadata.manualLoad, true);
 assert.equal(isLoaded(), false);
@@ -1686,7 +1741,10 @@ copyFileSync({0}, stagedOverridePath);
 
 const firstBindings = load(stagedOverridePath);
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(stagedOverridePath));
+assert.equal(
+  canonicalExistingPath(getFfiBindings().libraryPath),
+  canonicalExistingPath(stagedOverridePath),
+);
 
 const secondBindings = load(stagedOverridePath);
 assert.strictEqual(secondBindings, firstBindings);
@@ -1701,7 +1759,10 @@ assert.equal(koffi.registeredCallbackCount(), 0);
 
 const reloadedBindings = load(stagedOverridePath);
 assert.equal(isLoaded(), true);
-assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(stagedOverridePath));
+assert.equal(
+  canonicalExistingPath(getFfiBindings().libraryPath),
+  canonicalExistingPath(stagedOverridePath),
+);
 assert.notStrictEqual(reloadedBindings, firstBindings);
 assert.strictEqual(reloadedBindings.library, firstBindings.library);
 assert.strictEqual(reloadedBindings.ffiFunctions, firstBindings.ffiFunctions);
@@ -1722,7 +1783,10 @@ try {{
 
   const copiedBindings = load(copiedPath);
   assert.equal(isLoaded(), true);
-  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(copiedPath));
+  assert.equal(
+    canonicalExistingPath(getFfiBindings().libraryPath),
+    canonicalExistingPath(copiedPath),
+  );
   assert.notStrictEqual(copiedBindings, reloadedBindings);
   assert.notStrictEqual(copiedBindings.library, firstBindings.library);
   assert.notStrictEqual(copiedBindings.ffiFunctions, firstBindings.ffiFunctions);
@@ -1739,7 +1803,10 @@ try {{
 
   const aliasBindings = load(aliasPath);
   assert.equal(isLoaded(), true);
-  assert.equal(realpathSync(getFfiBindings().libraryPath), realpathSync(stagedOverridePath));
+  assert.equal(
+    canonicalExistingPath(getFfiBindings().libraryPath),
+    canonicalExistingPath(stagedOverridePath),
+  );
   assert.notStrictEqual(aliasBindings, reloadedBindings);
   assert.notStrictEqual(aliasBindings.library, copiedBindings.library);
   assert.notStrictEqual(aliasBindings.ffiFunctions, copiedBindings.ffiFunctions);
@@ -1762,7 +1829,8 @@ try {{
                 .expect("fixture library path should serialize"),
             serde_json::to_string(expected_library_filename)
                 .expect("sibling library filename should serialize"),
-            basic_fixture_api_smoke_body()
+            basic_fixture_api_smoke_body(),
+            path_helper = canonical_existing_path_js_helper(),
         ),
     );
 
@@ -1791,6 +1859,17 @@ fn default_mode_import_reports_missing_staged_root_library() {
         &format!(
             r#"
 import assert from "node:assert/strict";
+import {{ dirname, join }} from "node:path";
+import {{ fileURLToPath }} from "node:url";
+
+{path_helper}
+
+const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+const expectedRelativePath = {expected_relative_path_json};
+const expectedAbsolutePath = join(
+  moduleDirectory,
+  ...expectedRelativePath.split("/"),
+);
 
 try {{
   await import("./index.js");
@@ -1801,14 +1880,13 @@ try {{
     message.includes("No packaged UniFFI library was found at"),
     `unexpected error message: ${{message}}`,
   );
-  assert.ok(message.includes({}), `missing package path in error: ${{message}}`);
-  assert.ok(message.includes({}), `missing absolute path in error: ${{message}}`);
+  assertMessageIncludesPath(message, expectedRelativePath, "missing package path in error");
+  assertMessageIncludesPath(message, expectedAbsolutePath, "missing absolute path in error");
 }}
 "#,
-            serde_json::to_string(&expected_relative_path)
+            path_helper = path_message_assertion_js_helper(),
+            expected_relative_path_json = serde_json::to_string(&expected_relative_path)
                 .expect("expected package-relative path should serialize"),
-            serde_json::to_string(staged_library_path.as_str())
-                .expect("staged library path should serialize"),
         ),
     );
 
@@ -1999,10 +2077,6 @@ fn bundled_mode_import_reports_missing_host_prebuild() {
         .and_then(|path| path.strip_prefix(package_dir).ok())
         .map(|path| path.as_str().to_string())
         .expect("bundled fixture should report the generated package-relative prebuild path");
-    let staged_prebuild_path = generated
-        .bundled_prebuild_path
-        .as_ref()
-        .expect("bundled fixture should report the expected prebuild path");
 
     assert!(
         generated.sibling_library_path.is_none(),
@@ -2016,6 +2090,17 @@ fn bundled_mode_import_reports_missing_host_prebuild() {
         &format!(
             r#"
 import assert from "node:assert/strict";
+import {{ dirname, join }} from "node:path";
+import {{ fileURLToPath }} from "node:url";
+
+{path_helper}
+
+const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+const expectedRelativePath = {expected_relative_path_json};
+const expectedAbsolutePath = join(
+  moduleDirectory,
+  ...expectedRelativePath.split("/"),
+);
 
 try {{
   await import("./index.js");
@@ -2026,16 +2111,16 @@ try {{
     message.includes("No bundled UniFFI library was found for target"),
     `unexpected error message: ${{message}}`,
   );
-  assert.ok(message.includes({}), `missing target id in error: ${{message}}`);
-  assert.ok(message.includes({}), `missing package path in error: ${{message}}`);
-  assert.ok(message.includes({}), `missing absolute path in error: ${{message}}`);
+  assert.ok(message.includes({expected_target_json}), `missing target id in error: ${{message}}`);
+  assertMessageIncludesPath(message, expectedRelativePath, "missing package path in error");
+  assertMessageIncludesPath(message, expectedAbsolutePath, "missing absolute path in error");
 }}
 "#,
-            serde_json::to_string(&expected_target).expect("target id should serialize"),
-            serde_json::to_string(&expected_relative_path)
+            path_helper = path_message_assertion_js_helper(),
+            expected_target_json =
+                serde_json::to_string(&expected_target).expect("target id should serialize"),
+            expected_relative_path_json = serde_json::to_string(&expected_relative_path)
                 .expect("expected package-relative path should serialize"),
-            serde_json::to_string(staged_prebuild_path.as_str())
-                .expect("staged prebuild path should serialize"),
         ),
     );
 

@@ -144,7 +144,7 @@ fn handle_iteration_milestones(args: &Args, completed: usize) -> Result<()> {
 }
 
 fn should_report_progress(completed: usize, total_iterations: usize) -> bool {
-    completed % 10 == 0 || completed == total_iterations
+    completed.is_multiple_of(10) || completed == total_iterations
 }
 
 fn pause_at_end_if_requested(args: &Args) -> Result<()> {

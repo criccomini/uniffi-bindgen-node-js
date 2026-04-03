@@ -853,34 +853,12 @@ fn node_engine_override_is_written_to_package_json() {
         "unexpected package.json contents: {package_json:#}"
     );
     assert_eq!(
-        package_json
-            .get("exports")
-            .and_then(Value::as_object)
-            .and_then(|exports| exports.get("."))
-            .and_then(Value::as_object)
-            .and_then(|root_export| root_export.get("types"))
-            .and_then(Value::as_str),
-        Some("./index.d.ts"),
-        "unexpected package.json contents: {package_json:#}"
-    );
-    assert_eq!(
-        package_json
-            .get("exports")
-            .and_then(Value::as_object)
-            .and_then(|exports| exports.get("."))
-            .and_then(Value::as_object)
-            .and_then(|root_export| root_export.get("default"))
-            .and_then(Value::as_str),
+        package_json.get("exports").and_then(Value::as_str),
         Some("./index.js"),
         "unexpected package.json contents: {package_json:#}"
     );
     assert_eq!(
-        package_json
-            .get("exports")
-            .and_then(Value::as_object)
-            .and_then(|exports| exports.get("."))
-            .and_then(Value::as_object)
-            .and_then(|root_export| root_export.get("import")),
+        package_json.get("exports").and_then(Value::as_object),
         None,
         "unexpected package.json contents: {package_json:#}"
     );

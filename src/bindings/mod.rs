@@ -245,23 +245,15 @@ mod tests {
         assert!(
             package_json
                 .get("exports")
-                .and_then(Value::as_object)
-                .and_then(|exports| exports.get("."))
-                .and_then(Value::as_object)
-                .and_then(|root_export| root_export.get("types"))
                 .and_then(Value::as_str)
-                .is_some_and(|types| types == "./index.d.ts"),
+                .is_some_and(|exports| exports == "./index.js"),
             "unexpected package.json contents: {package_json}"
         );
         assert!(
             package_json
                 .get("exports")
                 .and_then(Value::as_object)
-                .and_then(|exports| exports.get("."))
-                .and_then(Value::as_object)
-                .and_then(|root_export| root_export.get("default"))
-                .and_then(Value::as_str)
-                .is_some_and(|default| default == "./index.js"),
+                .is_none(),
             "unexpected package.json contents: {package_json}"
         );
 

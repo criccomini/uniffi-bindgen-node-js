@@ -1,8 +1,10 @@
 mod support;
 
+use std::fs;
+
 use self::support::{
-    generate_fixture_package, install_fixture_package_dependencies, remove_dir_all,
-    run_typescript_check,
+    generate_fixture_package, install_fixture_package_dependencies, read_package_file_tree,
+    remove_dir_all, run_typescript_check, temp_dir_path,
 };
 
 #[test]
@@ -160,6 +162,65 @@ void runtimeContractErrorCtor;
 "#,
     );
 
+    remove_dir_all(&generated.built_fixture.workspace_dir);
+    remove_dir_all(package_dir);
+}
+
+#[test]
+fn typechecks_generated_basic_fixture_package_when_imported_by_package_name() {
+    let generated = generate_fixture_package("basic");
+    let package_dir = &generated.package_dir;
+    let consumer_dir = temp_dir_path("basic-typescript-consumer");
+    let installed_package_dir = consumer_dir.join("node_modules").join("fixture-package");
+
+    for (relative_path, contents) in read_package_file_tree(package_dir) {
+        if relative_path.starts_with("node_modules/") {
+            continue;
+        }
+
+        let target_path = installed_package_dir.join(&relative_path);
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent.as_std_path()).unwrap_or_else(|error| {
+                panic!("failed to create consumer package dir {parent}: {error}")
+            });
+        }
+        fs::write(target_path.as_std_path(), contents).unwrap_or_else(|error| {
+            panic!("failed to write consumer package file {target_path}: {error}")
+        });
+    }
+
+    fs::write(
+        consumer_dir.join("package.json").as_std_path(),
+        r#"{
+  "type": "module"
+}
+"#,
+    )
+    .unwrap_or_else(|error| {
+        panic!("failed to write consumer package manifest {consumer_dir}: {error}")
+    });
+
+    run_typescript_check(
+        &consumer_dir,
+        "smoke.ts",
+        r#"
+import { Store, type BlobRecord } from "fixture-package";
+
+const seed: BlobRecord = {
+  name: "seed",
+  value: new Uint8Array([1, 2]),
+  maybe_value: undefined,
+  chunks: [new Uint8Array([3]), new Uint8Array([4, 5])],
+};
+
+const store = new Store(seed);
+const current: BlobRecord = store.current();
+
+void current;
+"#,
+    );
+
+    remove_dir_all(&consumer_dir);
     remove_dir_all(&generated.built_fixture.workspace_dir);
     remove_dir_all(package_dir);
 }

@@ -1,6 +1,6 @@
 [package]
 name = "uniffi-bindgen-node-js"
-version = "0.0.9"
+version = "0.0.10"
 edition = "2024"
 license = "Apache-2.0"
 description = "Generate ESM Node.js bindings for UniFFI cdylibs using koffi."

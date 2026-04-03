@@ -24,6 +24,12 @@ Install the CLI from crates.io:
 cargo install uniffi-bindgen-node-js
 ```
 
+Release automation currently publishes plain `0.0.X` versions. If you do not want to automatically pull in the latest release, pin the CLI to an explicit version:
+
+```sh
+cargo install uniffi-bindgen-node-js --version <version>
+```
+
 If you want the current repository checkout instead:
 
 ```sh

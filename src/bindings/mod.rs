@@ -24,6 +24,7 @@ mod tests {
 
     use anyhow::Result;
     use camino::{Utf8Path, Utf8PathBuf};
+    use serde_json::Value;
     use uniffi_bindgen::interface::ComponentInterface;
 
     use crate::node::config::{NodePackageConfig, parse_node_package_config};
@@ -212,26 +213,55 @@ mod tests {
             assert!(!path.exists(), "unexpected generated file {path}");
         }
 
-        let package_json = fs::read_to_string(output_dir.join("package.json").as_std_path())
-            .expect("package.json should be readable");
+        let package_json: Value = serde_json::from_str(
+            &fs::read_to_string(output_dir.join("package.json").as_std_path())
+                .expect("package.json should be readable"),
+        )
+        .expect("package.json should parse");
         assert!(
-            package_json.contains("\"name\": \"example-package\""),
+            package_json
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name == "example-package"),
             "unexpected package.json contents: {package_json}"
         );
         assert!(
-            package_json.contains("\"koffi\": \"^2.0.0\""),
+            package_json
+                .get("dependencies")
+                .and_then(Value::as_object)
+                .and_then(|dependencies| dependencies.get("koffi"))
+                .and_then(Value::as_str)
+                .is_some_and(|version| version == "^2.0.0"),
             "unexpected package.json contents: {package_json}"
         );
         assert!(
-            package_json.contains("\"main\": \"./index.js\""),
+            package_json.get("main").is_none(),
             "unexpected package.json contents: {package_json}"
         );
         assert!(
-            package_json.contains("\"types\": \"./index.d.ts\""),
+            package_json.get("types").is_none(),
             "unexpected package.json contents: {package_json}"
         );
         assert!(
-            package_json.contains("\"default\": \"./index.js\""),
+            package_json
+                .get("exports")
+                .and_then(Value::as_object)
+                .and_then(|exports| exports.get("."))
+                .and_then(Value::as_object)
+                .and_then(|root_export| root_export.get("types"))
+                .and_then(Value::as_str)
+                .is_some_and(|types| types == "./index.d.ts"),
+            "unexpected package.json contents: {package_json}"
+        );
+        assert!(
+            package_json
+                .get("exports")
+                .and_then(Value::as_object)
+                .and_then(|exports| exports.get("."))
+                .and_then(Value::as_object)
+                .and_then(|root_export| root_export.get("default"))
+                .and_then(Value::as_str)
+                .is_some_and(|default| default == "./index.js"),
             "unexpected package.json contents: {package_json}"
         );
 

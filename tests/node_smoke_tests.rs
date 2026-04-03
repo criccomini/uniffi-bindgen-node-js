@@ -90,7 +90,7 @@ fn path_message_assertion_js_helper() -> &'static str {
     r#"
 function normalizePathForComparison(path) {
   return process.platform === "win32"
-    ? path.replaceAll("\\", "/").toLowerCase()
+    ? path.replace(/[\\/]+/g, "/").toLowerCase()
     : path;
 }
 

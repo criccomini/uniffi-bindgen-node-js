@@ -146,6 +146,10 @@ mod tests {
             .join("\n")
     }
 
+    fn normalize_test_library_filename(contents: &str) -> String {
+        contents.replace(&test_library_filename(), "<STAGED_LIBRARY_FILE_NAME>")
+    }
+
     fn assert_contains_in_order(contents: &str, snippets: &[&str]) {
         let mut search_start = 0;
 
@@ -1170,10 +1174,12 @@ mod tests {
             .expect("component FFI JS should be readable");
         let ffi_dts = fs::read_to_string(output_dir.join("example-ffi.d.ts").as_std_path())
             .expect("component FFI DTS should be readable");
-        let metadata_section = normalize_checksum_value(&extract_section(
-            &ffi_js,
-            "export const ffiMetadata = Object.freeze({",
-            "function createBindingCore(",
+        let metadata_section = normalize_test_library_filename(&normalize_checksum_value(
+            &extract_section(
+                &ffi_js,
+                "export const ffiMetadata = Object.freeze({",
+                "function createBindingCore(",
+            ),
         ));
         let lifecycle_section = extract_section(
             &ffi_js,
@@ -1195,8 +1201,8 @@ mod tests {
 export const ffiMetadata = Object.freeze({
   namespace: "example",
   cdylibName: "fixture",
-  stagedLibraryFileName: "libfixture.dylib",
-  stagedLibraryPackageRelativePath: "libfixture.dylib",
+  stagedLibraryFileName: "<STAGED_LIBRARY_FILE_NAME>",
+  stagedLibraryPackageRelativePath: "<STAGED_LIBRARY_FILE_NAME>",
   bundledPrebuilds: false,
   manualLoad: false,
 });
@@ -1596,7 +1602,10 @@ export function validateChecksums(bindings = getFfiBindings()) {
             "ffi metadata should expose bundledPrebuilds:\n{metadata_and_resolution}"
         );
         assert!(
-            metadata_and_resolution.contains("stagedLibraryFileName: \"libfixture.dylib\""),
+            metadata_and_resolution.contains(&format!(
+                "stagedLibraryFileName: {:?}",
+                test_library_filename()
+            )),
             "ffi metadata should expose the staged library filename:\n{metadata_and_resolution}"
         );
         assert!(

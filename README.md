@@ -242,5 +242,3 @@ The generator does not yet support:
 
 - UniFFI custom types
 - UniFFI external types
-- CommonJS package output
-- automatic multi-target package assembly

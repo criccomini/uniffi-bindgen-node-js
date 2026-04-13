@@ -11,7 +11,7 @@ expression: "snapshot_package_output_for_fixture(\"basic\")"
     "node": ">=16"
   },
   "dependencies": {
-    "koffi": "^2.15.3"
+    "koffi": "^2.15.6"
   },
   "exports": "./index.js"
 }

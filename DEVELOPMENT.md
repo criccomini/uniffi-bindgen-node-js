@@ -51,7 +51,7 @@ Run a single test target while iterating:
 cargo test --test node_package_generation
 ```
 
-Run the ignored real-Koffi callback smoke test locally with npm registry access available and a Node runtime that can install and run `koffi@^2.15.3`:
+Run the ignored real-Koffi callback smoke test locally with npm registry access available and a Node runtime that can install and run `koffi@^2.15.6`:
 
 ```sh
 cargo test --locked --test node_real_koffi_tests -- --ignored
@@ -96,7 +96,7 @@ That helper binary builds the fixture cdylib in a temporary workspace, generates
 
 It prints both `package_dir` and `library_path`. Point `UNIFFI_LEAK_PACKAGE_DIR` at `package_dir`; `library_path` is the staged sibling library inside that generated package.
 
-Run the runtime probes with `node --expose-gc` on a runtime that can install and run `koffi@^2.15.3`:
+Run the runtime probes with `node --expose-gc` on a runtime that can install and run `koffi@^2.15.6`:
 
 ```sh
 UNIFFI_LEAK_PACKAGE_DIR=/tmp/uniffi-basic-leaks \
@@ -196,7 +196,7 @@ leaks --atExit -- cargo run -- generate \
 
 GitHub Actions runs the full suite on pull requests and on every push to `main`.
 
-The Linux workflow uses Node 24 to revalidate the Koffi sync-callback fix in `koffi@^2.15.3`, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
+The Linux workflow uses Node 24 to revalidate the Koffi sync-callback fix in `koffi@^2.15.6`, installs a global `tsc` binary for the generated-package TypeScript checks, prefetches fixture dependencies for the offline fixture builds, and then runs:
 
 ```sh
 cargo test --locked
@@ -253,9 +253,9 @@ Some real-runtime Node tests are intentionally ignored because they require regi
 
 ## Koffi Validation
 
-Generated packages now declare `koffi@^2.15.3`.
+Generated packages now declare `koffi@^2.15.6`.
 
-Run the real-Koffi callback smoke and benchmark suites with npm registry access available and a Node runtime that can install and execute `koffi@^2.15.3`. CI uses Node 24 for this coverage.
+Run the real-Koffi callback smoke and benchmark suites with npm registry access available and a Node runtime that can install and execute `koffi@^2.15.6`. CI uses Node 24 for this coverage.
 
 Run locally with:
 

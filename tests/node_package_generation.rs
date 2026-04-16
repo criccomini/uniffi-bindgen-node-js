@@ -4,10 +4,10 @@ use std::{collections::BTreeMap, fs};
 
 use self::support::{
     FixturePackageOptions, build_fixture_cdylib, build_off_workspace_udl_fixture_cdylib,
-    build_proc_macro_multi_component_cdylib, fixtures::fixture_spec, generate_fixture_package,
-    generate_fixture_package_with_options, install_fixture_package_dependencies,
-    load_fixture_component_interface, read_package_file_tree, remove_dir_all, run_node_script,
-    stage_fixture_package_native_library, temp_dir_path,
+    build_proc_macro_multi_component_cdylib, bundled_library_file_name_for_target,
+    fixtures::fixture_spec, generate_fixture_package, generate_fixture_package_with_options,
+    install_fixture_package_dependencies, load_fixture_component_interface, read_package_file_tree,
+    remove_dir_all, run_node_script, stage_fixture_package_native_library, temp_dir_path,
 };
 use serde_json::Value;
 use uniffi_bindgen::interface::{Callable, ComponentInterface};
@@ -126,6 +126,36 @@ fn parse_generated_expected_contract_version(ffi_js: &str) -> u32 {
                 .expect("generated contract version should parse as u32")
         })
         .expect("generated ffi js should include an expected contract version")
+}
+
+fn parse_generated_cdylib_name(ffi_js: &str) -> String {
+    extract_generated_block(
+        ffi_js,
+        "export const ffiMetadata = Object.freeze({",
+        "export const ffiIntegrity = Object.freeze({",
+    )
+    .lines()
+    .find_map(|line| {
+        line.trim()
+            .strip_prefix("cdylibName: ")
+            .map(|value| value.trim_end_matches(','))
+    })
+    .map(|value| serde_json::from_str(value).expect("generated cdylib name should be JSON"))
+    .expect("generated ffi js should include cdylibName metadata")
+}
+
+fn parse_generated_staged_library_package_relative_path(ffi_js: &str) -> camino::Utf8PathBuf {
+    let raw_relative_path = ffi_js
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("stagedLibraryPackageRelativePath: ")
+                .map(|value| value.trim_end_matches(','))
+        })
+        .expect("generated ffi js should include stagedLibraryPackageRelativePath metadata");
+    let relative_path: String = serde_json::from_str(raw_relative_path)
+        .expect("generated staged library package path should deserialize as JSON");
+    camino::Utf8PathBuf::from(relative_path)
 }
 
 fn async_scaffolding_symbols<T: Callable>(callable: &T, ci: &ComponentInterface) -> [String; 4] {
@@ -896,21 +926,23 @@ fn bundled_prebuilds_option_emits_bundled_loader_metadata() {
         "unexpected component FFI JS contents: {ffi_js}"
     );
     assert!(
-        ffi_js.contains(&format!(
-            "stagedLibraryFileName: {:?},",
-            built_fixture
-                .library_path
-                .file_name()
-                .expect("fixture library path should have a filename")
-        )),
+        !ffi_js.contains("stagedLibraryFileName:"),
         "unexpected component FFI JS contents: {ffi_js}"
     );
     assert!(
-        ffi_js.contains("const filename = ffiMetadata.stagedLibraryFileName;"),
+        ffi_js.contains("function bundledLibraryFileName(platform) {"),
         "unexpected component FFI JS contents: {ffi_js}"
     );
     assert!(
         ffi_js.contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+    assert!(
+        ffi_js.contains("case \"darwin\":\n      return `lib${ffiMetadata.cdylibName}.dylib`;"),
+        "unexpected component FFI JS contents: {ffi_js}"
+    );
+    assert!(
+        ffi_js.contains("case \"win32\":\n      return `${ffiMetadata.cdylibName}.dll`;"),
         "unexpected component FFI JS contents: {ffi_js}"
     );
 
@@ -928,15 +960,13 @@ fn generated_bundled_package_records_the_expected_prebuild_path_without_copying(
         },
     );
     let package_dir = &generated.package_dir;
-    let input_library_path = &generated.built_fixture.library_path;
-    let library_filename = input_library_path
-        .file_name()
-        .expect("fixture library path should have a filename");
     let bundled_target = generated
         .bundled_prebuild_target
         .as_ref()
         .expect("bundled generation should record the staged host target");
-    let expected_relative_path = format!("prebuilds/{bundled_target}/{library_filename}");
+    let expected_library_filename =
+        bundled_library_file_name_for_target(&generated.built_fixture.crate_name, bundled_target);
+    let expected_relative_path = format!("prebuilds/{bundled_target}/{expected_library_filename}");
     let bundled_prebuild_path = generated
         .bundled_prebuild_path
         .as_ref()
@@ -968,12 +998,75 @@ fn generated_bundled_package_records_the_expected_prebuild_path_without_copying(
         "bundled generation should not copy the input cdylib into prebuilds/<target>/"
     );
     assert!(
-        input_library_path.is_file(),
+        generated.built_fixture.library_path.is_file(),
         "fixture library should still exist at the source path"
     );
 
     remove_dir_all(&generated.built_fixture.workspace_dir);
     remove_dir_all(package_dir);
+}
+
+#[test]
+fn bundled_prebuilds_canonicalize_the_staged_filename_for_renamed_inputs() {
+    let built_fixture = build_fixture_cdylib("basic");
+    let package_dir = temp_dir_path("bundled-prebuild-renamed-input");
+    let renamed_file_name = match std::env::consts::OS {
+        "windows" => "libhost-artifact.so",
+        _ => "host-artifact.dll",
+    };
+    let renamed_library_path = built_fixture
+        .workspace_dir
+        .join("renamed")
+        .join(renamed_file_name);
+    fs::create_dir_all(
+        renamed_library_path
+            .parent()
+            .expect("renamed library path should have a parent")
+            .as_std_path(),
+    )
+    .expect("renamed library directory should be created");
+    fs::copy(
+        built_fixture.library_path.as_std_path(),
+        renamed_library_path.as_std_path(),
+    )
+    .expect("fixture library should be copied to the renamed input path");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: renamed_library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some(built_fixture.crate_name.clone()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: true,
+        manual_load: false,
+    })
+    .expect("package generation should accept renamed bundled-prebuild inputs");
+
+    let ffi_js = read_generated_component_ffi_js(&package_dir, &built_fixture.namespace);
+    let cdylib_name = parse_generated_cdylib_name(&ffi_js);
+    let staged_relative_path = parse_generated_staged_library_package_relative_path(&ffi_js);
+    let bundled_target = staged_relative_path
+        .components()
+        .nth(1)
+        .expect("bundled staged path should include a target directory")
+        .as_str()
+        .to_string();
+    let expected_file_name = bundled_library_file_name_for_target(&cdylib_name, &bundled_target);
+
+    assert_eq!(
+        staged_relative_path.file_name(),
+        Some(expected_file_name.as_str()),
+        "bundled staging should use the canonical filename for the host target",
+    );
+    assert_ne!(
+        staged_relative_path.file_name(),
+        renamed_library_path.file_name(),
+        "bundled staging should not preserve the codegen-time input filename",
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
 }
 
 #[test]
@@ -996,12 +1089,8 @@ fn bundled_package_resolves_the_staged_host_target_directory_at_runtime() {
         .as_ref()
         .expect("bundled generation should record a host-target prebuild path");
     let expected_relative_path = generated.staged_library_package_relative_path.to_string();
-    let expected_library_filename = generated
-        .built_fixture
-        .library_path
-        .file_name()
-        .expect("fixture library path should have a filename")
-        .to_string();
+    let expected_library_filename =
+        bundled_library_file_name_for_target(&generated.built_fixture.crate_name, bundled_target);
     assert_eq!(
         staged_prebuild_path,
         &package_dir.join(&generated.staged_library_package_relative_path),
@@ -1532,13 +1621,10 @@ fn generates_bundled_basic_fixture_package_with_only_a_host_prebuild() {
         .bundled_prebuild_path
         .as_ref()
         .expect("bundled-mode fixture package should record the expected prebuild path");
-    let expected_library_filename = generated
-        .built_fixture
-        .library_path
-        .file_name()
-        .expect("fixture library path should have a filename");
+    let expected_library_filename =
+        bundled_library_file_name_for_target(&generated.built_fixture.crate_name, bundled_target);
     let bundled_library_relative_path = generated.staged_library_package_relative_path.to_string();
-    let root_library_path = package_dir.join(expected_library_filename);
+    let root_library_path = package_dir.join(&expected_library_filename);
 
     assert!(
         generated.sibling_library_path.is_none(),

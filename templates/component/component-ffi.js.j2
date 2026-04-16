@@ -26,7 +26,6 @@ import {
 export const ffiMetadata = Object.freeze({
   namespace: {{ context.namespace_json }},
   cdylibName: {{ context.library_name_json }},
-  stagedLibraryFileName: {{ context.staged_library_file_name_json }},
   stagedLibraryPackageRelativePath: {{ context.staged_library_package_relative_path_json }},
   bundledPrebuilds: {{ context.bundled_prebuilds }},
   manualLoad: {{ context.manual_load }},
@@ -104,9 +103,29 @@ function defaultBundledTarget() {
   return `${platform}-${arch}-${linuxLibc}`;
 }
 
+function bundledLibraryFileName(platform) {
+  switch (platform) {
+    case "win32":
+      return `${ffiMetadata.cdylibName}.dll`;
+    case "darwin":
+      return `lib${ffiMetadata.cdylibName}.dylib`;
+    case "aix":
+    case "android":
+    case "freebsd":
+    case "linux":
+    case "openbsd":
+      return `lib${ffiMetadata.cdylibName}.so`;
+    default:
+      throw new Error(
+        `Unsupported Node platform ${JSON.stringify(platform)} for UniFFI bundled prebuild resolution.`,
+      );
+  }
+}
+
 function defaultBundledLibrary() {
+  const platform = bundledPrebuildPlatform();
   const target = defaultBundledTarget();
-  const filename = ffiMetadata.stagedLibraryFileName;
+  const filename = bundledLibraryFileName(platform);
   return Object.freeze({
     target,
     packageRelativePath: `prebuilds/${target}/${filename}`,

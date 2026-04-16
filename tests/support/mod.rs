@@ -48,6 +48,21 @@ impl GeneratedFixturePackage {
     }
 }
 
+pub fn bundled_library_file_name_for_target(library_name: &str, target: &str) -> String {
+    let platform = target
+        .split('-')
+        .next()
+        .unwrap_or_else(|| panic!("bundled target should include a platform segment: {target}"));
+    match platform {
+        "win32" => format!("{library_name}.dll"),
+        "darwin" => format!("lib{library_name}.dylib"),
+        "aix" | "android" | "freebsd" | "linux" | "openbsd" => {
+            format!("lib{library_name}.so")
+        }
+        _ => panic!("unsupported bundled target platform in {target}"),
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FixturePackageOptions {
     pub bundled_prebuilds: bool,
@@ -381,7 +396,7 @@ pub fn generate_fixture_package_with_options(
     })
     .unwrap_or_else(|error| panic!("failed to generate fixture package {name}: {error:#}"));
 
-    let library_filename = built_fixture.library_path.file_name().unwrap_or_else(|| {
+    let input_library_filename = built_fixture.library_path.file_name().unwrap_or_else(|| {
         panic!(
             "fixture library path has no filename: {}",
             built_fixture.library_path
@@ -398,15 +413,17 @@ pub fn generate_fixture_package_with_options(
         match staged_library_components.as_slice() {
             [file_name] => {
                 assert_eq!(
-                    *file_name, library_filename,
+                    *file_name, input_library_filename,
                     "generated root-staged library should keep the input filename"
                 );
                 (Some(staged_library_path), None, None)
             }
             ["prebuilds", target, file_name] => {
+                let expected_file_name =
+                    bundled_library_file_name_for_target(&built_fixture.crate_name, target);
                 assert_eq!(
-                    *file_name, library_filename,
-                    "generated bundled prebuild should keep the input filename"
+                    *file_name, expected_file_name,
+                    "generated bundled prebuild should use the canonical filename for the bundled target"
                 );
                 (None, Some((*target).to_string()), Some(staged_library_path))
             }

@@ -76,6 +76,11 @@ cp path/to/your/built/library ./generated/your-package/
 ```
 
 If you generated with `--bundled-prebuilds`, copy it into the expected `prebuilds/<target>/` path instead.
+Bundled prebuild filenames are canonicalized from the UniFFI cdylib name:
+
+- macOS: `prebuilds/<target>/libyour_crate.dylib`
+- Linux and other Unix targets: `prebuilds/<target>/libyour_crate.so`
+- Windows: `prebuilds/<target>/your_crate.dll`
 
 4. Install the generated package dependencies.
 
@@ -133,7 +138,7 @@ your-package/
   libyour_crate.dylib
 ```
 
-If you pass `--bundled-prebuilds`, the generated loader expects the native library under `prebuilds/<host-target>/` for the current host build and resolves platform-specific libraries from that layout:
+If you pass `--bundled-prebuilds`, the generated loader resolves the runtime target and expects canonical platform filenames under `prebuilds/<target>/`:
 
 ```text
 your-package/
@@ -146,7 +151,7 @@ your-package/
     win32-x64/your_crate.dll
 ```
 
-Each invocation describes one host-target build layout. Building a package that contains multiple targets still requires running the generator separately for each built cdylib and assembling the output layout yourself as part of your packaging process.
+You can generate the package once and populate as many `prebuilds/<target>/` directories as you need. The bundled loader derives the filename from the runtime platform instead of preserving the filename of the library used during code generation.
 
 Linux bundled targets include a libc suffix:
 

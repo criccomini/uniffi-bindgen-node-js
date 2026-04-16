@@ -37,7 +37,6 @@ impl GeneratedPackage {
         let ffi_api = render_component_ffi(
             ci,
             &package_spec.library_name,
-            &layout.native_library.file_name,
             layout.native_library.package_relative_path.as_str(),
             package_spec.bundled_prebuilds,
             package_spec.manual_load,

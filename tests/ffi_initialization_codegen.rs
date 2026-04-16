@@ -56,11 +56,6 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
     let component_interface = load_fixture_component_interface(&generated.built_fixture);
     let ffi_js =
         read_generated_component_ffi_js(&generated.package_dir, &generated.built_fixture.namespace);
-    let staged_library_file_name = generated
-        .built_fixture
-        .library_path
-        .file_name()
-        .expect("fixture cdylib should have a filename");
     let checksum_symbol = component_interface
         .iter_checksums()
         .next()
@@ -88,10 +83,6 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
             json_string(&generated.built_fixture.crate_name)
         ),
         format!(
-            "  stagedLibraryFileName: {},",
-            json_string(staged_library_file_name)
-        ),
-        format!(
             "  stagedLibraryPackageRelativePath: {},",
             json_string(generated.staged_library_package_relative_path.as_str())
         ),
@@ -115,6 +106,10 @@ fn basic_fixture_ffi_metadata_and_lifecycle_follow_the_v2_contract() {
         "let cachedLibraryPath = null;".to_string(),
         "let runtimeHooks = Object.freeze({});".to_string(),
         "const libraryNotLoadedMessage =".to_string(),
+        "function bundledLibraryFileName(platform) {".to_string(),
+        "return `${ffiMetadata.cdylibName}.dll`;".to_string(),
+        "return `lib${ffiMetadata.cdylibName}.dylib`;".to_string(),
+        "return `lib${ffiMetadata.cdylibName}.so`;".to_string(),
         "function defaultSiblingLibraryPath() {".to_string(),
         "return join(moduleDirectory, ffiMetadata.stagedLibraryPackageRelativePath);".to_string(),
         "function resolveLibraryPath(libraryPath = undefined) {".to_string(),
@@ -210,7 +205,6 @@ fn basic_fixture_ffi_typescript_contract_matches_the_v2_lifecycle_surface() {
         "export interface FfiMetadata {",
         "namespace: string;",
         "cdylibName: string;",
-        "stagedLibraryFileName: string;",
         "stagedLibraryPackageRelativePath: string;",
         "bundledPrebuilds: boolean;",
         "manualLoad: boolean;",

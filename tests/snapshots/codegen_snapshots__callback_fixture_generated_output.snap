@@ -1453,7 +1453,6 @@ import {
 export const ffiMetadata = Object.freeze({
   namespace: "callbacks_fixture",
   cdylibName: "fixture_callbacks",
-  stagedLibraryFileName: "<STAGED_LIBRARY_FILE_NAME>",
   stagedLibraryPackageRelativePath: "<STAGED_LIBRARY_FILE_NAME>",
   bundledPrebuilds: false,
   manualLoad: false,
@@ -1569,9 +1568,29 @@ function defaultBundledTarget() {
   return `${platform}-${arch}-${linuxLibc}`;
 }
 
+function bundledLibraryFileName(platform) {
+  switch (platform) {
+    case "win32":
+      return `${ffiMetadata.cdylibName}.dll`;
+    case "darwin":
+      return `lib${ffiMetadata.cdylibName}.dylib`;
+    case "aix":
+    case "android":
+    case "freebsd":
+    case "linux":
+    case "openbsd":
+      return `lib${ffiMetadata.cdylibName}.so`;
+    default:
+      throw new Error(
+        `Unsupported Node platform ${JSON.stringify(platform)} for UniFFI bundled prebuild resolution.`,
+      );
+  }
+}
+
 function defaultBundledLibrary() {
+  const platform = bundledPrebuildPlatform();
   const target = defaultBundledTarget();
-  const filename = ffiMetadata.stagedLibraryFileName;
+  const filename = bundledLibraryFileName(platform);
   return Object.freeze({
     target,
     packageRelativePath: `prebuilds/${target}/${filename}`,
@@ -4845,7 +4864,6 @@ export function ffi_fixture_callbacks_uniffi_contract_version(...args) {
 export interface FfiMetadata {
   namespace: string;
   cdylibName: string;
-  stagedLibraryFileName: string;
   stagedLibraryPackageRelativePath: string;
   bundledPrebuilds: boolean;
   manualLoad: boolean;

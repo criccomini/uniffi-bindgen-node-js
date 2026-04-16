@@ -16,7 +16,9 @@ pub(crate) use self::spec::NodePackageSpec;
 // GENERATED CODE
 #[cfg(test)]
 mod tests {
-    use super::{NodePackageSpec, write_generated_package};
+    use super::{
+        NodePackageSpec, target::current_host_bundled_library_file_name, write_generated_package,
+    };
     use std::{
         env, fs, process,
         time::{SystemTime, UNIX_EPOCH},
@@ -116,6 +118,10 @@ mod tests {
             std::env::consts::DLL_PREFIX,
             std::env::consts::DLL_EXTENSION
         )
+    }
+
+    fn test_bundled_library_filename(library_name: &str) -> String {
+        current_host_bundled_library_file_name(library_name).expect("host bundled filename")
     }
 
     fn extract_section(contents: &str, start_marker: &str, end_marker: &str) -> String {
@@ -445,7 +451,8 @@ mod tests {
             .map(|entry| Utf8PathBuf::from_path_buf(entry.path()).expect("path should be utf-8"))
             .next()
             .expect("expected one bundled prebuild target directory");
-        let staged_library_path = bundled_target_path.join(test_library_filename());
+        let staged_library_path =
+            bundled_target_path.join(test_bundled_library_filename(&component.spec.library_name));
         assert!(
             !staged_library_path.exists(),
             "expected the bundled prebuild path to be recorded without copying the native library into {staged_library_path}"
@@ -483,11 +490,12 @@ mod tests {
     }
 
     #[test]
-    fn write_generated_package_preserves_windows_style_filenames_in_bundled_prebuild_paths() {
-        let output_dir = temp_dir_path("staged-windows-filename");
+    fn write_generated_package_uses_canonical_bundled_filename_instead_of_input_filename() {
+        let output_dir = temp_dir_path("staged-bundled-canonical-filename");
         let mut component = component_with_namespace("example");
         component.spec.bundled_prebuilds = true;
-        let input_library_filename = "fixture.dll";
+        component.spec.library_name = "ffi_symbol_name".to_string();
+        let input_library_filename = "host-artifact.node";
 
         write_test_package_with_library_filename(&output_dir, &component, input_library_filename)
             .expect("write_generated_package should succeed");
@@ -498,16 +506,17 @@ mod tests {
             .map(|entry| Utf8PathBuf::from_path_buf(entry.path()).expect("path should be utf-8"))
             .next()
             .expect("expected one bundled prebuild target directory");
-        let staged_library_path = bundled_target_path.join(input_library_filename);
-        let prefixed_library_path = bundled_target_path.join("libfixture.dll");
+        let canonical_library_path =
+            bundled_target_path.join(test_bundled_library_filename(&component.spec.library_name));
+        let input_named_library_path = bundled_target_path.join(input_library_filename);
 
         assert!(
-            !staged_library_path.exists(),
-            "expected the bundled library path to preserve the input filename without copying into {staged_library_path}"
+            !canonical_library_path.exists(),
+            "expected the bundled library path to use the canonical bundled filename without copying into {canonical_library_path}"
         );
         assert!(
-            !prefixed_library_path.exists(),
-            "bundled prebuild paths should preserve the exact input filename instead of forcing a lib-prefixed variant: {prefixed_library_path}"
+            !input_named_library_path.exists(),
+            "bundled prebuild paths should ignore the input filename in favor of the canonical bundled filename: {input_named_library_path}"
         );
 
         fs::remove_dir_all(output_dir.as_std_path()).expect("cleanup temp dir");
@@ -1222,7 +1231,6 @@ mod tests {
 export const ffiMetadata = Object.freeze({
   namespace: "example",
   cdylibName: "fixture",
-  stagedLibraryFileName: "<STAGED_LIBRARY_FILE_NAME>",
   stagedLibraryPackageRelativePath: "<STAGED_LIBRARY_FILE_NAME>",
   bundledPrebuilds: false,
   manualLoad: false,
@@ -1300,9 +1308,29 @@ function defaultBundledTarget() {
   return `${platform}-${arch}-${linuxLibc}`;
 }
 
+function bundledLibraryFileName(platform) {
+  switch (platform) {
+    case "win32":
+      return `${ffiMetadata.cdylibName}.dll`;
+    case "darwin":
+      return `lib${ffiMetadata.cdylibName}.dylib`;
+    case "aix":
+    case "android":
+    case "freebsd":
+    case "linux":
+    case "openbsd":
+      return `lib${ffiMetadata.cdylibName}.so`;
+    default:
+      throw new Error(
+        `Unsupported Node platform ${JSON.stringify(platform)} for UniFFI bundled prebuild resolution.`,
+      );
+  }
+}
+
 function defaultBundledLibrary() {
+  const platform = bundledPrebuildPlatform();
   const target = defaultBundledTarget();
-  const filename = ffiMetadata.stagedLibraryFileName;
+  const filename = bundledLibraryFileName(platform);
   return Object.freeze({
     target,
     packageRelativePath: `prebuilds/${target}/${filename}`,
@@ -1530,7 +1558,6 @@ export function validateChecksums(bindings = getFfiBindings()) {
         export interface FfiMetadata {
           namespace: string;
           cdylibName: string;
-          stagedLibraryFileName: string;
           stagedLibraryPackageRelativePath: string;
           bundledPrebuilds: boolean;
           manualLoad: boolean;
@@ -1623,11 +1650,8 @@ export function validateChecksums(bindings = getFfiBindings()) {
             "ffi metadata should expose bundledPrebuilds:\n{metadata_and_resolution}"
         );
         assert!(
-            metadata_and_resolution.contains(&format!(
-                "stagedLibraryFileName: {:?}",
-                test_library_filename()
-            )),
-            "ffi metadata should expose the staged library filename:\n{metadata_and_resolution}"
+            !metadata_and_resolution.contains("stagedLibraryFileName:"),
+            "ffi metadata should not expose a staged library filename:\n{metadata_and_resolution}"
         );
         assert!(
             metadata_and_resolution.contains("stagedLibraryPackageRelativePath: "),
@@ -1657,13 +1681,27 @@ export function validateChecksums(bindings = getFfiBindings()) {
             "linux libc suffix should distinguish musl and gnu:\n{metadata_and_resolution}"
         );
         assert!(
+            metadata_and_resolution.contains("function bundledLibraryFileName(platform)"),
+            "bundled library filename helper should be emitted:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution
+                .contains("case \"darwin\":\n      return `lib${ffiMetadata.cdylibName}.dylib`;"),
+            "bundled filename helper should handle darwin:\n{metadata_and_resolution}"
+        );
+        assert!(
+            metadata_and_resolution
+                .contains("case \"win32\":\n      return `${ffiMetadata.cdylibName}.dll`;"),
+            "bundled filename helper should handle win32:\n{metadata_and_resolution}"
+        );
+        assert!(
             metadata_and_resolution
                 .contains("packageRelativePath: `prebuilds/${target}/${filename}`,"),
             "bundled libraries should resolve under prebuilds/<target>/<filename>:\n{metadata_and_resolution}"
         );
         assert!(
-            metadata_and_resolution.contains("const filename = ffiMetadata.stagedLibraryFileName;"),
-            "bundled libraries should use the staged input filename:\n{metadata_and_resolution}"
+            metadata_and_resolution.contains("const filename = bundledLibraryFileName(platform);"),
+            "bundled libraries should derive filenames from the runtime platform:\n{metadata_and_resolution}"
         );
         assert_contains_in_order(
             &metadata_and_resolution,

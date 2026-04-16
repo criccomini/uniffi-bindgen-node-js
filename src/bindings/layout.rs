@@ -4,7 +4,10 @@ use anyhow::{Result, anyhow, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use uniffi_bindgen::interface::ComponentInterface;
 
-use super::{spec::NodePackageSpec, target::current_host_prebuild_target};
+use super::{
+    spec::NodePackageSpec,
+    target::{current_host_bundled_library_file_name, current_host_prebuild_target},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GeneratedPackageLayout {
@@ -87,6 +90,7 @@ impl GeneratedPackageLayout {
         let native_library = StagedNativeLibraryLayout::from_source(
             out_dir,
             lib_source,
+            package_spec.library_name.as_str(),
             package_spec.bundled_prebuilds,
         )?;
 
@@ -172,16 +176,20 @@ impl StagedNativeLibraryLayout {
     fn from_source(
         out_dir: &Utf8Path,
         lib_source: &Utf8Path,
+        library_name: &str,
         bundled_prebuilds: bool,
     ) -> Result<Self> {
-        let file_name = lib_source
-            .file_name()
-            .ok_or_else(|| anyhow!("built UniFFI cdylib '{}' has no filename", lib_source))?
-            .to_string();
-
         let bundled_prebuild_target = bundled_prebuilds
             .then(current_host_prebuild_target)
             .transpose()?;
+        let file_name = if bundled_prebuild_target.is_some() {
+            current_host_bundled_library_file_name(library_name)?
+        } else {
+            lib_source
+                .file_name()
+                .ok_or_else(|| anyhow!("built UniFFI cdylib '{}' has no filename", lib_source))?
+                .to_string()
+        };
         let package_relative_path = match bundled_prebuild_target.as_deref() {
             Some(target) => Utf8PathBuf::from("prebuilds").join(target).join(&file_name),
             None => Utf8PathBuf::from(&file_name),
@@ -393,7 +401,9 @@ mod tests {
         .expect("layout");
 
         let target = current_host_prebuild_target().expect("host target");
-        assert_eq!(layout.native_library.file_name, "libexample.so");
+        let expected_file_name =
+            current_host_bundled_library_file_name("fixture").expect("host bundled filename");
+        assert_eq!(layout.native_library.file_name, expected_file_name);
         assert_eq!(
             layout.native_library.bundled_prebuild_target.as_deref(),
             Some(target.as_str())
@@ -402,14 +412,14 @@ mod tests {
             layout.native_library.package_relative_path,
             Utf8PathBuf::from("prebuilds")
                 .join(&target)
-                .join("libexample.so")
+                .join(&layout.native_library.file_name)
         );
         assert_eq!(
             layout.native_library.output_path,
             out_dir
                 .join("prebuilds")
                 .join(&target)
-                .join("libexample.so")
+                .join(&layout.native_library.file_name)
         );
     }
 

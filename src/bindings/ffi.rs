@@ -17,7 +17,6 @@ pub(crate) struct RenderedComponentFfi {
 pub(crate) fn render_component_ffi(
     ci: &ComponentInterface,
     library_name: &str,
-    staged_library_file_name: &str,
     staged_library_package_relative_path: &str,
     bundled_prebuilds: bool,
     manual_load: bool,
@@ -25,7 +24,6 @@ pub(crate) fn render_component_ffi(
     let context = ComponentFfiTemplateContext::from_parts(
         ci,
         library_name,
-        staged_library_file_name,
         staged_library_package_relative_path,
         bundled_prebuilds,
         manual_load,
@@ -64,7 +62,6 @@ fn component_requires_runtime_hooks(ci: &ComponentInterface) -> bool {
 struct ComponentFfiTemplateContext {
     namespace_json: String,
     library_name_json: String,
-    staged_library_file_name_json: String,
     staged_library_package_relative_path_json: String,
     bundled_prebuilds: bool,
     manual_load: bool,
@@ -81,7 +78,6 @@ impl ComponentFfiTemplateContext {
     fn from_parts(
         ci: &ComponentInterface,
         library_name: &str,
-        staged_library_file_name: &str,
         staged_library_package_relative_path: &str,
         bundled_prebuilds: bool,
         manual_load: bool,
@@ -91,7 +87,6 @@ impl ComponentFfiTemplateContext {
         Ok(Self {
             namespace_json: json_string(ci.namespace())?,
             library_name_json: json_string(library_name)?,
-            staged_library_file_name_json: json_string(staged_library_file_name)?,
             staged_library_package_relative_path_json: json_string(
                 staged_library_package_relative_path,
             )?,

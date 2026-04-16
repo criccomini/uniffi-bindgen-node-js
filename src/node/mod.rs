@@ -3,7 +3,7 @@ pub(crate) mod config;
 mod paths;
 mod validation;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use camino::Utf8PathBuf;
 use uniffi_bindgen::{BindgenLoader, Component};
 
@@ -12,7 +12,7 @@ use self::config::{
     NodePackageCliOverrides, NodePackageConfig, apply_component_renames,
     finalize_node_package_config, parse_node_package_config,
 };
-use self::paths::build_bindgen_paths;
+use self::paths::{build_bindgen_paths, resolve_cdylib_target_name};
 use self::validation::validate_generate_options;
 use crate::bindings::{NodePackageSpec, write_generated_package};
 
@@ -30,20 +30,13 @@ pub struct GenerateNodePackageOptions {
     pub manual_load: bool,
 }
 
-struct LoadedNodePackageInputs {
-    library_name: String,
-    components: Vec<NodeComponent>,
-}
-
 pub fn generate_node_package(options: GenerateNodePackageOptions) -> Result<()> {
     validate_generate_options(&options)?;
 
     let cli_overrides = build_cli_overrides(&options)?;
-    let LoadedNodePackageInputs {
-        library_name,
-        components,
-    } = load_node_package_inputs(&options)?;
+    let components = load_node_components(&options)?;
     let component = prepare_selected_component(components, &options, &cli_overrides)?;
+    let library_name = resolve_library_name(&options, &component)?;
     let package_spec = build_package_spec(&component, &library_name)?;
 
     write_selected_component_package(&options, &component, &package_spec)
@@ -56,15 +49,6 @@ fn build_cli_overrides(options: &GenerateNodePackageOptions) -> Result<NodePacka
         options.bundled_prebuilds,
         options.manual_load,
     )
-}
-
-fn load_node_package_inputs(
-    options: &GenerateNodePackageOptions,
-) -> Result<LoadedNodePackageInputs> {
-    Ok(LoadedNodePackageInputs {
-        library_name: resolve_library_name(options)?,
-        components: load_node_components(options)?,
-    })
 }
 
 fn prepare_selected_component(
@@ -83,7 +67,23 @@ fn build_bindgen_loader(options: &GenerateNodePackageOptions) -> Result<BindgenL
     Ok(BindgenLoader::new(paths))
 }
 
-fn resolve_library_name(options: &GenerateNodePackageOptions) -> Result<String> {
+fn resolve_library_name(
+    options: &GenerateNodePackageOptions,
+    component: &NodeComponent,
+) -> Result<String> {
+    if let Some(library_name) =
+        resolve_cdylib_target_name(options.manifest_path.as_deref(), component.ci.crate_name())?
+    {
+        return Ok(library_name);
+    }
+
+    if options.bundled_prebuilds {
+        bail!(
+            "failed to determine the canonical UniFFI cdylib name for '{}' while generating bundled prebuild metadata; re-run with --manifest-path pointing at the source Cargo.toml or from the source workspace",
+            options.lib_source
+        );
+    }
+
     let loader = build_bindgen_loader(options)?;
     loader
         .library_name(&options.lib_source)

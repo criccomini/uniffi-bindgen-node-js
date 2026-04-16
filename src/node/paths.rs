@@ -1,8 +1,11 @@
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use cargo_metadata::Metadata;
+use cargo_metadata::{Metadata, Package, PackageId, Resolve, Target};
 use uniffi_bindgen::{BindgenPaths, BindgenPathsLayer};
 
 pub(crate) fn build_bindgen_paths(manifest_path: Option<&Utf8Path>) -> Result<BindgenPaths> {
@@ -15,6 +18,17 @@ pub(crate) fn build_bindgen_paths(manifest_path: Option<&Utf8Path>) -> Result<Bi
     Ok(layer_v2_bindgen_paths(manifest_layer, workspace_layer))
 }
 
+pub(crate) fn resolve_cdylib_target_name(
+    manifest_path: Option<&Utf8Path>,
+    selected_component_crate_name: &str,
+) -> Result<Option<String>> {
+    let metadata = load_cargo_metadata(manifest_path, false)?;
+    Ok(resolve_cdylib_target_name_from_metadata(
+        &metadata,
+        selected_component_crate_name,
+    ))
+}
+
 #[derive(Debug, Clone, Default)]
 struct CargoMetadataPathsLayer {
     crate_roots: HashMap<String, Utf8PathBuf>,
@@ -22,28 +36,34 @@ struct CargoMetadataPathsLayer {
 
 impl CargoMetadataPathsLayer {
     fn from_workspace(no_deps: bool) -> Result<Self> {
-        let mut command = cargo_metadata::MetadataCommand::new();
-        if no_deps {
-            command.no_deps();
-        }
-        let metadata = command.exec().context("error running cargo metadata")?;
-        Ok(Self::from(metadata))
+        Ok(Self::from(load_cargo_metadata(None, no_deps)?))
     }
 
     fn from_manifest_path(manifest_path: &Utf8Path, no_deps: bool) -> Result<Self> {
-        let mut command = cargo_metadata::MetadataCommand::new();
+        Ok(Self::from(load_cargo_metadata(
+            Some(manifest_path),
+            no_deps,
+        )?))
+    }
+}
+
+fn load_cargo_metadata(manifest_path: Option<&Utf8Path>, no_deps: bool) -> Result<Metadata> {
+    let mut command = cargo_metadata::MetadataCommand::new();
+    if let Some(manifest_path) = manifest_path {
         command.manifest_path(manifest_path.as_std_path());
-        if no_deps {
-            command.no_deps();
-        }
-        let metadata = command.exec().with_context(|| {
+    }
+    if no_deps {
+        command.no_deps();
+    }
+    command.exec().with_context(|| match manifest_path {
+        Some(manifest_path) => {
             format!(
                 "error running cargo metadata for manifest '{}'",
                 manifest_path
             )
-        })?;
-        Ok(Self::from(metadata))
-    }
+        }
+        None => "error running cargo metadata".to_string(),
+    })
 }
 
 fn layer_v2_bindgen_paths<M, W>(manifest_layer: Option<M>, workspace_layer: W) -> BindgenPaths
@@ -90,6 +110,109 @@ impl From<Metadata> for CargoMetadataPathsLayer {
 
         Self { crate_roots }
     }
+}
+
+fn resolve_cdylib_target_name_from_metadata(
+    metadata: &Metadata,
+    selected_component_crate_name: &str,
+) -> Option<String> {
+    if let Some(root_package) = metadata.root_package()
+        && let Some(root_target_name) = exactly_one_cdylib_target_name(root_package)
+    {
+        return Some(root_target_name);
+    }
+
+    let selected_package_ids =
+        selected_component_package_ids(metadata, selected_component_crate_name);
+    if let Some(target_name) = exactly_one_cdylib_target_name_from_packages(
+        metadata
+            .packages
+            .iter()
+            .filter(|package| selected_package_ids.contains(&package.id)),
+    ) {
+        return Some(target_name);
+    }
+
+    if let Some(target_name) = metadata.resolve.as_ref().and_then(|resolve| {
+        exactly_one_cdylib_target_name_from_packages(metadata.packages.iter().filter(|package| {
+            selected_package_ids.contains(&package.id)
+                || package_depends_on_any(resolve, &package.id, &selected_package_ids)
+        }))
+    }) {
+        return Some(target_name);
+    }
+
+    exactly_one_cdylib_target_name_from_packages(metadata.packages.iter())
+}
+
+fn selected_component_package_ids(
+    metadata: &Metadata,
+    selected_component_crate_name: &str,
+) -> HashSet<PackageId> {
+    let normalized_crate_name = normalize_cargo_name(selected_component_crate_name);
+    metadata
+        .packages
+        .iter()
+        .filter(|package| package_matches_component(package, &normalized_crate_name))
+        .map(|package| package.id.clone())
+        .collect()
+}
+
+fn package_matches_component(package: &Package, normalized_crate_name: &str) -> bool {
+    normalize_cargo_name(&package.name) == normalized_crate_name
+        || package
+            .targets
+            .iter()
+            .any(|target| normalize_cargo_name(&target.name) == normalized_crate_name)
+}
+
+fn package_depends_on_any(
+    resolve: &Resolve,
+    package_id: &PackageId,
+    selected_package_ids: &HashSet<PackageId>,
+) -> bool {
+    if selected_package_ids.is_empty() {
+        return false;
+    }
+
+    let mut pending = vec![package_id.clone()];
+    let mut visited = HashSet::new();
+    while let Some(current_id) = pending.pop() {
+        if !visited.insert(current_id.clone()) {
+            continue;
+        }
+        if selected_package_ids.contains(&current_id) {
+            return true;
+        }
+        let current_node = &resolve[&current_id];
+        pending.extend(current_node.dependencies.iter().cloned());
+    }
+    false
+}
+
+fn exactly_one_cdylib_target_name_from_packages<'a>(
+    packages: impl IntoIterator<Item = &'a Package>,
+) -> Option<String> {
+    let mut target_names = packages
+        .into_iter()
+        .flat_map(package_cdylib_targets)
+        .map(|target| target.name.clone())
+        .collect::<HashSet<_>>()
+        .into_iter();
+    let target_name = target_names.next()?;
+    target_names.next().is_none().then_some(target_name)
+}
+
+fn exactly_one_cdylib_target_name(package: &Package) -> Option<String> {
+    exactly_one_cdylib_target_name_from_packages([package])
+}
+
+fn package_cdylib_targets(package: &Package) -> impl Iterator<Item = &Target> {
+    package.targets.iter().filter(|target| target.is_cdylib())
+}
+
+fn normalize_cargo_name(name: &str) -> String {
+    name.replace('-', "_")
 }
 
 impl BindgenPathsLayer for CargoMetadataPathsLayer {

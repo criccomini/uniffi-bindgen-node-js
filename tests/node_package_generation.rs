@@ -1052,7 +1052,13 @@ fn bundled_prebuilds_canonicalize_the_staged_filename_for_renamed_inputs() {
         .expect("bundled staged path should include a target directory")
         .as_str()
         .to_string();
-    let expected_file_name = bundled_library_file_name_for_target(&cdylib_name, &bundled_target);
+    let expected_file_name =
+        bundled_library_file_name_for_target(&built_fixture.crate_name, &bundled_target);
+
+    assert_eq!(
+        cdylib_name, built_fixture.crate_name,
+        "bundled prebuild metadata should use the canonical UniFFI cdylib name instead of the renamed input basename",
+    );
 
     assert_eq!(
         staged_relative_path.file_name(),
@@ -1063,6 +1069,75 @@ fn bundled_prebuilds_canonicalize_the_staged_filename_for_renamed_inputs() {
         staged_relative_path.file_name(),
         renamed_library_path.file_name(),
         "bundled staging should not preserve the codegen-time input filename",
+    );
+
+    remove_dir_all(&built_fixture.workspace_dir);
+    remove_dir_all(&package_dir);
+}
+
+#[test]
+fn bundled_prebuilds_use_the_cdylib_target_name_for_selected_megazord_components() {
+    let built_fixture = build_proc_macro_multi_component_cdylib();
+    let package_dir = temp_dir_path("bundled-prebuild-megazord-selected-component");
+    let renamed_file_name = match std::env::consts::OS {
+        "windows" => "libhost-artifact.so",
+        _ => "host-artifact.dll",
+    };
+    let renamed_library_path = built_fixture
+        .workspace_dir
+        .join("renamed")
+        .join(renamed_file_name);
+    fs::create_dir_all(
+        renamed_library_path
+            .parent()
+            .expect("renamed library path should have a parent")
+            .as_std_path(),
+    )
+    .expect("renamed library directory should be created");
+    fs::copy(
+        built_fixture.library_path.as_std_path(),
+        renamed_library_path.as_std_path(),
+    )
+    .expect("fixture library should be copied to the renamed input path");
+
+    generate_node_package(GenerateNodePackageOptions {
+        lib_source: renamed_library_path.clone(),
+        manifest_path: Some(built_fixture.manifest_path.clone()),
+        crate_name: Some("component-alpha".to_string()),
+        out_dir: package_dir.clone(),
+        package_name: None,
+        node_engine: None,
+        bundled_prebuilds: true,
+        manual_load: false,
+    })
+    .expect("selected megazord components should still derive the canonical bundled filename");
+
+    let ffi_js = read_generated_component_ffi_js(&package_dir, "component_alpha");
+    let cdylib_name = parse_generated_cdylib_name(&ffi_js);
+    let staged_relative_path = parse_generated_staged_library_package_relative_path(&ffi_js);
+    let bundled_target = staged_relative_path
+        .components()
+        .nth(1)
+        .expect("bundled staged path should include a target directory")
+        .as_str()
+        .to_string();
+    let expected_cdylib_name = "megazord_fixture";
+    let expected_file_name =
+        bundled_library_file_name_for_target(expected_cdylib_name, &bundled_target);
+
+    assert_eq!(
+        cdylib_name, expected_cdylib_name,
+        "selected component metadata should preserve the megazord cdylib target name",
+    );
+    assert_eq!(
+        staged_relative_path.file_name(),
+        Some(expected_file_name.as_str()),
+        "bundled staging should use the megazord cdylib target name instead of the selected component crate name",
+    );
+    assert_ne!(
+        staged_relative_path.file_name(),
+        renamed_library_path.file_name(),
+        "bundled staging should not preserve the renamed input filename",
     );
 
     remove_dir_all(&built_fixture.workspace_dir);

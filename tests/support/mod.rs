@@ -911,6 +911,8 @@ fn should_retry_cargo_without_offline(args: &[&str], stderr: &[u8]) -> bool {
         let stderr = String::from_utf8_lossy(stderr);
         stderr.contains("you're using offline mode (--offline)")
             || stderr.contains("attempting to make an HTTP request, but --offline was specified")
+            || stderr.contains("offline mode (via `--offline`)")
+            || stderr.contains("retry without `--offline`")
     }
 }
 

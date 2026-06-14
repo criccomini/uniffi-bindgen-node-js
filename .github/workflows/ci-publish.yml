@@ -65,6 +65,7 @@ jobs:
           cargo fetch --locked
           cargo fetch --manifest-path fixtures/basic-fixture/Cargo.toml
           cargo fetch --manifest-path fixtures/callback-fixture/Cargo.toml
+          cargo fetch --manifest-path fixtures/docs-fixture/Cargo.toml
 
       - name: Run default test suite
         run: cargo test --locked
@@ -104,6 +105,7 @@ jobs:
           cargo fetch --locked
           cargo fetch --manifest-path fixtures/basic-fixture/Cargo.toml
           cargo fetch --manifest-path fixtures/callback-fixture/Cargo.toml
+          cargo fetch --manifest-path fixtures/docs-fixture/Cargo.toml
 
       - name: Run generated-package smoke coverage
         run: |

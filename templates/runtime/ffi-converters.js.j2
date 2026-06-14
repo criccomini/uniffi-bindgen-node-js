@@ -579,7 +579,7 @@ export const FfiConverterTimestamp = new (class extends AbstractFfiConverterByte
       );
     }
 
-    const magnitudeMs = (seconds < 0n ? -seconds : seconds) * 1000n + BigInt(nanos / 1000000);
+    const magnitudeMs = (seconds < 0n ? -seconds : seconds) * 1000n + BigInt(Math.floor(nanos / 1000000));
     if (magnitudeMs > MAX_DATE_MILLISECONDS) {
       throw new ConverterRangeError(
         `timestamp ${String(magnitudeMs)}ms exceeds the supported Date range.`,
